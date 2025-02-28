@@ -15,10 +15,11 @@ jl = juliacall.newmodule("PhantomRevealer")
 jl.seval("using PhantomRevealer")
 PhantomRevealer_path = jl.get_PhantomRevealer_path()
 sys.path.insert(0, f'{PhantomRevealer_path}/src')
+sys.path.insert(0, f'{PhantomRevealer_path}/src/julia')
 sys.path.insert(0, f'{PhantomRevealer_path}/script')
 
 from PhantomRevealerAnalysisResult import *
-from pyplot_backend import *
+from python.pyplot_backend import *
 
 def minimum_growth_rate(radius_au,M_solarmass,spiral_lifetime_yr=3000):
     radius_SI = radius_au*149597870700

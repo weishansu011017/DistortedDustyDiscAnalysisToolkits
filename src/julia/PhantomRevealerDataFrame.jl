@@ -52,17 +52,26 @@ end
 
 # Multiple rows and multiple columns indexing
 @inline function Base.getindex(prdf::PhantomRevealerDataFrame, row_inds::AbstractVector, col_inds::Union{Vector{Symbol}, Vector{String}, Vector{Int}})
-    return prdf.dfdata[row_inds, col_inds]
+    return PhantomRevealerDataFrame(prdf.dfdata[row_inds, col_inds],prdf.params)
 end
 
 # Boolean vector indexing for rows and multiple columns
-@inline function Base.getindex(prdf::PhantomRevealerDataFrame, bool_mask::AbstractVector{Bool}, col_inds::Union{Vector{Symbol}, Vector{String}, Vector{Int}})
-    return prdf.dfdata[bool_mask, col_inds]
+@inline function Base.getindex(prdf::PhantomRevealerDataFrame, bool_mask::AbstractVector{Bool}, col_ind::Union{Symbol, String, Int})
+    return prdf.dfdata[bool_mask, col_ind]  # Vector
 end
+
+@inline function Base.getindex(prdf::PhantomRevealerDataFrame, bool_mask::AbstractVector{Bool}, col_inds::Union{Vector{Symbol}, Vector{String}, Vector{Int}})
+    return PhantomRevealerDataFrame(prdf.dfdata[bool_mask, col_inds], prdf.params)
+end
+
+@inline function Base.getindex(prdf::PhantomRevealerDataFrame, bool_mask::AbstractVector{Bool}, ::Colon)
+    return PhantomRevealerDataFrame(prdf.dfdata[bool_mask, :], prdf.params)
+end
+
 
 # All rows and multiple columns indexing
 @inline function Base.getindex(prdf::PhantomRevealerDataFrame, ::Colon, col_inds::Union{Vector{Symbol}, Vector{String}, Vector{Int}})
-    return prdf.dfdata[:, col_inds]
+    return PhantomRevealerDataFrame(prdf.dfdata[:, col_inds],prdf.params)
 end
 
 # Single row and multiple columns assignment
@@ -91,6 +100,7 @@ end
 
     return prdf
 end
+
 
 #Method
 """

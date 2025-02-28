@@ -28,8 +28,10 @@ disc_*
 # Test
 Test_*
 
-# PNG
-*.png
+# Figure
+*.pdf
+*.eps
+*.svg
 
 # Backup
 backup/
@@ -42,3 +44,5 @@ subjobJ64.sh
 
 # Matlab
 script/*.m
+
+Manifest.toml

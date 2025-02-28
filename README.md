@@ -2,7 +2,7 @@
 
 A Julia interface for analyzing dump files from the Phantom Smoothed Particle Hydrodynamics code.
 
-Most of the analysis is based on SPH interpolation. Check out Price2010 for further information.
+Most of the analysis is based on SPH interpolation. Check out Price(2010) for further information.
 
 ## Installation
 
@@ -154,7 +154,7 @@ test_grid :: gridbackend = generate_empty_grid(imin, imax, in ,type)
 For a disk-shape grid, a useful function is provied
 
 ~~~julia
-grid :: gridbackend = disk_2d_grid_generator(imin, iman, in)
+grid :: gridbackend = disk_2d_grid_generator(imin, imax, in)
 ~~~
 
 the `grid` is equivalent to `test_grid`
@@ -165,7 +165,17 @@ In SPH, an arbitrary quantity $\mathbf{A}(\mathbf{r})$ can be interpolated by th
 ```math
 \mathbf{A}(\mathbf{r}) \approx \sum_b \frac{\mathbf{A}_b}{\rho_b} W(|\mathbf{r}-\mathbf{r}_b|; h)
 ```
-Where $W$ is the kernel function, and the $h$ is the smoothed radius. **PhantomRevealer** provides 6 kernel functions: $M_4$ B-Spline, $M_5$ B-Spline, $M_6$ B-Spline, Wendland $C_2$, Wendland $C_4$ and Wendland $C_6$. The smoothed radius $h$​ for each point can be determine by three ways: taking the average of all of the particles `"mean"`, choosing the smoothed radius of closest particles to the target`"closest"`.
+Where $W$ is the kernel function, and the $h$ is the smoothed radius. **PhantomRevealer** provides 6 kernel functions: $M_4$ B-Spline, $M_5$ B-Spline, $M_6$ B-Spline, Wendland $C_2$, Wendland $C_4$ and Wendland $C_6$. The smoothed radius $h$​ for each point can be determine by two ways: taking the average of all of the particles `"mean"`, choosing the smoothed radius of closest particles to the target`"closest"`.
+
+Moreover, the first derivative SPH interpolations are also provided, including gradient, divergence and curl by the following formulas
+$$
+\nabla A(\mathbf{r}) = \frac{1}{\rho(\mathbf{r})}\sum_b m_b (A_b - A(\mathbf{r})) \nabla W(\mathbf{r} - \mathbf{r}_b; h)\\
+\nabla \cdot \mathbf{A}(\mathbf{r}) = \frac{1}{\rho(\mathbf{r})}\sum_b m_b (\mathbf{A}_b - \mathbf{A}(\mathbf{r})) \cdot\nabla W(\mathbf{r} - \mathbf{r}_b; h)\\
+\nabla \times \mathbf{A}(\mathbf{r}) = -\frac{1}{\rho(\mathbf{r})}\sum_b m_b (\mathbf{A}_b - \mathbf{A}(\mathbf{r})) \times\nabla W(\mathbf{r} - \mathbf{r}_b; h)\\
+$$
+These formulas are derived by using the general first derivative operator in Price(2010) (Equation (76) (79) (80)), by taking $\phi = \rho$ in the formulas. 
+
+
 
 ### File extraction
 
@@ -199,8 +209,12 @@ result :: Analysis_result = buffer2output(result_buffer)
 After generateing the `Analysis_result` , the data can be written out by
 
 ~~~julia
-Write_HDF5(filepath, result, "TEST")    # The `filepath` is used for extracting the step of simulation to prevent conflicting among different output e.g "disc_00100" -> "00100".
+Write_HDF5(Analysis_tag, filepath, result, "TEST")
 ~~~
+
+Note that the parameter `Analysis_tag` would be recorded inside the `param` fields to manage the output file into different usage.
+
+The `filepath` is used for extracting the step of simulation to prevent conflicting among different output e.g "disc_00100" -> "00100".
 
 The `data_prefix` is the `PREFIX` part in the result string `PREFIX_00XXX.h5`
 
@@ -213,30 +227,30 @@ result = Read_HDF5(filepath)
 
 
 #### Example : Disk interpolation
-
 Our goal is to interpolating a disk-shape (annulus) grid from a dumpfile `disc_00000` which including gaseous and dusty particles. We should also calculate the mid-plane average of density `rho` and velocity `vs, vϕ` . Here is a example to do it.
 
 ~~~julia
 function Disk_Faceon_interpolation(filepath :: String)
+    @info "-------------------------------------------------------"
     # ------------------------------PARAMETER SETTING------------------------------
     Analysis_tag :: String = "Faceon_disk"
     # parameters of radial axis
     smin :: Float64 = 10.0
-    smax :: Float64 = 120.0
-    sn :: Int64 = 221
+    smax :: Float64 = 175.0
+    sn :: Int64 = 331
     
     # parameters of azimuthal axis
     ϕmin :: Float64 = 0.0
     ϕmax :: Float64 = 2π
-    ϕn :: Int64 = 301
+    ϕn :: Int64 = 351
   
     # Other parameters
-    column_names :: Vector = ["e"]									    	# The quantities that would be interpolate except for surface density `Sigma`.
-    mid_column_names :: Vector = ["rho","vs", "vϕ"]                         # The quantities that would be interpolate in the midplane.
+    column_names :: Vector{String} = ["e"]									# The quantities that would be interpolate except for surface density `Sigma`.
+    mid_column_names :: Vector{String} = ["rho","vs","vϕ","vz","vϕ-vϕ_k"]   # The quantities that would be interpolate in the midplane.
     Origin_sinks_id :: Int64 = 1											# The id of sink at the middle of disk for analysis.
     smoothed_kernel :: Function = M6_spline
     h_mode :: String = "closest"
-    DiskMass_OuterRadius :: Float64 = 150.0                                 # The outer radius of disk while estimating the mass of disk
+    DiskMass_OuterRadius :: Float64 = 175.0                                 # The outer radius of disk while estimating the mass of disk
 
     # Output setting
     File_prefix :: String = "Faceon"
@@ -258,6 +272,9 @@ function Disk_Faceon_interpolation(filepath :: String)
     add_cylindrical!(datad)
     add_eccentricity!(datag)
     add_eccentricity!(datad)
+    add_Kepelarian_azimuthal_velocity!(datag)
+    add_Kepelarian_azimuthal_velocity!(datad)
+
     
     # Make the `params` field
     time :: Float64 = get_time(datag)
@@ -266,120 +283,145 @@ function Disk_Faceon_interpolation(filepath :: String)
     params["DustDiskMass"] = get_disk_mass(datad, sinks_data, DiskMass_OuterRadius, Origin_sinks_id)
     
     # Calculate the midplane of gaseous disk
-    midz_func = Disk_2D_midplane_function_generator(datag)
+    if isempty(mid_column_names)
+        midz_func = nothing
+        midz_gbe = nothing
+    else
+        midz_func = Disk_2D_midplane_function_generator(datag,(10.0,smax, 166))
+        # Transfer the midplane interpolation function into gridbackend.
+        imin = [smin,ϕmin]
+        imax = [smax,ϕmax]
+        in = [sn,ϕn]
+        midz_gbe = func2gbe(func=midz_func, imin, imax,in)
+    end
 
     # Interpolation
-    grids_gas :: Dict{String, gridbackend} = Disk_2D_FaceOn_Grid_analysis(datag, sparams, ϕparams, column_names, mid_column_names, midz_func, smoothed_kernel, h_mode)
-    grids_dust :: Dict{String, gridbackend} = Disk_2D_FaceOn_Grid_analysis(datad, sparams, ϕparams, column_names, mid_column_names, midz_func, smoothed_kernel, h_mode)
+    grids_gas :: Dict{String, gridbackend} = Disk_2D_FaceOn_Grid_analysis(datag, sparams, ϕparams, column_names=column_names, mid_column_names=mid_column_names, midz_func=midz_func, smoothed_kernel=smoothed_kernel, h_mode=h_mode)
+    grids_dust :: Dict{String, gridbackend} = Disk_2D_FaceOn_Grid_analysis(datad, sparams, ϕparams, column_names=column_names, mid_column_names=mid_column_names, midz_func=midz_func, smoothed_kernel=smoothed_kernel, h_mode=h_mode)
     
     # Combine these dictionaries of grids with suffix
     final_dict = create_grids_dict(["g","d"], [grids_gas, grids_dust])
-    
-    # Transfer the midplane interpolation function into gridbackend.
-    imin = [smin,ϕmin]
-    imax = [smax,ϕmax]
-    in = [sn,ϕn]
-    midz_gbe = func2gbe(func=midz_func, imin, imax,in)
 
     # Packaging the result
     Result_buffer :: Analysis_result_buffer = Analysis_result_buffer(time, final_dict, columns_order, params, midz_gbe)
     Result :: Analysis_result = buffer2output(Result_buffer)
     
     # Write out the result to HDF5
-    Write_HDF5(Analysis_tag, filepath, Result, File_prefix)
+    Write_HDF5(Analysis_tag,filepath, Result, File_prefix)
     @info "-------------------------------------------------------"
 end
 ~~~
 
-### Built-in plotting backend
+### Built-in plotting tools
 
-There has a built-in plotting backend in **PhantomRevealer** which is based on `matplotlib`. To use it, initializing the backend by
+**Important Notification:** After *0.9.0*, the old matplotlib-based plotting backend are discarded due to a fatal issue while calling Python from Julia.
 
-~~~julia
-prplt = initialize_pyplot_backend()
-~~~
+**PhantomRevealer.jl** provides a built-in plotting tools based on a well-known interactive plotting package **Makie.jl**, which wraps certian common-used plotting tools, including:
 
-The basic structure of backend is shown as the following
+1. Wrapping the `Figure` and several common-used object to manage the plotting object easier.
+2. Automatic setup the axis in the figure. More intuitive way to plotting on axes.
+3. Easier colorbar setup by automatically detecting the position of axis in the `Figure` object.
+4. Polar Heatmap while using `GLMakie`. (Exprienmental but useful)
 
-~~~python
-class figure_ax:
-    '''
-    The plotting object in the code.
-    
-    Field in Class:
-        fig: The figure/Canvas.
-        ax: The axes of plotting/colorbar
-        proj: The projection of plotting
-    '''
-    def __init__(self,proj=None):
-        '''
-        Two kinds of projection
-        "None": Normal cartisian plotting
-        "polar": Polar plotting
-        "3d": 3D plotting
-        '''
-        self.fig: mfg.Figure = None
-        self.ax: maxe._axes.Axes = None
-        self.ncols = None
-        self.nrows = None
-        self.proj = proj
-~~~
+The basic block in the tools is the `FigureAxes` object.
 
-Follow the guideline to use the structure 
+```julia
+mutable struct FigureAxes <: PhantomRevealerDataStructures
+    fig :: Figure
+    axes :: Matrix{Union{Nothing,Makie.Block}}
+    axes_type :: Matrix{String}
+    screen :: Union{Nothing, GLMakie.Screen}
+end
+```
 
-1. Generate an object
+Where `fig` is the main `Figure` object that contains the plots, `axes` is a matrix representing the relative position of axis among all `Axis`-alike object. `axes_type` is a matrix that stores the type of each axis as a string. This can be used to track different axis configurations (e.g., "Cartesian", "Polar", "3D"). The `screen` represents the `GLMakie.Screen` object associated with the figure, used when rendering interactive visualizations. `Nothing` if no screen is assigned.
 
-   ~~~julia
-   fax = prplt.figure_ax()
-   ~~~
+User can easily construct `FigureAxes` by calling the function
 
-2. Setup the desired figure
+```julia
+function FigureAxes(nrows::Int64,ncols::Int64;
+    figsize::Tuple{Int64,Int64}=(8,6),
+    sharex::Bool = true, sharey::Bool = true,
+    polar_axis::Union{Nothing,Matrix{Bool}}=nothing,ThreeDim_axis::Union{Nothing,Matrix{Bool}}=nothing)
+```
 
-   ~~~julia
-   fax.setup_fig(2,2,(10,6))
-   ~~~
+By passing the matrix with size `(nrows, ncols)` into the constructing function, the type of each axis can be contructed into either `Axis`(Cartesian), `PolarAxis`(Polar) or `Axis3`(3-dimensional). The corresponding type of axis would be recorded inside the `axes_type` fields. 
 
-3. Make the plot at each axes
+Two kinds of backend can be selected: `CairoMakie` and `GLMakie`. `CairoMakie` is sutible for **plotting vector graphics** such as `.svg` and `.pdf`, while `GLMakie` is for **interactive operation**. Use either `using CairoMakie` or `using GLMakie` at the beginning of your script to select the backend. If using both in your script, make sure to call
 
-   ~~~julia
-   fax.ax[0].plot(x,y,*plotting_params)
-   cont = fax.ax[1].pcolor(x,y,z,*plotting_params)
-   ~~~
+```julia
+activate_backend("GL")    # or "Cairo"
+```
 
-   
+to select the backend that you would likely to use. 
 
-4. Setup the colorbar for each map (if necessary). Allowing giving the colorbar a specific label so that the new colorbar can be drawn on the old ax rather then the new one.
+#### Example : Usage of built-in plotting backend 
 
-   ~~~julia
-   colorbar = fax.setup_colorbar(cont,"LABEL_OF_COLORBAR")
-   ~~~
+A simple usage for plotting is shown as following
 
-5. Save the figure
+```julia
+using PhantomRevealer, GLMakie, LaTeXStrings
+activate_backend("GL")  # Activate the GLMakie backend for interactive visualization
 
-   ~~~julia
-   save_fig("figure_1.png",450)
-   ~~~
+# Define coordinate grids
+x = LinRange(0.0,1.0,100)  # X-axis values ranging from 0 to 1 with 100 points
+y = LinRange(0.0,2π,150)   # Y-axis values ranging from 0 to 2π with 150 points
 
-6. Close the figure
+# Define the Z matrix as a 2D function of (x, y)
+z = [sin(yj)*exp(-xi)+1.0 for xi in x, yj in y]  # A damped sine function with an exponential decay
 
-   ~~~julia
-   fax.close_fig()
-   ~~~
+# Define colormap settings for different plots
+z12cmap = "hot"      # Colormap for subplot (1,2)
+z23cmap = "jet"      # Colormap for subplot (2,3)
+z34cmap = "jet"      # Colormap for subplot (3,4) with a white base
+zc1 = "brg"          # Colormap for multiple subplots (column 1)
 
-   Or, some subclasses for plotting is also provided e.g.
+# Define the grid layout of the figure
+nr = 3  # Number of rows
+nc = 4  # Number of columns
+Fax = FigureAxes(nr, nc, figsize=(10,8))  # Create a figure with the specified grid layout and figure size
 
-   ~~~julia
-   prplt.cart_plots()
-   prplt.polar_plots()
-   ~~~
+# Create a pseudocolor plot (heatmap) in subplot (1,2)
+lazypcolor!(Fax, (1,2), x, y, z, colormap=z12cmap)
+set_colorbar!(Fax, (1,2))  # Add a colorbar for subplot (1,2)
 
-   Check out the source code under `src/` to get further information.
+# Create a pseudocolor plot (heatmap) in subplot (2,3) with a logarithmic color scale
+lazypcolor!(Fax, (2,3), x, y, z, colormap=z23cmap, colorscale=log10)
+set_colorbar!(Fax, (2,3))  # Add a colorbar for subplot (2,3)
+
+# Create a pseudocolor plot (heatmap) in subplot (3,4) with a colormap that has a white base
+lazypcolor!(Fax, (3,4), x, y, z, colormap=colormap_with_base(z34cmap, to_white=true))
+set_colorbar!(Fax, (3,4))  # Add a colorbar for subplot (3,4)
+
+# Create multiple pseudocolor plots (heatmaps) in column 1 using the same colormap
+lazypcolor!(Fax, (1,1), x, y, z, colormap=zc1)   
+lazypcolor!(Fax, (2,1), x, y, z, colormap=zc1)   
+lazypcolor!(Fax, (3,1), x, y, z, colormap=zc1)   
+
+# Set a shared colorbar for the plots in rows 1, 2, and 3 of column 1
+set_colorbar!(Fax, (1,1), mutiaxes_extend_range=1:3)
+
+# Set axis labels
+set_xlabel!(Fax, "x")             # Set the x-axis label
+set_ylabel!(Fax, L"\theta")       # Set the y-axis label (using LaTeX formatting)
+
+# Render the figure
+draw_Fig!(Fax)  # Draw the figure with all configured subplots
+
+```
+
+The result would be as following.
+
+![alt text](PlottingExample.png)
+
 
 ## Relative links
 
 Phantom homepage: [Phantom SPH](https://phantomsph.github.io)
 
 Sarracen documentation: [Sarracen Documentation](https://sarracen.readthedocs.io/en/latest/)
+
+Makie documentation: [Makie Documentation](https://docs.makie.org/stable/)
 
 ## References
 

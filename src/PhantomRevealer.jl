@@ -3,25 +3,27 @@ module PhantomRevealer
 # With the order of level
 _module_location = @__DIR__
 #Level 1 (Package and information)
-include("$_module_location/module_initialization.jl")
-include("$_module_location/logging.jl")
+include("$_module_location/julia/module_initialization.jl")
+include("$_module_location/julia/logging.jl")
 #Level 2 (SPH Mathematics)
-include("$_module_location/mathematical_tools.jl")
-include("$_module_location/kernel_function.jl")
-include("$_module_location/eos_properties.jl")
+include("$_module_location/julia/mathematical_tools.jl")
+include("$_module_location/julia/kernel_function.jl")
+include("$_module_location/julia/eos_properties.jl")
 #Level 3 (Data Structure)
-include("$_module_location/grid.jl")
-include("$_module_location/PhantomRevealerDataFrame.jl")
+include("$_module_location/julia/grid.jl")
+include("$_module_location/julia/PhantomRevealerDataFrame.jl")
 #Level 4 (Sigal point analysis and File read)
-include("$_module_location/physical_quantity.jl")
-include("$_module_location/read_phantom.jl")
+include("$_module_location/julia/physical_quantity.jl")
+include("$_module_location/julia/read_phantom.jl")
 #Level 5 (Analysis)
-include("$_module_location/Grid_interpolation.jl")
+include("$_module_location/julia/Grid_interpolation.jl")
 #Level 6 (Extract data)
-include("$_module_location/Extract_data.jl")
-include("$_module_location/result_toolkits.jl")
-include("$_module_location/growth_rate.jl")
-include("$_module_location/spiral_detection.jl")
+include("$_module_location/julia/Makie_backend.jl")
+include("$_module_location/julia/Extract_data.jl")
+include("$_module_location/julia/result_toolkits.jl")
+include("$_module_location/julia/growth_rate.jl")
+include("$_module_location/julia/spiral_detection.jl")
+
 
 # Initialize function
 """
@@ -34,23 +36,22 @@ Get the folder of currently loaded PhantomRevealer
 function get_PhantomRevealer_path()
     return dirname(dirname(pathof(PhantomRevealer)))
 end
-"""
-    initialize_pyplot_backend()
-Initialize the built-in pyplot backend.
-"""
-function initialize_pyplot_backend()
-    push!(pyimport("sys")."path", dirname(pathof(PhantomRevealer)))
-    os = pyimport("os")
-    os.environ["OMP_NUM_THREADS"] = "1"
-    os.environ["MKL_NUM_THREADS"] = "1"
-    prplt = pyimport("pyplot_backend")
-    return prplt
-end
+# """
+#     initialize_pyplot_backend()
+# Initialize the built-in pyplot backend.
+# """
+# function initialize_pyplot_backend()
+#     push!(pyimport("sys")."path", dirname(pathof(PhantomRevealer))*"/python")
+#     os = pyimport("os")
+#     os.environ["OMP_NUM_THREADS"] = "1"
+#     os.environ["MKL_NUM_THREADS"] = "1"
+#     prplt = pyimport("pyplot_backend")
+#     return prplt
+# end
 
 # Import Python plt backend
-push!(pyimport("sys")."path", _module_location)
-prplt = pyimport("pyplot_backend")
-
+# push!(pyimport("sys")."path", _module_location*"/python")
+# prplt = pyimport("pyplot_backend")
 # Export function, marco, const...
 for name in filter(s -> !startswith(string(s), "#"), names(@__MODULE__, all = true))
     if !startswith(String(name), "_") && (name != :eval) && (name != :include)

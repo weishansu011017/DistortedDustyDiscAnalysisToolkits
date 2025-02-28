@@ -142,17 +142,17 @@ function _Integral_1d(x::AbstractVector, y::AbstractVector, inteval::Vector)
 end
 
 """
-    value2closestvalueindex(array::AbstractVector, target::Float64)
+    value2closestvalueindex(array::AbstractVector, Union{Float64,Int64})
 Find the index of value which is the closest value to a given target in a array.
 
 # Parameters
 - `array::AbstractVector`: The array.
-- `target::Float64`: The target for finding.
+- `target::Union{Float64,Int64}`: The target for finding.
 
 # Returns
 - `Int64`: The index of closest value.
 """
-function value2closestvalueindex(array::AbstractVector, target::Float64)
+function value2closestvalueindex(array::AbstractVector, target::Union{Float64,Int64})
     target_index = argmin(abs.(target .- array))
     return target_index
 end
@@ -211,4 +211,62 @@ function astrounit2KeperianAngularVelocity(r::Float64,M::Float64)
     G = 6.67e-8
     Ω = sqrt((G*M_cgs)/r_cgs^3)
     return Ω
+end
+
+"""
+    replace_inf_with_nan!(array::Array)
+
+Replaces all infinite (`Inf`, `-Inf`) values in the given array with `NaN`.
+
+# Parameters
+- `array::Array`: The input array containing numerical values.
+
+# Returns
+- `Array`: A modified version of the input array where all infinite values are replaced with `NaN`.
+"""
+function replace_inf_with_nan!(array::Array)
+    mask = isinf.(array)
+    array[mask] .= NaN
+    return array
+end
+
+"""
+    Binning2OneDimBoxes(array::AbstractArray, boxes::AbstractVector)
+
+Assigns elements of `array` to bins defined by `boxes`, returning an array of bin indices.
+
+This function takes an input `array` and assigns each element to the closest bin index 
+defined in `boxes`, which must be sorted in ascending order. The output is an array of 
+integers indicating the bin index for each element in the original `array`.
+
+# Parameters
+- `array::AbstractArray`  
+    - The input array containing numerical values to be binned.
+- `boxes::AbstractVector`  
+    - A sorted vector defining bin edges. The values in `boxes` should be in ascending order.
+
+# Returns
+- `result_bin_array::AbstractArray{Int64}`  
+    - An array of the same shape as `array`, where each element is replaced by its bin index.
+"""
+function Binning2OneDimBoxes(array::AbstractArray, boxes::AbstractVector)
+    if !issorted(boxes)
+        error("NonSortedError: Only a sorted boxes set is allowed")
+    end
+    original_size = size(array)
+    flatten_array = vec(array)
+    bin_index = zeros(Int64,length(flatten_array))
+    for (i,element) in enumerate(flatten_array)
+        closest_index = value2closestvalueindex(boxes,element)
+        neiboredge = boxes[closest_index]
+        if ((neiboredge <= element) && (closest_index != length(boxes)))
+            bin_index[i] = closest_index
+        elseif ((neiboredge > element) && (closest_index != 1))
+            bin_index[i] = closest_index - 1
+        else
+            bin_index[i] = -1
+        end
+    end
+    result_bin_array = reshape(bin_index,original_size...)
+    return result_bin_array
 end

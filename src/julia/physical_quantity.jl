@@ -151,6 +151,73 @@ function density(
 end
 
 """
+    number_density(data::PhantomRevealerDataFrame, reference_point::Vector, smoothed_kernel:: Function = M5_spline,h_mode::String="closest", coordinate_flag::String = "cart")
+Calculate the number density n at the given reference point by SPH interpolation.
+
+# Parameters
+- `data :: PhantomRevealerDataFrame`: The SPH data that is stored in `PhantomRevealerDataFrame`
+- `reference_point :: Vector`: The reference point for interpolation.
+- `smoothed_kernel :: Function = M5_spline`: The Kernel function for interpolation.
+- `h_mode :: String="closest"`: The mode for finding a proper smoothed radius. (Allowed value:  "closest", "mean")
+- `coordinate_flag :: String = "cart"`: The coordinate system that is used for given the target. Allowed value: ("cart", "polar") 
+
+# Returns
+- `Float64`: The value of number density at the reference point.
+
+# Example
+```julia
+prdf_list = read_phantom(dumpfile_00000,"all")
+COM2star!(prdf_list, prdf_list[end],1)
+data :: PhantomRevealerDataFrame = prdf_list[1]
+reference_point :: Vector = [25.0, π/2, 0.0]  # Choosing the cylindrical coordinate
+smoothed_kernel :: Function = M6_spline
+numdens = number_density(data, reference_point, smoothed_kernel, "closest", "polar")
+```
+"""
+function number_density(
+    data::PhantomRevealerDataFrame,
+    reference_point::Vector,
+    smoothed_kernel::Function = M5_spline,
+    h_mode::String = "closest",
+    coordinate_flag::String = "cart"
+)
+    """
+    Here recommended to use a single type of particle.
+    coordinate_flag is the coordinate system that the reference_point is given
+    reference_point is in "3D"
+    "cart" = cartitian
+    "polar" = cylindrical
+    """
+    # Return 0.0 if no particle in the data
+    if nrow(data.dfdata) == 0
+        return 0.0
+    end
+
+    # Preparing and verifing the data
+    if coordinate_flag == "polar"
+        reference_point = _cylin2cart(reference_point)
+    end
+
+    # Evaluating a proper smoothed radius
+    truncate_multiplier = KernelFunctionValid()[nameof(smoothed_kernel)]
+    rnorm = get_rnorm_ref(data, reference_point)
+    h_intepolate = estimate_h_intepolate(data, rnorm, h_mode) # _easy_estimate_h_intepolate(dfdata, rnorm,)
+
+    # Kernel interpolation
+    if (h_intepolate == 0.0)
+        numdensity = 0.0
+    else
+        truncate_radius = truncate_multiplier * h_intepolate
+        filtered_indices = findall(r -> r <= truncate_radius, rnorm)
+        filtered_rnorm = rnorm[filtered_indices]
+        numdensity = sum(
+            Smoothed_kernel_function.(smoothed_kernel, h_intepolate, filtered_rnorm, 3),
+        )
+    end
+    return numdensity
+end
+
+"""
     gradient_density(data::PhantomRevealerDataFrame, reference_point::Vector, smoothed_kernel:: Function = M5_spline,h_mode::String="closest", coordinate_flag::String = "cart";Identical_particles::Bool=true)
 Calculate the grident of density ∇ρ at the given reference point by SPH interpolation
 
@@ -663,7 +730,7 @@ Those points whose neighborhood has no particles around it would be label as `Na
 
 The curl of any arbitrary vector quantity A would be estimated by
 
-∇×A(r) = (1/ρ(r))∑_b m_b*(A_b-A(r))×∇W(r-r_b)
+∇×A(r) = -(1/ρ(r))∑_b m_b*(A_b-A(r))×∇W(r-r_b)
 
 # Parameters
 - `data :: PhantomRevealerDataFrame`: The SPH data that is stored in `PhantomRevealerDataFrame`
