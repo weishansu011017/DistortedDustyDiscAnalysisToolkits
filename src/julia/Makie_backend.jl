@@ -50,7 +50,7 @@ figures, axes, and additional metadata.
 - `axes_type` :: `Matrix{String}`
     - A matrix that stores the type of each axis as a string. This can be used 
       to track different axis configurations (e.g., "Cartesian", "Polar", "3D").
-- `screen` :: `Union{Nothing, GLMakie.Screen}`
+- `screen` :: `Union{Nothing, Any}`
     - The `GLMakie.Screen` object associated with the figure, used when rendering 
       interactive visualizations. `Nothing` if no screen is assigned.
 """
@@ -58,7 +58,7 @@ mutable struct FigureAxes <: PhantomRevealerDataStructures
     fig :: Figure
     axes :: Matrix{Union{Nothing,Makie.Block}}
     axes_type :: Matrix{String}
-    screen :: Union{Nothing, GLMakie.Screen}
+    screen :: Union{Nothing, Any}
 end
 
 function _contructing_axes_from_axes_type(fig::Figure, axes_type::Matrix{String})
@@ -193,31 +193,6 @@ function FigureAxes(nrows::Int64,ncols::Int64;
 end
 
 """
-    activate_backend(backend::String)
-Activate the specific backend for plotting.
-
-# Parameters
-- `backend :: String`: The backend. The avaliable backends are either `GL` or `Cairo`.
-"""
-function activate_backend(backend::String)
-    if backend == "GL"
-        if isdefined(Main, :GLMakie)
-            GLMakie.activate!()
-        else
-            error("MisloadingError: The module `GLMakie` haven't loaded yet! Using `using GLMakie` before activating backend!")
-        end
-    elseif backend == "Cairo"
-        if isdefined(Main, :CairoMakie)
-            CairoMakie.activate!()
-        else
-            error("MisloadingError: The module `CairoMakie` haven't loaded yet! Using `using CairoMakie` before activating backend!")
-        end
-    else
-        error("ValueError: Unknown name of backend $backend !. The avaliable backends are either `GL` or `Cairo`.")
-    end
-end
-
-"""
     current_backend()
 Get the current activated backend
 
@@ -235,6 +210,31 @@ function current_backend()
     end
 end
 
+"""
+    activate_backend(backend::String)
+Activate the specific backend for plotting.
+
+# Parameters
+- `backend :: String`: The backend. The avaliable backends are either `GL` or `Cairo`.
+"""
+function activate_backend(backend::String)
+    if backend == "GL"
+        ext = Base.get_extension(PhantomRevealer, :BackendExtra)
+        if ext !== nothing
+            ext.activate_backend()
+        else
+            error("MisloadingError: GLMakie is not installed or loaded. Please use `CairoMakie` instead!")
+        end
+    elseif backend == "Cairo"
+        if isdefined(Main, :CairoMakie)
+            CairoMakie.activate!()
+        else
+            error("MisloadingError: The module `CairoMakie` haven't loaded yet! Using `using CairoMakie` before activating backend!")
+        end
+    else
+        error("ValueError: Unknown name of backend $backend !. The avaliable backends are either `GL` or `Cairo`.")
+    end
+end
 
 
 """
@@ -287,15 +287,16 @@ end
 
 """
     close_Fig!(Fax :: FigureAxes)
-Close the window that correlates to the given `FigureAxes`.
+Close the `GLMakie.screen` window that correlates to the given `FigureAxes`.
 
 # Parameters
 - `Fax :: FigureAxes`: The `FigureAxes` object.
 """
 function close_Fig!(Fax :: FigureAxes)
     if current_backend == "GL"
-        if !isnothing(Fax.screen)
-            GLMakie.close(Fax.screen)
+        ext = Base.get_extension(PhantomRevealer, :BackendExtra)
+        if (!isnothing(Fax.screen)) || (ext !== nothing)
+            ext.close_Fig!(Fax)
             Fax.screen = nothing
         end
     end

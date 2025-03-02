@@ -11,7 +11,6 @@ const MODULE_LIST = [
     :FilesystemDatastructures,
     :ForwardDiff,
     :GeometryBasics,
-    :GLMakie,
     :HDF5,
     :ImageFiltering,
     :Interpolations,
@@ -26,6 +25,7 @@ const MODULE_LIST = [
     :Pkg,
     :Printf,
     :QuadGK,
+    :Requires,
     :Statistics,
     :StatsBase,
 ]
