@@ -132,7 +132,7 @@ function create_column_names(keys_order::Vector{String}, suffixes::Vector, midz:
     if midz
         column_names = ["midz"]
     else
-        column_names = Array{String}()
+        column_names = Array{String}(undef,0)
     end
     for key in keys_order
         for suffix in suffixes
@@ -250,7 +250,7 @@ function Analysis_result_buffer(
             end
         end
     end
-    column_names = create_column_names(keys_array, suffixes)
+    column_names = create_column_names(keys_array, suffixes, isnothing(midz_gbe) ? false : true)
     column_dict = create_column_dict(column_names)
     sample_data = grids_dict[suffixes[1]][collect(keys(grids_dict[suffixes[1]]))[1]]
     axes = sample_data.axes

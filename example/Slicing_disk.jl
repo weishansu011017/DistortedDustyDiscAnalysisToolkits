@@ -19,8 +19,8 @@ function Slicing_disk(file::String)
 
     # Output setting
     File_prefix :: String = "Slice"
-    HDF5 :: Bool = true                                                                 # Extract the final result as HDF5 format
-    figure :: Bool = false                                                              # Extract the final result as figure
+    HDF5 :: Bool = false                                                                 # Extract the final result as HDF5 format
+    figure :: Bool = true                                                              # Extract the final result as figure
 
     # Disk generating setting (Base on cylindrical coordinate (s,ϕ,z))
     Origin_sinks_id = 1                                                                 # The id of sink which is located at the middle of disk.
@@ -43,27 +43,21 @@ function Slicing_disk(file::String)
     gradient_column_names :: Vector{String} = []                                        # The columns that would be interpolated its gradient value
     divergence_column_names :: Vector{String} = ["v"]                                   # The vector quantities that would be interpolated its divergence
     curl_column_names :: Vector{String} = ["v"]                                         # The vector quantities that would be interpolated its curl
-
-    # Figure setting (Valid only if figure == ture)
-    Figure_format :: String = "eps"
+    
+    Figure_format :: String = "pdf"
     figsize :: Tuple = (8,8)
     dpi = 450
     slabel = latexstring(L"$r$ [au]")
     zlabel = latexstring(L"$z$ [au]")
-    colormap_rhog :: String = "RdYlGn"
-    colormap_rhod :: String = "RdYlGn"
-    colormap_vsg :: String = "RdBu"
-    colormap_vsd :: String = "RdBu"
-    colormap_vorticityg :: String = "RdBu"
-    colormap_vorticityd :: String = "RdBu"
-    clim_rhog :: Vector = [1e-17,4e-14]
-    clim_rhod :: Vector = [1e-19,8e-14]
-    clim_vsg :: Vector = [-1.3e+5,1.3e+5]
-    clim_vsd :: Vector = [-1.3e+5,1.3e+5]
-    clim_vorticityg :: Vector = [-3.3,3.3]
-    clim_vorticityd :: Vector = [-3.3,3.3]  
+    colormap_rho :: String = "RdYlGn"
+    colormap_v :: String = "RdBu"
+    colormap_vorticity :: String = "RdBu"
+    clim_rho :: Vector = [7.1e-18,1e-14]
+    clim_vs :: Vector = [-1.5e+5,1.5e+5]
+    clim_vz :: Vector = [-1.5e+5,1.5e+5]
+    clim_vorticity :: Vector = [-25.5,25.5]
     Slice_ϕ :: Union{Nothing,Float64} = 0.0                                             # The azimuthal angle of vertical structure (in degree). Taking azimuthally averaging if `nothing`.
-
+    sreverse :: Bool = true
     # -----------------------------------------------------------------------------
     # Setup info
     initial_logging(get_analysis_info(file))
@@ -90,7 +84,7 @@ function Slicing_disk(file::String)
         push!(modified_curl_column_names, "∇×$(cvcolumn_name)ϕ")
         push!(modified_curl_column_names, "∇×$(cvcolumn_name)z")
     end
-    columns_order :: Vector = ["rho", "∇rhos", "∇rhoϕ", column_names...,modified_grad_column_names...,modified_diver_column_names...,modified_curl_column_names...] # construct a ordered column names 
+    columns_order :: Vector = ["rho", "∇rhos", "∇rhoϕ","∇rhoz", column_names...,modified_grad_column_names...,modified_diver_column_names...,modified_curl_column_names...] # construct a ordered column names 
 
     # Read file
     prdf_list :: Vector{PhantomRevealerDataFrame} = read_phantom(file,"all")
@@ -131,6 +125,10 @@ function Slicing_disk(file::String)
 
     # Construct the figure
     if figure
+        # Get the number for new filename
+        filename = splitext(file)[1]
+        number_data = extract_number(filename)
+
         # Modified Colormap to have white color at the bottom
         colormap_rho_modified = colormap_with_base(colormap_rho)
 
@@ -194,36 +192,45 @@ function Slicing_disk(file::String)
         activate_backend("Cairo")
         Fax = FigureAxes(4,2,figsize=figsize,sharex=true, sharey=true)
         heatmap!(Fax.axes[1,1],s ,z ,rhog ,colormap=colormap_rho_modified, colorrange=clim_rho, colorscale=log10)
-        set_annotation!(Fax,(1,1),latexstring(anatonate_label," (Gas)"))
+        set_annotation!(Fax,(1,1),latexstring(anatonate_label," (Gas)"),fontsize=14)
         heatmap!(Fax.axes[1,2],s ,z ,rhod ,colormap=colormap_rho_modified, colorrange=clim_rho, colorscale=log10)
-        set_annotation!(Fax,(1,2),latexstring(anatonate_label," (Dust)"))
+        set_annotation!(Fax,(1,2),latexstring(anatonate_label," (Dust)"),fontsize=14)
         set_colorbar!(Fax,(1,1),clabel=rho_label,link_row_colormap=true)
+        Fax.axes[1,1].xreversed = sreverse
+        Fax.axes[1,2].xreversed = sreverse
 
         heatmap!(Fax.axes[2,1],s ,z ,vsg ,colormap= colormap_v, colorrange=clim_vs, colorscale=Symlog10Scale(clim_vs...))
-        set_annotation!(Fax,(2,1),latexstring(anatonate_label," (Gas)"))
+        set_annotation!(Fax,(2,1),latexstring(anatonate_label," (Gas)"),fontsize=14)
         heatmap!(Fax.axes[2,2],s ,z ,vsd ,colormap= colormap_v, colorrange=clim_vs, colorscale=Symlog10Scale(clim_vs...))
-        set_annotation!(Fax,(2,2),latexstring(anatonate_label," (Dust)"))
+        set_annotation!(Fax,(2,2),latexstring(anatonate_label," (Dust)"),fontsize=14)
         set_colorbar!(Fax,(2,1),clabel=vs_label,link_row_colormap=true)
+        Fax.axes[2,1].xreversed = sreverse
+        Fax.axes[2,2].xreversed = sreverse
 
         heatmap!(Fax.axes[3,1],s ,z ,vzg ,colormap= colormap_v, colorrange=clim_vz, colorscale=Symlog10Scale(clim_vz...))
-        set_annotation!(Fax,(3,1),latexstring(anatonate_label," (Gas)"))
+        set_annotation!(Fax,(3,1),latexstring(anatonate_label," (Gas)"),fontsize=14)
         heatmap!(Fax.axes[3,2],s ,z ,vzd ,colormap= colormap_v, colorrange=clim_vz, colorscale=Symlog10Scale(clim_vz...))
-        set_annotation!(Fax,(3,2),latexstring(anatonate_label," (Dust)"))
+        set_annotation!(Fax,(3,2),latexstring(anatonate_label," (Dust)"),fontsize=14)
         set_colorbar!(Fax,(3,1),clabel=vz_label,link_row_colormap=true)
+        Fax.axes[3,1].xreversed = sreverse
+        Fax.axes[3,2].xreversed = sreverse
 
         heatmap!(Fax.axes[4,1],s ,z ,-curlvϕg*1e10 ,colormap= colormap_vorticity, colorrange=clim_vorticity, colorscale=identity)
-        set_annotation!(Fax,(4,1),latexstring(anatonate_label," (Gas)"))
+        set_annotation!(Fax,(4,1),latexstring(anatonate_label," (Gas)"),fontsize=14)
         heatmap!(Fax.axes[4,2],s ,z ,-curlvϕd*1e10 ,colormap= colormap_vorticity, colorrange=clim_vorticity, colorscale=identity)
-        set_annotation!(Fax,(4,2),latexstring(anatonate_label," (Dust)"))
+        set_annotation!(Fax,(4,2),latexstring(anatonate_label," (Dust)"),fontsize=14)
         set_colorbar!(Fax,(4,1),clabel=Vorticity_label,link_row_colormap=true)
+        Fax.axes[4,1].xreversed = sreverse
+        Fax.axes[4,2].xreversed = sreverse
+
 
         set_xlabel!(Fax,slabel)
         set_ylabel!(Fax,zlabel)
 
         if isnothing(Slice_ϕ)
-            output_filename = "$(File_prefix)_$(number_data)_aziavegTTTlog.$(Figure_format)"
+            output_filename = "$(File_prefix)_$(number_data)_aziave.$(Figure_format)"
         else
-            output_filename = "$(File_prefix)_$(number_data)_$(Slice_ϕ)degTTTlog.$(Figure_format)"
+            output_filename = "$(File_prefix)_$(number_data)_$(Slice_ϕ)deg.$(Figure_format)"
         end
         save_Fig!(Fax, output_filename, dpi)
         close_Fig!(Fax)

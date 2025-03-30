@@ -19,11 +19,12 @@ function Constructing_figure(filepath::String)
     colormap_rho :: String = "RdYlGn"
     colormap_v :: String = "RdBu"
     colormap_vorticity :: String = "RdBu"
-    clim_rho :: Vector = [7.1e-18,1e-14]
-    clim_vs :: Vector = [-1.5e+5,1.5e+5]
-    clim_vz :: Vector = [-1.5e+5,1.5e+5]
-    clim_vorticity :: Vector = [-25.5,25.5]
-    Slice_ϕ :: Union{Nothing,Float64} = 0                                             # The azimuthal angle of vertical structure (in degree). Taking azimuthally averaging if `nothing`.
+    clim_rho :: Vector = [5.1e-18,1e-14]
+    clim_vs :: Vector = [-4.0e+4,4.0e+4]
+    clim_vz :: Vector = [-4.0e+4,4.0e+4]
+    clim_vorticity :: Vector = [-5.5,5.5]
+    Slice_ϕ :: Union{Nothing,Float64} = 180.0                                             # The azimuthal angle of vertical structure (in degree). Taking azimuthally averaging if `nothing`.
+    sreverse :: Bool = true
     # -----------------------------------------------------------------------------
     # Packaging parameters
     filename = splitext(filepath)[1]
@@ -99,36 +100,44 @@ function Constructing_figure(filepath::String)
     activate_backend("Cairo")
     Fax = FigureAxes(4,2,figsize=figsize,sharex=true, sharey=true)
     heatmap!(Fax.axes[1,1],s ,z ,rhog ,colormap=colormap_rho_modified, colorrange=clim_rho, colorscale=log10)
-    set_annotation!(Fax,(1,1),latexstring(anatonate_label," (Gas)"))
+    set_annotation!(Fax,(1,1),latexstring(anatonate_label," (Gas)"),fontsize=14)
     heatmap!(Fax.axes[1,2],s ,z ,rhod ,colormap=colormap_rho_modified, colorrange=clim_rho, colorscale=log10)
-    set_annotation!(Fax,(1,2),latexstring(anatonate_label," (Dust)"))
+    set_annotation!(Fax,(1,2),latexstring(anatonate_label," (Dust)"),fontsize=14)
     set_colorbar!(Fax,(1,1),clabel=rho_label,link_row_colormap=true)
+    Fax.axes[1,1].xreversed = sreverse
+    Fax.axes[1,2].xreversed = sreverse
 
     heatmap!(Fax.axes[2,1],s ,z ,vsg ,colormap= colormap_v, colorrange=clim_vs, colorscale=Symlog10Scale(clim_vs...))
-    set_annotation!(Fax,(2,1),latexstring(anatonate_label," (Gas)"))
+    set_annotation!(Fax,(2,1),latexstring(anatonate_label," (Gas)"),fontsize=14)
     heatmap!(Fax.axes[2,2],s ,z ,vsd ,colormap= colormap_v, colorrange=clim_vs, colorscale=Symlog10Scale(clim_vs...))
-    set_annotation!(Fax,(2,2),latexstring(anatonate_label," (Dust)"))
+    set_annotation!(Fax,(2,2),latexstring(anatonate_label," (Dust)"),fontsize=14)
     set_colorbar!(Fax,(2,1),clabel=vs_label,link_row_colormap=true)
+    Fax.axes[2,1].xreversed = sreverse
+    Fax.axes[2,2].xreversed = sreverse
 
     heatmap!(Fax.axes[3,1],s ,z ,vzg ,colormap= colormap_v, colorrange=clim_vz, colorscale=Symlog10Scale(clim_vz...))
-    set_annotation!(Fax,(3,1),latexstring(anatonate_label," (Gas)"))
+    set_annotation!(Fax,(3,1),latexstring(anatonate_label," (Gas)"),fontsize=14)
     heatmap!(Fax.axes[3,2],s ,z ,vzd ,colormap= colormap_v, colorrange=clim_vz, colorscale=Symlog10Scale(clim_vz...))
-    set_annotation!(Fax,(3,2),latexstring(anatonate_label," (Dust)"))
+    set_annotation!(Fax,(3,2),latexstring(anatonate_label," (Dust)"),fontsize=14)
     set_colorbar!(Fax,(3,1),clabel=vz_label,link_row_colormap=true)
+    Fax.axes[3,1].xreversed = sreverse
+    Fax.axes[3,2].xreversed = sreverse
 
     heatmap!(Fax.axes[4,1],s ,z ,-curlvϕg*1e10 ,colormap= colormap_vorticity, colorrange=clim_vorticity, colorscale=identity)
-    set_annotation!(Fax,(4,1),latexstring(anatonate_label," (Gas)"))
+    set_annotation!(Fax,(4,1),latexstring(anatonate_label," (Gas)"),fontsize=14)
     heatmap!(Fax.axes[4,2],s ,z ,-curlvϕd*1e10 ,colormap= colormap_vorticity, colorrange=clim_vorticity, colorscale=identity)
-    set_annotation!(Fax,(4,2),latexstring(anatonate_label," (Dust)"))
+    set_annotation!(Fax,(4,2),latexstring(anatonate_label," (Dust)"),fontsize=14)
     set_colorbar!(Fax,(4,1),clabel=Vorticity_label,link_row_colormap=true)
+    Fax.axes[4,1].xreversed = sreverse
+    Fax.axes[4,2].xreversed = sreverse
 
     set_xlabel!(Fax,slabel)
     set_ylabel!(Fax,zlabel)
 
     if isnothing(Slice_ϕ)
-        output_filename = "$(File_prefix)_$(number_data)_aziavegTTTlog.$(Figure_format)"
+        output_filename = "$(File_prefix)_$(number_data)_aziave.$(Figure_format)"
     else
-        output_filename = "$(File_prefix)_$(number_data)_$(Slice_ϕ)degTTTlog.$(Figure_format)"
+        output_filename = "$(File_prefix)_$(number_data)_$(Slice_ϕ)deg.$(Figure_format)"
     end
     save_Fig!(Fax, output_filename, dpi)
     close_Fig!(Fax)

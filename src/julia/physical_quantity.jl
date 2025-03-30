@@ -311,13 +311,13 @@ function gradient_density(
         buffers_array = zeros(Float64, size(xyz_filtered))
         for i = 1:size(xyz_filtered)[1]
             bufferf_array[i, :] =
-                (filtered_ρb[i] * filtered_m[i]) .* Smoothed_greident_kernel_function(
+                (filtered_ρb[i] * filtered_m[i]) .* Smoothed_gradient_kernel_function(
                     smoothed_kernel,
                     h_intepolate,
                     xyz_filtered[i, :],
                 ) ./density_value
             buffers_array[i, :] =
-                filtered_m[i] .* Smoothed_greident_kernel_function(
+                filtered_m[i] .* Smoothed_gradient_kernel_function(
                     smoothed_kernel,
                     h_intepolate,
                     xyz_filtered[i, :],
@@ -510,7 +510,7 @@ function gradient_quantity_intepolate(
     "cart" = cartitian
     "polar" = cylindrical
     """
-    grad_quant::Vector = Vector{Float64}(undef, 3)\
+    grad_quant::Vector = Vector{Float64}(undef, 3)
     # Return NaN if no particle in the data
     if nrow(data.dfdata) == 0
         fill!(grad_quant, NaN)
@@ -561,7 +561,7 @@ function gradient_quantity_intepolate(
         buffer_array = zeros(Float64, size(xyz_filtered))
         for i = 1:size(xyz_filtered)[1]
             buffer_array[i, :] =
-                ((filtered_Ab[i] - quantity_value) * filtered_m[i]) .* Smoothed_greident_kernel_function(
+                ((filtered_Ab[i] - quantity_value) * filtered_m[i]) .* Smoothed_gradient_kernel_function(
                     smoothed_kernel,
                     h_intepolate,
                     xyz_filtered[i, :],
@@ -711,7 +711,7 @@ function divergence_quantity_intepolate(
         filtered_AbsAa = filtered_Ab .- quantity_value_vector'
         buffer_array = zeros(Float64, length(filtered_m))
         for i = 1:size(xyz_filtered)[1]
-            buffer_array[i] = dot(filtered_AbsAa[i,:] , Smoothed_greident_kernel_function(
+            buffer_array[i] = dot(filtered_AbsAa[i,:] , Smoothed_gradient_kernel_function(
                 smoothed_kernel,
                 h_intepolate,
                 xyz_filtered[i, :],
@@ -859,7 +859,7 @@ function curl_quantity_intepolate(
         buffer_array = zeros(Float64, size(xyz_filtered))
         for i = 1:size(xyz_filtered)[1]
             buffer_array[i, :] =
-                -cross(filtered_AbsAa[i,:], Smoothed_greident_kernel_function(
+                -cross(filtered_AbsAa[i,:], Smoothed_gradient_kernel_function(
                     smoothed_kernel,
                     h_intepolate,
                     xyz_filtered[i, :],
@@ -1035,7 +1035,7 @@ function gradient_surface_density(
         buffer_array = zeros(Float64, size(xy_filtered))
         for i = 1:size(xy_filtered)[1]
             buffer_array[i, :] =
-                filtered_m[i] .* Smoothed_greident_kernel_function(
+                filtered_m[i] .* Smoothed_gradient_kernel_function(
                     smoothed_kernel,
                     h_intepolate,
                     xy_filtered[i, :],

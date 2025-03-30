@@ -162,7 +162,7 @@ Get the value of converting from code unit to cgs.
 # Parameters
 - `data :: PhantomRevealerDataFrame`: The SPH data that is stored in `PhantomRevealerDataFrame` 
 
-#Returns
+# Returns
 - 'Float64': Unit of distance
 - 'Float64': Unit of mass
 - 'Float64': Unit of time
@@ -174,6 +174,20 @@ function get_code_unit(data::PhantomRevealerDataStructures)
     utime = data.params["utime"]
     umagfd = data.params["umagfd"]
     return udist, umass, utime, umagfd
+end
+
+"""
+    get_npart(data::PhantomRevealerDataFrame)
+Get the number of particles in `data`.
+
+# Parameters
+- `data :: PhantomRevealerDataFrame`: The SPH data that is stored in `PhantomRevealerDataFrame` 
+
+# Returns
+-`Int64`: The number of particles.
+"""
+function get_npart(data::PhantomRevealerDataFrame)
+    return nrow(data.dfdata)
 end
 
 """
@@ -281,7 +295,7 @@ function Generate_KDtree(data::PhantomRevealerDataFrame, dim::Int)
 end
 
 """
-    KDtree_filter(data::PhantomRevealerDataFrame, kdtree::KDTree, target::Vector, radius::Float64, coordinate_flag::String = "cart")
+    KDtreeRadiusFilter(data::PhantomRevealerDataFrame, kdtree::KDTree, target::Vector, radius::Float64, coordinate_flag::String = "cart")
 Mask the particles which is located far from target.
 
 # Parameters
@@ -303,10 +317,10 @@ kdtree3d :: KDTree = Generate_KDtree(data, 3)
 
 target :: Vector = [10.0, 3.1415, 0.0] # In polar/cylindrical coordinate
 coordinate_flag :: String = "polar"
-filtered_data :: PhantomRevealerDataFrame = KDtree_filter(data, kdtree3d, target, truncated_radius, coordinate_flag)
+filtered_data :: PhantomRevealerDataFrame = KDtreeRadiusFilter(data, kdtree3d, target, truncated_radius, coordinate_flag)
 ```
 """
-function KDtree_filter(
+function KDtreeRadiusFilter(
     data::PhantomRevealerDataFrame,
     kdtree::KDTree,
     target::Vector,
@@ -330,6 +344,62 @@ function KDtree_filter(
         )
     end
     kdtf_dfdata = data.dfdata[inrange(kdtree, target, radius), :]
+    kdtf_data = PhantomRevealerDataFrame(kdtf_dfdata, data.params)
+    return kdtf_data
+end
+
+"""
+    KDtreeNearNeighborsFilter(data::PhantomRevealerDataFrame, kdtree::KDTree, target::Vector, N::Int64, coordinate_flag::String = "cart")
+
+Filter out particles that are not among the `N` nearest neighbors of a given target position.
+
+# Parameters
+- `data :: PhantomRevealerDataFrame`: The SPH data stored in a `PhantomRevealerDataFrame`.
+- `kdtree :: KDTree`: The KDTree constructed from `data`.
+- `target :: Vector`: The reference position to search for nearest neighbors.
+- `N :: Int64`: The number of nearest neighbors to retain.
+- `coordinate_flag :: String = "cart"`: The coordinate system of `target`. Allowed values: `"cart"` (Cartesian), `"polar"` (polar/cylindrical).
+
+# Returns
+- `PhantomRevealerDataFrame`: A new data frame containing only the `N` nearest neighbors.
+
+# Example
+```julia
+prdf_list, prdf_sinks = read_phantom(dumpfile_00000)
+data = prdf_list[1]
+truncated_radius = get_truncated_radius(data)
+kdtree3d :: KDTree = Generate_KDtree(data, 3)
+
+target :: Vector = [10.0, 3.1415, 0.0] # In polar/cylindrical coordinates
+coordinate_flag :: String = "polar"
+filtered_data :: PhantomRevealerDataFrame = KDtreeNearNeighborsFilter(data, kdtree3d, target, 100, coordinate_flag)
+```
+"""
+function KDtreeNearNeighborsFilter(
+    data::PhantomRevealerDataFrame,
+    kdtree::KDTree,
+    target::Vector,
+    N::Int64,
+    coordinate_flag::String = "cart",
+)
+    """
+    Here recommended to use a single type of particle.
+    coordinate_flag is the coordinate system that the reference_point is given
+    reference_point is in "2D"
+    "cart" = cartitian
+    "polar" = polar
+    """
+    if coordinate_flag == "polar"
+        target = _cylin2cart(target)
+    end
+    dim = length(first(kdtree.data))
+    if (dim != length(target))
+        error(
+            "DimensionalError: The kdtree is constructed in $(dim)-d, but the given target is in $(length(target))-d.",
+        )
+    end
+    idxs, _ = knn(kdtree, target, N, true)
+    kdtf_dfdata = data.dfdata[idxs, :]
     kdtf_data = PhantomRevealerDataFrame(kdtf_dfdata, data.params)
     return kdtf_data
 end
@@ -860,7 +930,7 @@ function get_disk_mass(
         COM2star!(data_cp, sink_data, sink_particle_id)
     end
     kdtree = Generate_KDtree(data_cp, get_dim(data_cp))
-    kdtf_data = KDtree_filter(
+    kdtf_data = KDtreeRadiusFilter(
         data_cp,
         kdtree,
         zeros(Float64, get_dim(data_cp)),

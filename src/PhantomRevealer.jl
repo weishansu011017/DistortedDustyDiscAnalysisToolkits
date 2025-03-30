@@ -5,6 +5,8 @@ _module_location = @__DIR__
 #Level 1 (Package and information)
 include("$_module_location/julia/module_initialization.jl")
 include("$_module_location/julia/logging.jl")
+#Level 1.5 (Optional dependence of GLMakie)
+
 #Level 2 (SPH Mathematics)
 include("$_module_location/julia/mathematical_tools.jl")
 include("$_module_location/julia/kernel_function.jl")
@@ -36,22 +38,7 @@ Get the folder of currently loaded PhantomRevealer
 function get_PhantomRevealer_path()
     return dirname(dirname(pathof(PhantomRevealer)))
 end
-# """
-#     initialize_pyplot_backend()
-# Initialize the built-in pyplot backend.
-# """
-# function initialize_pyplot_backend()
-#     push!(pyimport("sys")."path", dirname(pathof(PhantomRevealer))*"/python")
-#     os = pyimport("os")
-#     os.environ["OMP_NUM_THREADS"] = "1"
-#     os.environ["MKL_NUM_THREADS"] = "1"
-#     prplt = pyimport("pyplot_backend")
-#     return prplt
-# end
 
-# Import Python plt backend
-# push!(pyimport("sys")."path", _module_location*"/python")
-# prplt = pyimport("pyplot_backend")
 # Export function, marco, const...
 for name in filter(s -> !startswith(string(s), "#"), names(@__MODULE__, all = true))
     if !startswith(String(name), "_") && (name != :eval) && (name != :include)

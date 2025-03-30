@@ -48,6 +48,7 @@ Draw a face-on polar plot from the Faceon disk data.
 - `colormap :: String = "plasma"`: The colormap used for visualization.
 - `cbar_log :: Bool = false`: If `true`, the colorbar will be in logarithmic scale.
 - `vlim :: Union{Nothing, Vector} = nothing`: The colorbar range. If `nothing`, it will be determined automatically.
+- `slim :: Union{Nothing, Tuple} = nothing`: The range of radial direction.
 - `time_unit :: String = "yr"`: The unit of time displayed in the plot.
 
 # Returns
@@ -63,14 +64,19 @@ fax = Faceon_polar_plot!(data, 3, Fax=fax)
 """
 function Faceon_polar_plot!(Disk2Ddata :: Analysis_result, array_index :: Int64;
     Fax::Union{FigureAxes, Nothing} =nothing, figsize :: Tuple = (8,6),colormap::String="plasma",
-    cbar_log::Bool=false, vlim :: Union{Nothing,Vector} = nothing,
+    cbar_log::Bool=false, vlim :: Union{Nothing,Vector} = nothing, slim::Union{Nothing,Tuple}=nothing,
     time_unit::String = "yr")
     if Disk2Ddata.params["Analysis_type"] != "Faceon_disk"
         error("InputError: The Analysis type of data needs to be `Faceon_disk`!")
     end
-    s = Disk2Ddata.axes[1]
+    if isnothing(slim)
+        srange = eachindex(Disk2Ddata.axes[1])
+    else
+        srange = value2closestvalueindex(Disk2Ddata.axes[1],slim[1]):value2closestvalueindex(Disk2Ddata.axes[1],slim[2])
+    end
+    s = Disk2Ddata.axes[1][srange]
     ϕ = Disk2Ddata.axes[2]
-    z = Disk2Ddata.data_dict[array_index]
+    z = Disk2Ddata.data_dict[array_index][srange,:]
     z_unit = ""
     if haskey(Disk2Ddata.params,"column_units")
         if haskey(Disk2Ddata.params["column_units"],array_index)

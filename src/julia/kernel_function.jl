@@ -40,7 +40,7 @@ IMPORTANT: Personally, I will NOT recommend using M4 spline function since M4 ma
 
     ## Calculating influence by Smoothed Function
         Smoothed_kernel_function (2 Method): Calculating W(r-r_a, h).
-        Smoothed_greident_kernel_function (2 Method): Calculating ∇W(r-r_a, h).
+        Smoothed_gradient_kernel_function (2 Method): Calculating ∇W(r-r_a, h).
         Smoothed_dh_kernel_function (2 Method): Calculating
         
 """
@@ -433,7 +433,7 @@ end
 
 # ∇W(ra-rb,h)
 """
-    Smoothed_greident_kernel_function_dimensionless(f::Function, h::Union{Float32,Float64}, ra::Vector, rb::Vector)
+    Smoothed_gradient_kernel_function_dimensionless(f::Function, h::Union{Float32,Float64}, ra::Vector, rb::Vector)
 
 Calculating dimensionless part of ∇W(ra-rb,h).
 
@@ -446,7 +446,7 @@ Calculating dimensionless part of ∇W(ra-rb,h).
 # Returns
 - `Vector`: ∇W(ra-rb,h)
 """
-function Smoothed_greident_kernel_function_dimensionless(
+function Smoothed_gradient_kernel_function_dimensionless(
     f::Function,
     h::Union{Float32,Float64},
     ra::Vector,
@@ -463,22 +463,22 @@ function Smoothed_greident_kernel_function_dimensionless(
 end
 
 """
-    Smoothed_greident_kernel_function_dimensionless(f::Function, h::Union{Float32,Float64}, rab::Vector)
+    Smoothed_gradient_kernel_function_dimensionless(f::Function, h::Union{Float32,Float64}, rab::AbstractVector)
 
 Calculating dimensionless part of ∇W(ra-rb,h).
 
 # Parameters
 - `f::Function`: Kernel function. 
 - `h::Union{Float32,Float64}`: Smoothed length.
-- `rab::Vector`: Vector of ra-rb
+- `rab::AbstractVector`: Vector of ra-rb
 
 # Returns
 - `Vector`: ∇W(ra-rb,h)
 """
-function Smoothed_greident_kernel_function_dimensionless(
+function Smoothed_gradient_kernel_function_dimensionless(
     f::Function,
     h::Union{Float32,Float64},
-    rab::Vector,
+    rab::AbstractVector,
 )
     hatrab::Vector = rab ./ norm(rab)
     q::Float64 = norm(rab) / h
@@ -489,7 +489,7 @@ function Smoothed_greident_kernel_function_dimensionless(
     return influence
 end
 """
-    Smoothed_greident_kernel_function(f::Function, h::Union{Float32,Float64}, ra::Vector, rb::Vector)
+    Smoothed_gradient_kernel_function(f::Function, h::Union{Float32,Float64}, ra::Vector, rb::Vector)
 
 Calculating ∇W(ra-rb,h).
 
@@ -502,7 +502,7 @@ Calculating ∇W(ra-rb,h).
 # Returns
 - `Vector`: ∇W(ra-rb,h)
 """
-function Smoothed_greident_kernel_function(
+function Smoothed_gradient_kernel_function(
     f::Function,
     h::Union{Float32,Float64},
     ra::Vector,
@@ -510,31 +510,31 @@ function Smoothed_greident_kernel_function(
 )
     dim::Int32 = length(rab)
     hr::Float64 = h^(-(dim + 1))
-    influence::Vector = hr .* Smoothed_greident_kernel_function_dimensionless(f,h,ra,rb)
+    influence::Vector = hr .* Smoothed_gradient_kernel_function_dimensionless(f,h,ra,rb)
     return influence
 end
 
 """
-    Smoothed_greident_kernel_function(f::Function, h::Union{Float32,Float64}, rab)
+    Smoothed_gradient_kernel_function(f::Function, h::Union{Float32,Float64}, rab)
 
 Calculating ∇W(ra-rb,h).
 
 # Parameters
 - `f::Function`: Kernel function. 
 - `h::Union{Float32,Float64}`: Smoothed length.
-- `rab::Vector`: Vector of ra-rb
+- `rab::AbstractVector`: Vector of ra-rb
 
 # Returns
 - `Vector`: ∇W(ra-rb,h)
 """
-function Smoothed_greident_kernel_function(
+function Smoothed_gradient_kernel_function(
     f::Function,
     h::Union{Float32,Float64},
-    rab::Vector,
+    rab::AbstractVector,
 )
     dim::Int32 = length(rab)
     hr::Float64 = h^(-(dim + 1))
-    influence::Vector = hr .* Smoothed_greident_kernel_function_dimensionless(f,h,rab)
+    influence::Vector = hr .* Smoothed_gradient_kernel_function_dimensionless(f,h,rab)
     return influence
 end
 

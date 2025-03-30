@@ -619,13 +619,17 @@ If an annotation box already exists at the target axis, the text is updated inst
 # Keyword Arguments
 - `halign::Symbol = :left`: Horizontal alignment of the annotation (`:left`, `:center`, or `:right`).
 - `valign::Symbol = :top`: Vertical alignment of the annotation (`:top`, `:center`, or `:bottom`).
+- `fontsize::Union{Nothing, Float64, Int64}=nothing`: The fontsize.
 """
 function set_annotation!(Fax :: FigureAxes,  axis_index::Tuple{Int64,Int64}, text::AbstractString;
-    halign::Symbol=:left, valign::Symbol= :top)
+    halign::Symbol=:left, valign::Symbol= :top, fontsize::Union{Nothing, Float64,Int64}=nothing)
     cornerradius = 4
     axis_figindex = _get_axis_position(Fax,axis_index)
     current_content = contents(Fax.fig[axis_figindex...])
-    pad = 0.3 * DEFAULT_THEME_SETUP["fontsize"]
+    if isnothing(fontsize)
+        fontsize = DEFAULT_THEME_SETUP["fontsize"]
+    end
+    pad = 0.3 * fontsize
     gridlayouts = filter(x -> x isa GridLayout, current_content)
     for layout in gridlayouts
         content = contents(layout)
@@ -645,7 +649,7 @@ function set_annotation!(Fax :: FigureAxes,  axis_index::Tuple{Int64,Int64}, tex
         Label(gl[1,1], text, 
             padding = (pad, pad, pad, pad), 
             halign = halign, valign = valign, 
-            color = :white, fontsize = DEFAULT_THEME_SETUP["fontsize"])
+            color = :white, fontsize = fontsize)
     exist_annotate = findfirst(gl -> begin
         content = contents(gl)
         any(x -> x isa Box, content) && any(x -> x isa Label, content)
@@ -845,7 +849,6 @@ end
 function _customSymlog10Ticks(linthresh::AbstractFloat, vmin::AbstractFloat, vmax::AbstractFloat)
     major_ticks = Float64[]
     stopping_threadshold = linthresh*0.6
-    println(stopping_threadshold)
 
     if stopping_threadshold <= 0
         error("stopping_threadshold must be greater than 0")
@@ -928,6 +931,10 @@ function lazypcolor!(Fax::FigureAxes, axis_index::Tuple{Int,Int}, x, y, matrix; 
     axis = Fax.axes[axis_index...]
     axis_type = Fax.axes_type[axis_index...]
     if axis_type == "Cartesian" || current_backend()=="Cairo"
+        if axis_type == "Polar"
+            x,y = y,x
+            matrix = transpose(matrix)
+        end
         if any(p -> typeof(p) <: Makie.ScenePlot, axis.scene.plots)
             oldplot = axis.scene.plots[1]
             oldplot.x[] = x
