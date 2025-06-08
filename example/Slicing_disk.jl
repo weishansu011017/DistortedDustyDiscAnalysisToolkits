@@ -84,7 +84,7 @@ function Slicing_disk(file::String)
         push!(modified_curl_column_names, "∇×$(cvcolumn_name)ϕ")
         push!(modified_curl_column_names, "∇×$(cvcolumn_name)z")
     end
-    columns_order :: Vector = ["rho", "∇rhos", "∇rhoϕ","∇rhoz", column_names...,modified_grad_column_names...,modified_diver_column_names...,modified_curl_column_names...] # construct a ordered column names 
+    columns_order :: Vector = ["rho", column_names...,modified_grad_column_names...,modified_diver_column_names...,modified_curl_column_names...] # construct a ordered column names 
 
     # Read file
     prdf_list :: Vector{PhantomRevealerDataFrame} = read_phantom(file,"all")
@@ -106,6 +106,10 @@ function Slicing_disk(file::String)
     # Add the cylindrical parameters
     add_cylindrical!(datag)
     add_cylindrical!(datad)
+
+    # Add necessary quantities
+    add_rho!(datag)
+    add_rho!(datad)
 
     # Main_analysis
     grids_dictg :: Dict{String, gridbackend} = Disk_3D_Grid_analysis(datag, sparams, ϕparams, zparams, column_names=column_names, gradient_column_names=gradient_column_names, divergence_column_names=divergence_column_names, curl_column_names=curl_column_names, smoothed_kernel=smoothed_kernel, h_mode=h_mode)

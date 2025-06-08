@@ -47,7 +47,7 @@ IMPORTANT: Personally, I will NOT recommend using M4 spline function since M4 ma
 
 # Kernel Functions
 # M4 B-spline
-function M4_spline(q)
+@inline function M4_spline(q :: Real) :: Float64
     if 0 <= q < 1
         return (0.25 * (2 - q)^3 - (1 - q)^3)
     elseif 1 <= q < 2
@@ -59,7 +59,7 @@ function M4_spline(q)
     end
 end
 
-function _dM4_spline(q)
+@inline function _dM4_spline(q :: Real) :: Float64
     if 0 <= q < 1
         return (-0.75 * (2 - q)^2 + 3 * (1 - q)^2)
     elseif 1 <= q < 2
@@ -72,7 +72,7 @@ function _dM4_spline(q)
 end
 
 # M5 B-spline
-function M5_spline(q)
+@inline function M5_spline(q :: Real) :: Float64
     if 0 <= q < 0.5
         return ((2.5 - q)^4 - 5 * (1.5 - q)^4 + 10 * (0.5 - q)^4)
     elseif 0.5 <= q < 1.5
@@ -86,7 +86,7 @@ function M5_spline(q)
     end
 end
 
-function _dM5_spline(q)
+@inline function _dM5_spline(q :: Real) :: Float64
     if 0 <= q < 0.5
         return (-4 * (2.5 - q)^3 + 20 * (1.5 - q)^3 - 40 * (0.5 - q)^3)
     elseif 0.5 <= q < 1.5
@@ -101,7 +101,7 @@ function _dM5_spline(q)
 end
 
 # M6 B-spline
-function M6_spline(q)
+@inline function M6_spline(q :: Real) :: Float64
     if 0 <= q < 1
         return ((3 - q)^5 - 6 * (2 - q)^5 + 15 * (1 - q)^5)
     elseif 1 <= q < 2
@@ -115,7 +115,7 @@ function M6_spline(q)
     end
 end
 
-function _dM6_spline(q)
+@inline function _dM6_spline(q :: Real) :: Float64
     if 0 <= q < 1
         return (-5 * (3 - q)^4 + 30 * (2 - q)^4 - 75 * (1 - q)^4)
     elseif 1 <= q < 2
@@ -130,7 +130,7 @@ function _dM6_spline(q)
 end
 
 # Wendland C2
-function C2_Wendland(q)
+@inline function C2_Wendland(q :: Real) :: Float64
     if q < 2
         return (((1 - 0.5 * q)^4) * (2 * q + 1))
     elseif q >= 2
@@ -140,7 +140,7 @@ function C2_Wendland(q)
     end
 end
 
-function _dC2_Wendland(q)
+@inline function _dC2_Wendland(q :: Real) :: Float64
     if q < 2
         return (((1 - 0.5 * q)^4) * 2 - ((1 - 0.5 * q)^3) * (4 * q + 2))
     elseif q >= 2
@@ -151,7 +151,7 @@ function _dC2_Wendland(q)
 end
 
 # Wendland C4
-function C4_Wendland(q)
+@inline function C4_Wendland(q :: Real) :: Float64
     if q < 2
         return (((1 - 0.5 * q)^6) * ((35 / 12) * (q^2) + 3 * q + 1))
     elseif q >= 2
@@ -161,7 +161,7 @@ function C4_Wendland(q)
     end
 end
 
-function _dC4_Wendland(q)
+@inline function _dC4_Wendland(q :: Real) :: Float64
     if q < 2
         return (
             ((1 - 0.5 * q)^6) * ((35 / 6) * q + 3) -
@@ -175,7 +175,7 @@ function _dC4_Wendland(q)
 end
 
 # Wendland C6
-function C6_Wendland(q)
+@inline function C6_Wendland(q :: Real) :: Float64
     if q < 2
         return (((1 - 0.5 * q)^8) * (4 * (q^3) + 6.25 * (q^2) + 4 * q + 1))
     elseif q >= 2
@@ -185,7 +185,7 @@ function C6_Wendland(q)
     end
 end
 
-function _dC6_Wendland(q)
+@inline function _dC6_Wendland(q :: Real) :: Float64
     if q < 2
         return (
             ((1 - 0.5 * q)^8) * (12 * (q^2) + 12.5 * q + 4) -
@@ -254,7 +254,7 @@ const _Nneigh = Dict(
 )
 
 """
-    function KernelFunctionValid()
+    @inline function KernelFunctionValid() :: Dict
 Call the dictionary of truncated radius of kernel function.
 
 # Returns
@@ -267,12 +267,12 @@ println(radius)
 >> 2.0
 ```
 """
-function KernelFunctionValid()
+@inline function KernelFunctionValid() :: Dict
     return _TRUNCATED_RADIUS
 end
 
 """
-    function KernelFunctionnorm()
+    @inline function KernelFunctionnorm() :: Dict
 Call the dictionary of normalized constant of kernel function.
 
 # Returns
@@ -285,12 +285,12 @@ println(Cnorm)
 >> [4/3, 10/7π, π]
 ```
 """
-function KernelFunctionnorm()
+@inline function KernelFunctionnorm() :: Dict
     return _CNORM
 end
 
 """
-    function KernelFunctionDiff()
+    @inline function KernelFunctionDiff() :: Dict
 Call the dictionary of differentiated reference of kernel function.
 
 # Returns
@@ -303,12 +303,12 @@ println(nameof(dfun))
 >> :_dM4_spline
 ```
 """
-function KernelFunctionDiff()
+@inline function KernelFunctionDiff() :: Dict
     return _DKERNEL
 end
 
 """
-    function KernelFunctioNneigh()
+    @inline function KernelFunctioNneigh() :: Dict
 Call the mean neighbour number of kernel function.
 
 # Returns
@@ -321,14 +321,14 @@ println(Nneigh)
 >> 58
 ```
 """
-function KernelFunctionNneigh()
+@inline function KernelFunctionNneigh() :: Dict
     return _Nneigh
 end
 
 # Calculating influence by Smoothed Function
 # W(ra-rb,h)
 """
-    function Smoothed_kernel_function_dimensionless(f::Function, h::Union{Float32,Float64}, ra::Vector, rb::Vector)
+    @inline function Smoothed_kernel_function_dimensionless(f::Function, h::Union{Float32,Float64}, ra::Vector, rb::Vector) :: Float64
 
 Calculating dimensionless part of W(ra-rb,h).
 
@@ -341,12 +341,12 @@ Calculating dimensionless part of W(ra-rb,h).
 # Returns
 - `Float64`: W(ra-rb,h)
 """
-function Smoothed_kernel_function_dimensionless(
+@inline function Smoothed_kernel_function_dimensionless(
     f::Function,
     h::Union{Float32,Float64},
     ra::Vector,
     rb::Vector,
-)
+) :: Float64
     r::Float64 = norm(ra - rb)
     q::Float64 = r / h
     dim::Int32 = length(ra)
@@ -355,7 +355,7 @@ function Smoothed_kernel_function_dimensionless(
 end
 
 """
-    function Smoothed_kernel_function_dimensionless(f::Function, h::Union{Float32,Float64}, r::Float64, dim::Int)
+    @inline function Smoothed_kernel_function_dimensionless(f::Function, h::Union{Float32,Float64}, r::Float64, dim::Int) :: Float64
 
 Calculating dimensionless part of W(ra-rb,h).
 
@@ -368,19 +368,19 @@ Calculating dimensionless part of W(ra-rb,h).
 # Returns
 - `Float64`: W(ra-rb,h)
 """
-function Smoothed_kernel_function_dimensionless(
+@inline function Smoothed_kernel_function_dimensionless(
     f::Function,
     h::Union{Float32,Float64},
     r::Float64,
     dim::Int,
-)
+) :: Float64
     q::Float64 = r / h
     influence::Float64 = f(q) * KernelFunctionnorm()[nameof(f)][dim]
     return influence
 end
 
 """
-    function Smoothed_kernel_function(f::Function, h::Union{Float32,Float64}, ra::Vector, rb::Vector)
+    @inline function Smoothed_kernel_function(f::Function, h::Union{Float32,Float64}, ra::Vector, rb::Vector) :: Float64
 
 Calculating W(ra-rb,h).
 
@@ -393,12 +393,12 @@ Calculating W(ra-rb,h).
 # Returns
 - `Float64`: W(ra-rb,h)
 """
-function Smoothed_kernel_function(
+@inline function Smoothed_kernel_function(
     f::Function,
     h::Union{Float32,Float64},
     ra::Vector,
     rb::Vector,
-)  
+) :: Float64
     dim::Int32 = length(ra)
     hr::Float64 = h^(-dim)
     influence::Float64 = hr * Smoothed_kernel_function_dimensionless(f,h,ra,rb)
@@ -406,7 +406,7 @@ function Smoothed_kernel_function(
 end
 
 """
-    function Smoothed_kernel_function(f::Function, h::Union{Float32,Float64}, r::Float64, dim::Int)
+    @inline function Smoothed_kernel_function(f::Function, h::Union{Float32,Float64}, r::Float64, dim::Int) :: Float64
 
 Calculating W(ra-rb,h).
 
@@ -419,13 +419,12 @@ Calculating W(ra-rb,h).
 # Returns
 - `Float64`: W(ra-rb,h)
 """
-function Smoothed_kernel_function(
+@inline function Smoothed_kernel_function(
     f::Function,
     h::Union{Float32,Float64},
     r::Float64,
     dim::Int,
-)
-    q::Float64 = r / h
+) :: Float64
     hr::Float64 = h^(-dim)
     influence::Float64 = hr * Smoothed_kernel_function_dimensionless(f,h,r,dim)
     return influence
@@ -433,7 +432,7 @@ end
 
 # ∇W(ra-rb,h)
 """
-    Smoothed_gradient_kernel_function_dimensionless(f::Function, h::Union{Float32,Float64}, ra::Vector, rb::Vector)
+    @inline Smoothed_gradient_kernel_function_dimensionless(f::Function, h::Union{Float32,Float64}, ra::Vector, rb::Vector)
 
 Calculating dimensionless part of ∇W(ra-rb,h).
 
@@ -446,7 +445,7 @@ Calculating dimensionless part of ∇W(ra-rb,h).
 # Returns
 - `Vector`: ∇W(ra-rb,h)
 """
-function Smoothed_gradient_kernel_function_dimensionless(
+@inline function Smoothed_gradient_kernel_function_dimensionless(
     f::Function,
     h::Union{Float32,Float64},
     ra::Vector,
@@ -463,7 +462,7 @@ function Smoothed_gradient_kernel_function_dimensionless(
 end
 
 """
-    Smoothed_gradient_kernel_function_dimensionless(f::Function, h::Union{Float32,Float64}, rab::AbstractVector)
+    @inline Smoothed_gradient_kernel_function_dimensionless(f::Function, h::Union{Float32,Float64}, rab::AbstractVector)
 
 Calculating dimensionless part of ∇W(ra-rb,h).
 
@@ -475,7 +474,7 @@ Calculating dimensionless part of ∇W(ra-rb,h).
 # Returns
 - `Vector`: ∇W(ra-rb,h)
 """
-function Smoothed_gradient_kernel_function_dimensionless(
+@inline function Smoothed_gradient_kernel_function_dimensionless(
     f::Function,
     h::Union{Float32,Float64},
     rab::AbstractVector,
@@ -489,7 +488,7 @@ function Smoothed_gradient_kernel_function_dimensionless(
     return influence
 end
 """
-    Smoothed_gradient_kernel_function(f::Function, h::Union{Float32,Float64}, ra::Vector, rb::Vector)
+    @inline Smoothed_gradient_kernel_function(f::Function, h::Union{Float32,Float64}, ra::Vector, rb::Vector)
 
 Calculating ∇W(ra-rb,h).
 
@@ -502,12 +501,13 @@ Calculating ∇W(ra-rb,h).
 # Returns
 - `Vector`: ∇W(ra-rb,h)
 """
-function Smoothed_gradient_kernel_function(
+@inline function Smoothed_gradient_kernel_function(
     f::Function,
     h::Union{Float32,Float64},
     ra::Vector,
     rb::Vector,
 )
+    rab::Vector = ra - rb
     dim::Int32 = length(rab)
     hr::Float64 = h^(-(dim + 1))
     influence::Vector = hr .* Smoothed_gradient_kernel_function_dimensionless(f,h,ra,rb)
@@ -515,7 +515,7 @@ function Smoothed_gradient_kernel_function(
 end
 
 """
-    Smoothed_gradient_kernel_function(f::Function, h::Union{Float32,Float64}, rab)
+    @inline Smoothed_gradient_kernel_function(f::Function, h::Union{Float32,Float64}, rab)
 
 Calculating ∇W(ra-rb,h).
 
@@ -527,7 +527,7 @@ Calculating ∇W(ra-rb,h).
 # Returns
 - `Vector`: ∇W(ra-rb,h)
 """
-function Smoothed_gradient_kernel_function(
+@inline function Smoothed_gradient_kernel_function(
     f::Function,
     h::Union{Float32,Float64},
     rab::AbstractVector,
@@ -540,7 +540,7 @@ end
 
 # ∂W(ra-rb,h)/∂h
 """
-    Smoothed_dh_kernel_function(f::Function, h::Union{Float32,Float64}, ra::Vector, rb::Vector)
+    @inline Smoothed_dh_kernel_function(f::Function, h::Union{Float32,Float64}, ra::Vector, rb::Vector) :: Float64
 
 Calculating ∂W(ra-rb,h)/∂h.
 
@@ -553,12 +553,12 @@ Calculating ∂W(ra-rb,h)/∂h.
 # Returns
 - `Float64`: ∂W(ra-rb,h)/∂h
 """
-function Smoothed_dh_kernel_function(
+@inline function Smoothed_dh_kernel_function(
     f::Function,
     h::Union{Float32,Float64},
     ra::Vector,
     rb::Vector,
-)
+) :: Float64
     r::Float64 = norm(ra - rb)
     dim::Int32 = length(ra)
     q::Float64 = r / h
@@ -571,7 +571,7 @@ function Smoothed_dh_kernel_function(
 end
 
 """
-    Smoothed_dh_kernel_function(f::Function, h::Union{Float32,Float64}, r::Float64, dim::Int)
+    @inline Smoothed_dh_kernel_function(f::Function, h::Union{Float32,Float64}, r::Float64, dim::Int) :: Float64
 
 Calculating ∂W(ra-rb,h)/∂h.
 
@@ -584,12 +584,12 @@ Calculating ∂W(ra-rb,h)/∂h.
 # Returns
 - `Float64`: ∂W(ra-rb,h)/∂h
 """
-function Smoothed_dh_kernel_function(
+@inline function Smoothed_dh_kernel_function(
     f::Function,
     h::Union{Float32,Float64},
     r::Float64,
     dim::Int,
-)
+) :: Float64
     q::Float64 = r / h
     hr::Float64 = h^(-(dim + 1))
     influence::Float64 =

@@ -103,7 +103,7 @@ function _contructing_axes_from_axes_type(Fax :: FigureAxes)
 end
 
 """
-    FigureAxes(nrows::Int, ncols::Int; size::Tuple{Int, Int}=(800,600), 
+    FigureAxes(nrows::Int, ncols::Int; figsize::Tuple{Int, Int}=(8,6), 
                polar_axis::Union{Nothing,Matrix{Bool}}=nothing, 
                ThreeDim_axis::Union{Nothing,Matrix{Bool}}=nothing)
 
@@ -121,7 +121,7 @@ It ensures that each grid cell is assigned to only one axis type.
 - `ncols::Int`: The number of columns in the figure grid.
 
 # Keyword arguments
-- `size::Tuple{Int, Int}=(800,600)`: The overall size of the figure in inches.
+- `figsize::Tuple{Int, Int}=(8,6)`: The overall size of the figure in inches.
 - `sharex::Bool`: If `true`, all x-axes in the `FigureAxes` object will be linked, ensuring that zooming or panning in one axis will update all other axes accordingly.
 - `sharey::Bool`: If `true`, all y-axes in the `FigureAxes` object will be linked, ensuring that zooming or panning in one axis will update all other axes accordingly.
 - `polar_axis::Union{Nothing,Matrix{Bool}}=nothing`: A `Bool` matrix of shape `(nrows, ncols)`, where `true` marks positions for **PolarAxes**.
@@ -376,9 +376,9 @@ Sets the x-axis limits for a specified axis in the figure.
 """
 function set_xlim!(Fax::FigureAxes, axis_index::Tuple{Int64,Int64}, xlim::Tuple{Float64,Float64})
     axis = Fax.axes[axis_index...]
-    current_limits = axis.limits.val
+    current_limits = axis.limits[]
     new_limits = (xlim, current_limits[2])
-    axis.limits = new_limits
+    axis.limits[] = new_limits
 end
 
 """
@@ -393,9 +393,9 @@ Sets the y-axis limits for a specified axis in the figure.
 """
 function set_ylim!(Fax::FigureAxes, axis_index::Tuple{Int64,Int64}, ylim::Tuple{Float64,Float64})
     axis = Fax.axes[axis_index...]
-    current_limits = axis.limits.val
+    current_limits = axis.limits[]
     new_limits = (current_limits[1],ylim)
-    axis.limits = new_limits
+    axis.limits[] = new_limits
 end
 
 """
@@ -419,7 +419,37 @@ function set_clim!(Fax::FigureAxes, axis_index::Tuple{Int64,Int64}, clim::Tuple{
     axis = Fax.axes[axis_index...]
     heatmaps = filter(p -> p isa Heatmap, axis.scene.plots)
     heatmap = heatmaps[target_hm_index]
-    heatmap.colorrange = clim
+    heatmap.colorrange[] = clim
+end
+
+"""
+    set_xscale!(Fax::FigureAxes, axis_index::Tuple{Int64,Int64}, scaling::Function)
+
+Sets the x-axis scale for a specified axis in the figure.
+
+# Parameters
+- `Fax::FigureAxes`: The figure container with axes.
+- `axis_index::Tuple{Int64, Int64}`: The (row, column) position of the target axis in `Fax.axes`.
+- `scaling::Function`: The new function for scaling for the x-axis.
+"""
+function set_xscale!(Fax::FigureAxes, axis_index::Tuple{Int64,Int64}, scaling::Function)
+    axis = Fax.axes[axis_index...]
+    axis.xscale[] = scaling
+end
+
+"""
+    set_yscale!(Fax::FigureAxes, axis_index::Tuple{Int64,Int64}, scaling::Function)
+
+Sets the y-axis scale for a specified axis in the figure.
+
+# Parameters
+- `Fax::FigureAxes`: The figure container with axes.
+- `axis_index::Tuple{Int64, Int64}`: The (row, column) position of the target axis in `Fax.axes`.
+- `scaling::Function`: The new function for scaling for the x-axis.
+"""
+function set_yscale!(Fax::FigureAxes, axis_index::Tuple{Int64,Int64}, scaling::Function)
+    axis = Fax.axes[axis_index...]
+    axis.yscale[] = scaling
 end
 
 function _get_axis_position(Fax::FigureAxes, target_axis_index::Tuple{Int64,Int64})
@@ -443,6 +473,10 @@ end
 
 function _existcontents(layout::GridLayout, row::Int, col::Int)
     return any(gc -> (row in gc.span.rows && col in gc.span.cols), layout.content)
+end
+
+function _support_set_colorbar(plot)
+    return any(ht -> typeof(plot) <: ht, HEATMAP)
 end
 
 """
@@ -513,7 +547,7 @@ function set_colorbar!(Fax::FigureAxes, axis_index::Tuple{Int64,Int64};
         error("ValueError: Row and column colormap cannot be linked simultaneously!")
     end
 
-    heatmaps = filter(p -> typeof(p) <: Makie.ScenePlot, Fax.axes[axis_index...].scene.plots)
+    heatmaps = filter(p -> _support_set_colorbar(p), Fax.axes[axis_index...].scene.plots)
     if isempty(heatmaps)
         error("EmptyHeatmapDetected: No Heatmap detected in the specified axis $(axis_index).")
     end
@@ -580,7 +614,20 @@ function set_colorbar!(Fax::FigureAxes, axis_index::Tuple{Int64,Int64};
     hm_scale = String(Symbol(targeted_heatmap.colorscale[]))
     
     if hm_scale == "log10"
-        Colorbar(fig[row_range, col_range], targeted_heatmap, vertical=vertical,label=clabel,tickformat=_customLog10_formatter, minorticksvisible=true,minorticks=IntervalsBetween(9))
+        matrix = targeted_heatmap[3][]
+        if String(Symbol(targeted_heatmap.colorrange[])) == "MakieCore.Automatic()"
+            vmin = minimum(filter(!iszero, matrix)) 
+            vmax = maximum(matrix)
+        else
+            vmin, vmax = targeted_heatmap.colorrange[]
+        end
+
+        ticks, _, _ = _customLog10_ticks(matrix; clip=(vmin, vmax), minorticks=true)
+
+        Colorbar(fig[row_range, col_range], targeted_heatmap, vertical=vertical,label=clabel,ticks=ticks,
+                tickformat=_customLog10_formatter,
+                minorticks=IntervalsBetween(9),
+                minorticksvisible=true)
         return
     elseif hm_scale == "ReversibleScale(Symlog10)"
         if String(Symbol(targeted_heatmap.colorrange[])) == "MakieCore.Automatic()"
@@ -601,6 +648,33 @@ function set_colorbar!(Fax::FigureAxes, axis_index::Tuple{Int64,Int64};
         Colorbar(fig[row_range, col_range], targeted_heatmap, vertical=vertical,label=clabel)
         return
     end 
+end
+
+function _support_legend(plot)
+    return any(sl -> typeof(plot) <: sl, SUPPORTLEGEND)
+end
+
+"""
+    set_legend!(Fax::FigureAxes, axis_index::Tuple{Int64,Int64})
+
+Sets and adjusts the box of legend for a specified axis in the figure. This function dynamically inserts a `Legend` next to the target axis, ensuring proper placement and spacing in the grid layout.
+# Parameters
+- `Fax::FigureAxes`: The figure container with axes.
+- `axis_index::Tuple{Int64, Int64}`: The (row, column) position of the target axis in `Fax.axes`.
+"""
+function set_legend!(Fax::FigureAxes, axis_index::Tuple{Int64,Int64})
+    fig = Fax.fig
+    ax = Fax.axes[axis_index...]
+    layout = fig.layout
+    plots = filter(p -> _support_legend(p), ax.scene.plots)
+    labels = Vector{AbstractString}(undef,length(plots))
+    for (i,plot) in enumerate(plots)
+        labels[i] = plot.label[]
+    end
+
+    nrows, ncols = size(layout)
+    current_axesrow_figindex, current_axescol_figindex  = _get_axis_position(Fax,axis_index)
+    Legend(Fax.fig[current_axesrow_figindex, ncols+1],plots,labels)
 end
 
 """
@@ -824,6 +898,24 @@ function Makie.plot!(plot::PolarHeatmap)
     return plot
 end
 
+############# Abstract type #############
+const HEATMAP :: Vector{UnionAll} = [
+    Heatmap,
+    PolarHeatmap,
+    Contourf,
+    Voronoiplot,
+    Poly,
+    Contour
+]
+const SUPPORTLEGEND :: Vector{UnionAll} = [
+    Lines,
+    HLines,
+    Scatter,
+    ScatterLines,
+    BarPlot,
+    Contour
+]
+
 ############# Symlog10Scale option #############
 """
     Symlog10Scale(cmin::AbstractFloat, cmax::AbstractFloat)
@@ -883,7 +975,36 @@ function _customSymlog10_formatter(values)
 end
 
 function _customLog10_formatter(values)
-    return map(v -> latexstring("10^{", string(round(Int, log10(abs(v)))), "}"), values)
+    return map(v -> iszero(v) ? "0" : latexstring("10^{", string(round(Int, log10(abs(v)))), "}"), values)
+end
+
+function _customLog10_ticks(data; clip=nothing, min_exp=nothing, max_exp=nothing, minorticks::Bool=false)
+    # Determine data range
+    if clip !== nothing
+        vmin, vmax = clip
+    else
+        vmin = minimum(filter(!iszero, data)) 
+        vmax = maximum(data)
+    end
+
+    # Determine exponent range
+    minexp = isnothing(min_exp) ? floor(Int, log10(vmin)) : min_exp
+    maxexp = isnothing(max_exp) ? ceil(Int, log10(vmax)) : max_exp
+    major_ticks = 10.0 .^ (minexp:maxexp)
+
+    # Tick labels (log10 style)
+    ticklabels = map(e -> latexstring("10^{", string(e), "}"), minexp:maxexp)
+
+    # Minor ticks (between each 10^n and 10^{n+1})
+    if minorticks
+        minor_ticks = Float64[]
+        for e in minexp:maxexp-1
+            append!(minor_ticks, 10.0^e .* (2:9))
+        end
+        return major_ticks, ticklabels, minor_ticks
+    else
+        return major_ticks, ticklabels
+    end
 end
 
 ############# Pcolor plotting #############
@@ -937,9 +1058,9 @@ function lazypcolor!(Fax::FigureAxes, axis_index::Tuple{Int,Int}, x, y, matrix; 
         end
         if any(p -> typeof(p) <: Makie.ScenePlot, axis.scene.plots)
             oldplot = axis.scene.plots[1]
-            oldplot.x[] = x
-            oldplot.y[] = y
-            oldplot.converted[3][] = matrix
+            oldplot.converted[1][] = _center_to_edges(x)        
+            oldplot.converted[2][] = _center_to_edges(y)         
+            oldplot.converted[3][] = matrix   
             update_necessary_attribute!(oldplot; kwargs...)
         else
             heatmap!(axis, x, y, matrix; kwargs...)

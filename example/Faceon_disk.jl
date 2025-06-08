@@ -34,7 +34,7 @@ function Disk_Faceon_interpolation(filepath :: String)
     # Packaging parameters
     sparams :: Tuple{Float64,Float64,Int} = (smin, smax, sn)
     ϕparams :: Tuple{Float64,Float64,Int} = (ϕmin, ϕmax, ϕn)
-    columns_order :: Vector = ["Sigma", "∇Sigmas", "∇Sigmaϕ", column_names..., (mid_column_names.*"m")...] # construct a ordered column names (Those quantities with taking mid-plane average will have a suffix "m")
+    columns_order :: Vector = ["Sigma", column_names..., (mid_column_names.*"m")...] # construct a ordered column names (Those quantities with taking mid-plane average will have a suffix "m")
     
     # Load file
     prdf_list :: Vector{PhantomRevealerDataFrame} = read_phantom(filepath, "all")
@@ -44,6 +44,10 @@ function Disk_Faceon_interpolation(filepath :: String)
     sinks_data :: PhantomRevealerDataFrame = prdf_list[3]
     
     # Add extra quantity for interpolation 
+    add_rho!(datag)
+    add_rho!(datad)
+    add_Sigma!(datag)
+    add_Sigma!(datad)
     add_cylindrical!(datag)
     add_cylindrical!(datad)
     add_eccentricity!(datag)

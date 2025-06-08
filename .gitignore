@@ -44,5 +44,5 @@ subjobJ64.sh
 
 # Matlab
 script/*.m
-
+*2.jl
 Manifest.toml

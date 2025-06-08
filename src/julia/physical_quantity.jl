@@ -5,8 +5,6 @@ The single point SPH interpolation
 
 
 # Structure:
-    ## Preparation
-        add_necessary_quantity()
     ## 3D interpolation
         ### density
         ### gradient density
@@ -16,11 +14,6 @@ The single point SPH interpolation
         ### gradient surface density
         ### 2D quantity interpolation
 """
-function add_necessary_quantity!(data::PhantomRevealerDataFrame)
-    if !(hasproperty(data.dfdata, "rho"))
-        add_rho!(data)
-    end
-end
 
 function _easy_estimate_h_intepolate(dfdata::DataFrame, rnorm::Vector)
     """
@@ -139,13 +132,10 @@ function density(
         density = 0.0
     else
         truncate_radius = truncate_multiplier * h_intepolate
-        filtered_indices = findall(r -> r <= truncate_radius, rnorm)
-        filtered_rnorm = rnorm[filtered_indices]
-        filtered_m = mass_array[filtered_indices]
-        density = sum(
-            filtered_m .*
-            Smoothed_kernel_function.(smoothed_kernel, h_intepolate, filtered_rnorm, 3),
-        )
+        mask_rnorm = rnorm .< truncate_radius
+        filtered_m = mass_array[mask_rnorm]
+        filtered_r = rnorm[mask_rnorm]
+        density = sum( filtered_m .* Smoothed_kernel_function.(smoothed_kernel, h_intepolate, filtered_r, 3))
     end
     return density
 end
@@ -208,11 +198,9 @@ function number_density(
         numdensity = 0.0
     else
         truncate_radius = truncate_multiplier * h_intepolate
-        filtered_indices = findall(r -> r <= truncate_radius, rnorm)
-        filtered_rnorm = rnorm[filtered_indices]
-        numdensity = sum(
-            Smoothed_kernel_function.(smoothed_kernel, h_intepolate, filtered_rnorm, 3),
-        )
+        mask_rnorm = rnorm .< truncate_radius
+        filtered_r = rnorm[mask_rnorm]
+        numdensity = sum(Smoothed_kernel_function.(smoothed_kernel, h_intepolate, filtered_r, 3))
     end
     return numdensity
 end
@@ -276,9 +264,7 @@ function gradient_density(
         ϕ =  reference_point[2]
         reference_point = _cylin2cart(reference_point)
     end
-    if !(hasproperty(data.dfdata, "rho"))
-        add_rho!(data)
-    end
+
     if isnothing(density_value)
         density_value = density(data,reference_point,smoothed_kernel,h_mode,"cart",Identical_particles=Identical_particles)
     end
@@ -304,28 +290,20 @@ function gradient_density(
         mask_rnorm = rnorm .< truncate_radius
         xyz_filtered = xyzref[mask_rnorm, :]
         filtered_m = mass_array[mask_rnorm]
-        filtered_ρb = density_array[mask_rnorm]
+        filtered_ρblρ = density_array[mask_rnorm] ./ density_value
 
-        # bufferf represent the first term of formula, buffers represent the second term of formula
-        bufferf_array = zeros(Float64, size(xyz_filtered))
-        buffers_array = zeros(Float64, size(xyz_filtered))
-        for i = 1:size(xyz_filtered)[1]
-            bufferf_array[i, :] =
-                (filtered_ρb[i] * filtered_m[i]) .* Smoothed_gradient_kernel_function(
-                    smoothed_kernel,
-                    h_intepolate,
-                    xyz_filtered[i, :],
-                ) ./density_value
-            buffers_array[i, :] =
-                filtered_m[i] .* Smoothed_gradient_kernel_function(
+        buffer_array = zeros(Float64, size(xyz_filtered))
+        @inbounds @simd for i = 1:size(xyz_filtered)[1]
+            buffer_array[i, :] =
+                ((filtered_ρblρ[i] .- 1) * filtered_m[i]) .* Smoothed_gradient_kernel_function(
                     smoothed_kernel,
                     h_intepolate,
                     xyz_filtered[i, :],
                 )
-            
         end
-        for j in eachindex(grad_density)
-            grad_density[j] = sum(bufferf_array[:, j] .- buffers_array[:,j])
+
+        @inbounds @simd for j in eachindex(grad_density)
+            grad_density[j] = sum(buffer_array[:, j])
         end
 
         if coordinate_flag == "polar"
@@ -408,14 +386,6 @@ function quantity_intepolate(
     end
 
     # Preparing and verifing the data
-    if !(hasproperty(data.dfdata, "rho"))
-        add_rho!(data)
-    end
-    for column_name in working_column_names
-        if !(hasproperty(data.dfdata, column_name))
-            error("IntepolateError: No matching column '$(column_name)'.")
-        end
-    end
     if coordinate_flag == "polar"
         reference_point = _cylin2cart(reference_point)
     end
@@ -442,16 +412,20 @@ function quantity_intepolate(
         end
     else
         truncate_radius = truncate_multiplier * h_intepolate
-        indices = findall(x -> x <= truncate_radius, rnorm)
-        filtered_dfdata = dfdata[indices, :]
-        filtered_rnorm = rnorm[indices]
-        filtered_m = mass_array[indices]
+        mask_rnorm = rnorm .< truncate_radius
+        filtered_m = mass_array[mask_rnorm]
+        filtered_r = rnorm[mask_rnorm]
+        filtered_ρ = dfdata[mask_rnorm, divided_column]
+        filtered_A = [dfdata[mask_rnorm, column_name] for column_name in working_column_names]
+        mW = filtered_m .* Smoothed_kernel_function.(smoothed_kernel, h_intepolate, filtered_r, 3)
+        mWlρ = mW ./ filtered_ρ
         if rho_flag
-            quantity_result[divided_column] = sum(filtered_m .* (Smoothed_kernel_function.(smoothed_kernel, h_intepolate, filtered_rnorm,3)))
+            quantity_result[divided_column] = sum(mW)
         end
-        for column_name in working_column_names
-            filtered_dfdata[!, column_name] ./= filtered_dfdata[!, divided_column]
-            quantity_result[column_name] = sum(filtered_m .* (filtered_dfdata[!, column_name]) .* (Smoothed_kernel_function.(smoothed_kernel, h_intepolate, filtered_rnorm,3)))
+        # Shepard Normalization
+        sn = sum(mWlρ)
+        @inbounds @simd for k in eachindex(working_column_names)
+            quantity_result[working_column_names[k]] = sum(mWlρ .* filtered_A[k]) / sn
         end
     end
     return quantity_result
@@ -476,8 +450,8 @@ The gradient value of any arbitrary scalar quantity A would be estimated by
 
 # Keyword argument
 - `Identical_particles :: Bool = true`: Whether all the particles is identical in `data`. If false, particle mass would try to access the mass column i.e. data.data_dict["m"].
-- `density_value :: Union{Nothing,Float64} = nothing`: The density of fluid at reference_point. If `nothing` will calculate it automatically.
-- `quantity_value :: Union{Nothing,Float64} = nothing`: The value of quantitiy at reference_point. If `nothing` will calculate it automatically.
+- `density_value :: Float64 = NaN`: The density of fluid at reference_point. If `NaN` will calculate it automatically.
+- `quantity_value :: Float64 = NaN`: The value of quantitiy at reference_point. If `NaN` will calculate it automatically.
 
 # Returns
 - `Vector`: The gradient vector of density at the reference point. The coordinate would be as same as the input(depends on "coordinate_flag").
@@ -501,8 +475,8 @@ function gradient_quantity_intepolate(
     h_mode::String = "closest",
     coordinate_flag::String = "cart";
     Identical_particles::Bool=true,
-    density_value::Union{Nothing,Float64} = nothing,
-    quantity_value::Union{Nothing,Float64} = nothing
+    density_value::Float64 = NaN,
+    quantity_value::Float64 = NaN
 )
     """
     Here recommended to use a single type of particle.
@@ -527,10 +501,10 @@ function gradient_quantity_intepolate(
     end
 
     # Estimating necessary quantity if not provided
-    if isnothing(density_value)
+    if isnan(density_value)
         density_value = density(data,reference_point,smoothed_kernel,h_mode,"cart",Identical_particles=Identical_particles)
     end
-    if isnothing(quantity_value)
+    if isnan(quantity_value)
         quantity_value = quantity_intepolate(data,reference_point,[column_name],smoothed_kernel,h_mode,"cart",Identical_particles=Identical_particles)[column_name]
     end
 
@@ -557,9 +531,8 @@ function gradient_quantity_intepolate(
         filtered_m = mass_array[mask_rnorm]
         filtered_Ab = quantity_array[mask_rnorm]
 
-        # bufferf represent the first term of formula, buffers represent the second term of formula
         buffer_array = zeros(Float64, size(xyz_filtered))
-        for i = 1:size(xyz_filtered)[1]
+        @inbounds @simd for i = 1:size(xyz_filtered)[1]
             buffer_array[i, :] =
                 ((filtered_Ab[i] - quantity_value) * filtered_m[i]) .* Smoothed_gradient_kernel_function(
                     smoothed_kernel,
@@ -567,7 +540,7 @@ function gradient_quantity_intepolate(
                     xyz_filtered[i, :],
                 ) ./density_value 
         end
-        for j in eachindex(grad_quant)
+        @inbounds @simd for j in eachindex(grad_quant)
             grad_quant[j] = sum(buffer_array[:, j])
         end
 
@@ -599,8 +572,8 @@ The divergence of any arbitrary vector quantity A would be estimated by
 
 # Keyword argument
 - `Identical_particles :: Bool = true`: Whether all the particles is identical in `data`. If false, particle mass would try to access the mass column i.e. data.data_dict["m"].
-- `density_value :: Union{Nothing,Float64} = nothing`: The density of fluid at reference_point. If `nothing` will calculate it automatically.
-- `quantity_value :: Union{Nothing,Vector{Float64}} = nothing`: The vector of quantitiy at reference_point. If `nothing` will calculate it automatically.
+- `density_value :: Float64 = NaN`: The density of fluid at reference_point. If `nothing` will calculate it automatically.
+- `quantity_value :: Vector{Float64} = [NaN, NaN, NaN]`: The vector of quantitiy at reference_point. If `nothing` will calculate it automatically.
 - `quantity_coordinate_flag :: String = "cart"`: The coordinate system of `quantity_value`.
 
 # Returns
@@ -615,8 +588,8 @@ function divergence_quantity_intepolate(
     h_mode::String = "closest",
     coordinate_flag::String = "cart";
     Identical_particles::Bool=true,
-    density_value::Union{Nothing,Float64} = nothing,
-    quantity_value::Union{Nothing,Vector{Float64}} = nothing,
+    density_value::Float64 = NaN,
+    quantity_value::Vector{Float64} = [NaN, NaN, NaN],
     quantity_coordinate_flag::String = "cart"
 )
     """
@@ -710,7 +683,7 @@ function divergence_quantity_intepolate(
         filtered_Ab = quantity_array[mask_rnorm,:]
         filtered_AbsAa = filtered_Ab .- quantity_value_vector'
         buffer_array = zeros(Float64, length(filtered_m))
-        for i = 1:size(xyz_filtered)[1]
+        @inbounds @simd for i = 1:size(xyz_filtered)[1]
             buffer_array[i] = dot(filtered_AbsAa[i,:] , Smoothed_gradient_kernel_function(
                 smoothed_kernel,
                 h_intepolate,
@@ -857,7 +830,7 @@ function curl_quantity_intepolate(
         filtered_AbsAa = filtered_Ab .- quantity_value_vector'
 
         buffer_array = zeros(Float64, size(xyz_filtered))
-        for i = 1:size(xyz_filtered)[1]
+        @inbounds @simd for i = 1:size(xyz_filtered)[1]
             buffer_array[i, :] =
                 -cross(filtered_AbsAa[i,:], Smoothed_gradient_kernel_function(
                     smoothed_kernel,
@@ -866,7 +839,7 @@ function curl_quantity_intepolate(
                 )) 
             buffer_array[i,:] .*= (filtered_m[i]/density_value) 
         end
-        for j in eachindex(curl_quant)
+        @inbounds @simd for j in eachindex(curl_quant)
             curl_quant[j] = sum(buffer_array[:, j])
         end
 
@@ -946,111 +919,12 @@ function surface_density(
         surface_density = 0.0
     else
         truncate_radius = truncate_multiplier * h_intepolate
-        filtered_indices = findall(r -> r <= truncate_radius, snorm)
-        filtered_snorm = snorm[filtered_indices]
-        filtered_m = mass_array[filtered_indices]
-        surface_density = sum(
-            filtered_m .*
-            Smoothed_kernel_function.(smoothed_kernel, h_intepolate, filtered_snorm, 2),
-        )
+        mask_snorm = snorm .< truncate_radius
+        filtered_m = mass_array[mask_snorm]
+        filtered_s = snorm[mask_snorm]
+        surface_density = sum( filtered_m .* Smoothed_kernel_function.(smoothed_kernel, h_intepolate, filtered_s, 2))
     end
     return surface_density
-end
-
-"""
-    gradient_surface_density(data::PhantomRevealerDataFrame, reference_point::Vector, smoothed_kernel:: Function = M5_spline,h_mode::String="closest", coordinate_flag::String = "cart";Identical_particles::Bool=true)
-Calculate the gredient of surface density ∇Σ at the given reference point by SPH interpolation
-
-# Parameters
-- `data :: PhantomRevealerDataFrame`: The SPH data that is stored in `PhantomRevealerDataFrame`
-- `reference_point :: Vector`: The reference point for interpolation.
-- `smoothed_kernel :: Function = M5_spline`: The Kernel function for interpolation.
-- `h_mode :: String="closest"`: The mode for finding a proper smoothed radius. (Allowed value: "closest", "mean")
-- `coordinate_flag :: String = "cart"`: The coordinate system that is used for given the target. Allowed value: ("cart", "polar") 
-
-# Keyword argument
-- `Identical_particles :: Bool = true`: Whether all the particles is identical in `data`. If false, particle mass would try to access the mass column i.e. data.data_dict["m"].
-
-# Returns
-- `Vector`: The gradient vector of surface density at the reference point. The coordinate would be as same as the input(depends on "coordinate_flag").
-
-# Example
-```julia
-prdf_list = read_phantom(dumpfile_00000,"all")
-COM2star!(prdf_list, prdf_list[end],1)
-data :: PhantomRevealerDataFrame = prdf_list[1]
-reference_point :: Vector = [25.0, π/2]  # Choosing the cylindrical coordinate
-smoothed_kernel :: Function = M6_spline
-grad_surf_dens :: Vector = grad_surface_density(data, reference_point, smoothed_kernel, "closest", "polar")
-```
-"""
-function gradient_surface_density(
-    data::PhantomRevealerDataFrame,
-    reference_point::Vector,
-    smoothed_kernel::Function = M5_spline,
-    h_mode::String = "closest",
-    coordinate_flag::String = "cart";
-    Identical_particles::Bool=true
-)
-    """
-    Here recommended to use a single type of particle.
-    coordinate_flag is the coordinate system that the reference_point is given
-    reference_point is in "2D"
-    "cart" = cartitian
-    "polar" = polar
-    """
-    # Return NaN if no particle in the data
-    grad_surface_density::Vector = Vector{Float64}(undef, 2)
-    if nrow(data.dfdata) == 0
-        fill!(grad_surface_density, NaN)
-        return grad_surface_density
-    end
-
-    # Preparing and verifing the data
-    if coordinate_flag == "polar"
-        ϕ =  reference_point[2]
-        reference_point = _cylin2cart(reference_point)
-    end
-
-    # Evaluating a proper smoothed radius
-    truncate_multiplier = KernelFunctionValid()[nameof(smoothed_kernel)]
-    snorm, xyref = get_s_ref(data, reference_point)
-    if Identical_particles
-        particle_mass = data.params["mass"]
-        mass_array = fill(particle_mass,length(snorm))
-    else
-        mass_array = data.dfdata[!,"m"]
-    end
-    h_intepolate = estimate_h_intepolate(data, snorm, h_mode) #_easy_estimate_h_intepolate(dfdata, rnorm, 1.0)
-
-    # Kernel interpolation
-    if (h_intepolate == 0.0)
-        fill!(grad_surface_density, NaN)
-        return grad_surface_density
-    else
-        truncate_radius = truncate_multiplier * h_intepolate
-        mask_snorm = snorm .< truncate_radius
-        xy_filtered = xyref[mask_snorm, :]
-        filtered_m = mass_array[mask_snorm]
-        buffer_array = zeros(Float64, size(xy_filtered))
-        for i = 1:size(xy_filtered)[1]
-            buffer_array[i, :] =
-                filtered_m[i] .* Smoothed_gradient_kernel_function(
-                    smoothed_kernel,
-                    h_intepolate,
-                    xy_filtered[i, :],
-                )
-        end
-        for j in eachindex(grad_surface_density)
-            grad_surface_density[j] = sum(buffer_array[:, j])
-        end
-        if coordinate_flag == "polar"
-            cylindrical_grad_surface_density = _vector_cart2cylin(ϕ,grad_surface_density...)
-            return cylindrical_grad_surface_density
-        else
-            return grad_surface_density
-        end
-    end
 end
 
 """
@@ -1087,7 +961,6 @@ quantities_dict :: Dict{Float64} = quantity_intepolate2D(data, reference_point, 
 function quantity_intepolate_2D(
     data::PhantomRevealerDataFrame,
     reference_point::Vector,
-    Sigmai::Float64,
     column_names::Vector{String},
     smoothed_kernel::Function = M5_spline,
     h_mode::String = "closest",
@@ -1103,22 +976,28 @@ function quantity_intepolate_2D(
     """
     # Constructing the column names for interpolation
     working_column_names = copy(column_names)
+    divided_column = "Sigma"
+    rho_flag = false
+    if divided_column in working_column_names
+        rho_flag = true
+        deleteat!(working_column_names, findall(x->x==divided_column, working_column_names))
+    else
+        rho_flag = false
+    end
     quantity_result = Dict{String,Float64}()
 
     # Return NaN if no particle in the data
-    if nrow(data.dfdata) == 0 && Sigmai == 0.0
+    if nrow(data.dfdata) == 0
         for column_name in working_column_names
             quantity_result[column_name] = NaN
+            if rho_flag
+                quantity_result[divided_column] = 0.0
+            end
         end
         return quantity_result
     end
-    
+
     # Preparing and verifing the data
-    for column_name in column_names
-        if !(hasproperty(data.dfdata, column_name))
-            error("IntepolateError: No matching column '$(column_name)'.")
-        end
-    end
     if coordinate_flag == "polar"
         reference_point = _cylin2cart(reference_point)
     end
@@ -1139,16 +1018,26 @@ function quantity_intepolate_2D(
     if (h_intepolate == 0.0)
         for column_name in working_column_names
             quantity_result[column_name] = NaN
+            if rho_flag
+                quantity_result[divided_column] = 0.0
+            end
         end
     else
         truncate_radius = truncate_multiplier * h_intepolate
-        indices = findall(x -> x <= truncate_radius, snorm)
-        filtered_dfdata = dfdata[indices, :]
-        filtered_m = mass_array[indices]
-        filtered_snorm = snorm[indices]
-        for column_name in working_column_names
-            filtered_dfdata[!, column_name] ./= Sigmai
-            quantity_result[column_name] = sum(filtered_m .* (filtered_dfdata[!, column_name]) .* (Smoothed_kernel_function.(smoothed_kernel,h_intepolate,filtered_snorm,2)))
+        mask_snorm = snorm .< truncate_radius
+        filtered_m = mass_array[mask_snorm]
+        filtered_s = snorm[mask_snorm]
+        filtered_ρ = dfdata[mask_snorm, divided_column]
+        filtered_A = [dfdata[mask_snorm, column_name] for column_name in working_column_names]
+        mW = filtered_m .* Smoothed_kernel_function.(smoothed_kernel, h_intepolate, filtered_s, 2)
+        mWlρ = mW ./ filtered_ρ
+        if rho_flag
+            quantity_result[divided_column] = sum(mW)
+        end
+        # Shepard Normalization
+        sn = sum(mWlρ)
+        @inbounds @simd for k in eachindex(working_column_names)
+            quantity_result[working_column_names[k]] = sum(mWlρ .* filtered_A[k]) / sn
         end
     end
     return quantity_result

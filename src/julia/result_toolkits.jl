@@ -264,3 +264,44 @@ function Check_array_quantities(data :: Analysis_result, array_index :: Int64)
     println("STD: $STD")
     println("----------------------------------------------------------------")
 end
+
+
+function twoarms_spiral_detection(Disk2Ddata :: Analysis_result, array_index :: Int64, ϕend_spiral1 = 0.0;
+    Fax::Union{FigureAxes, Nothing} = nothing, slim = (50.0,100.0),
+    boxfactor = 8.0,a_range::Tuple{Float64,Float64} = (30.0, 300.0), k_range::Tuple{Float64,Float64} = (-0.5, -0.06), num_a_bins::Int = 800, num_k_bins::Int = 200,width=5.0)
+    if Disk2Ddata.params["Analysis_type"] != "Faceon_disk"
+        error("InputError: The Analysis type of data needs to be `Faceon_disk`!")
+    end
+    if isnothing(slim)
+        srange = eachindex(Disk2Ddata.axes[1])
+    else
+        srange = value2closestvalueindex(Disk2Ddata.axes[1],slim[1]):value2closestvalueindex(Disk2Ddata.axes[1],slim[2])
+    end
+    s = Disk2Ddata.axes[1][srange]
+    ϕ = Disk2Ddata.axes[2]
+    axes = (s, ϕ)
+    z = Disk2Ddata.data_dict[array_index]
+    
+
+    pointsset_binary_full, weight_array_full, _ = ridge_detection_automatic_scale_selection(z, width_pixel_range = (8.0,12.0), width_resolution = 24, boxfactor = boxfactor)
+    pointsset_binary = pointsset_binary_full[srange,:]
+    weight_array = weight_array_full[srange,:]
+    spiral1, spiral2 = Hough_transform_fitting_twolines(pointsset_binary, axes, weight_array, a_range=a_range, k_range=k_range, num_a_bins=num_a_bins, num_k_bins=num_k_bins,ϕend_spiral1=ϕend_spiral1,width=width)
+
+    # Draw point
+    S, Φ = meshgrid(Disk2Ddata.axes[1], Disk2Ddata.axes[2])
+    ss = S[pointsset_binary_full]
+    phis = Φ[pointsset_binary_full]
+    weight_color = weight_array_full[pointsset_binary_full]
+
+    if !isnothing(Fax)
+        ϕ1 = _logarithmic_spiral_ϕ.(s, a = spiral1.params["a"], k = spiral1.params["k"])
+        ϕ2 = _logarithmic_spiral_ϕ.(s, a = spiral2.params["a"], k = spiral2.params["k"])
+        scatter!(Fax.axes[1,1],phis,ss ; markersize = 5, color=weight_color,colormap=:plasma, colorrange=(1.0,maximum(weight_color)), colorscale=log10)
+        lines!(Fax.axes[1,1], ϕ1,s , color=:blue)
+        lines!(Fax.axes[1,1], ϕ2,s , color=:red)
+        draw_Fig!(Fax)
+    end
+
+    return spiral1, spiral2
+end

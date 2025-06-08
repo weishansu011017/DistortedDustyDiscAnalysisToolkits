@@ -270,3 +270,66 @@ function Binning2OneDimBoxes(array::AbstractArray, boxes::AbstractVector)
     result_bin_array = reshape(bin_index,original_size...)
     return result_bin_array
 end
+
+"""
+    AssignBinIndices(array::AbstractArray, boxes::AbstractVector; mode::Symbol = :bin)
+
+Assign each element in `array` to a bin defined by `boxes`, using either binning or nearest-neighbor matching.
+
+# Parameters
+- `array :: AbstractArray`: The array of values to assign to bins.
+- `boxes :: AbstractVector`: A sorted vector defining bin **edges** (for `mode=:bin`) or **center points** (for `:nearest`).
+- `mode :: Symbol`: 
+    - `:bin`: Use standard binning. `boxes` are treated as bin edges.
+    - `:nearest`: Match each value to the closest value in `boxes`.
+
+# Returns
+- `Array`: An array of the same shape as `array`, filled with bin indices (1-based). `-1` for out-of-range (in `:bin` mode).
+"""
+function AssignBinIndices(array::AbstractArray, boxes::AbstractVector; mode::Symbol = :bin)
+    if !issorted(boxes)
+        error("Boxes must be sorted in ascending order.")
+    end
+
+    original_size = size(array)
+    flatten_array = vec(array)
+    bin_index = similar(flatten_array, Int)
+
+    if mode == :bin
+        for (i, val) in enumerate(flatten_array)
+            idx = searchsortedlast(boxes, val)
+            if 1 <= idx < length(boxes)
+                bin_index[i] = idx
+            else
+                bin_index[i] = -1  # value out of bin range
+            end
+        end
+
+    elseif mode == :nearest
+        for (i, val) in enumerate(flatten_array)
+            _, idx = findmin(abs.(boxes .- val))
+            bin_index[i] = idx
+        end
+
+    else
+        error("Unknown mode: $mode. Must be :bin or :nearest.")
+    end
+
+    return reshape(bin_index, original_size...)
+end
+
+"""
+    @inline function _angular_distance(θ1, θ2) 
+
+Calculate the angular distances between (θ1, θ2) 
+
+# Parameters
+- `θ1 :: Real`: The first angle.
+- `θ2 :: Real`: The second angle.
+
+# Returns
+- `Float64`: The angular distances between (θ1, θ2).
+"""
+@inline function _angular_distance(θ1 :: Real, θ2 :: Real) :: Float64
+    return abs(mod(θ1 - θ2 + π, 2π) - π)
+end

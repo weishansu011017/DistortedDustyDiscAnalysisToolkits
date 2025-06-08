@@ -8,6 +8,7 @@ const MODULE_LIST = [
     :DataFrames,
     :DataStructures,
     :Dates,
+    :FFTW,
     :FilesystemDatastructures,
     :ForwardDiff,
     :GeometryBasics,

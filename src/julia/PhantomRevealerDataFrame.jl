@@ -74,6 +74,11 @@ end
     return PhantomRevealerDataFrame(prdf.dfdata[:, col_inds],prdf.params)
 end
 
+# Single row and single columns assignment
+@inline function Base.setindex!(prdf::PhantomRevealerDataFrame, value, row_ind::Integer, col_ind::Union{String, Symbol})
+    prdf.dfdata[row_ind, col_ind] = value
+end
+
 # Single row and multiple columns assignment
 @inline function Base.setindex!(prdf::PhantomRevealerDataFrame, value, row_ind::Integer, col_inds::Union{Vector{Symbol}, Vector{String}, Vector{Int}})
     prdf.dfdata[row_ind, col_inds] = value
@@ -122,7 +127,7 @@ function print_params(data::PhantomRevealerDataStructures, pause::Bool = false)
 end
 
 """
-    get_dim(data::PhantomRevealerDataFrame)
+    @inline get_dim(data::PhantomRevealerDataFrame)
 Get the dimension of simulation.
 
 # Parameters
@@ -131,12 +136,12 @@ Get the dimension of simulation.
 #Returns
 - 'Int64': The dimension of simulation of SPH data.
 """
-function get_dim(data::PhantomRevealerDataFrame)
+@inline function get_dim(data::PhantomRevealerDataFrame)
     return hasproperty(data.dfdata, "z") ? 3 : 2
 end
 
 """
-    get_time(data::PhantomRevealerDataFrame)
+    @inline get_time(data::PhantomRevealerDataFrame)
 Get the time of simulation in code unit.
 
 # Parameters
@@ -145,7 +150,7 @@ Get the time of simulation in code unit.
 #Returns
 - 'Float64': The time of simulation.
 """
-function get_time(data::PhantomRevealerDataFrame)
+@inline function get_time(data::PhantomRevealerDataFrame)
     if haskey(data.params,"time")
         return data.params["time"]
     elseif haskey(data.params,"Time")
@@ -156,7 +161,7 @@ function get_time(data::PhantomRevealerDataFrame)
 end
 
 """
-    get_code_unit(data::PhantomRevealerDataFrame)
+    @inline get_code_unit(data::PhantomRevealerDataFrame)
 Get the value of converting from code unit to cgs.
 
 # Parameters
@@ -168,7 +173,7 @@ Get the value of converting from code unit to cgs.
 - 'Float64': Unit of time
 - 'Float64': Unit of magnetic field
 """
-function get_code_unit(data::PhantomRevealerDataStructures)
+@inline function get_code_unit(data::PhantomRevealerDataStructures)
     udist = data.params["udist"]
     umass = data.params["umass"]
     utime = data.params["utime"]
@@ -177,7 +182,7 @@ function get_code_unit(data::PhantomRevealerDataStructures)
 end
 
 """
-    get_npart(data::PhantomRevealerDataFrame)
+    @inline get_npart(data::PhantomRevealerDataFrame)
 Get the number of particles in `data`.
 
 # Parameters
@@ -186,23 +191,23 @@ Get the number of particles in `data`.
 # Returns
 -`Int64`: The number of particles.
 """
-function get_npart(data::PhantomRevealerDataFrame)
+@inline function get_npart(data::PhantomRevealerDataFrame)
     return nrow(data.dfdata)
 end
 
 """
-    add_mean_h!(data::PhantomRevealerDataFrame)
+    @inline add_mean_h!(data::PhantomRevealerDataFrame)
 Calculate the average smoothed radius of particles, storing into the `params` field.
 
 # Parameters
 - `data :: PhantomRevealerDataFrame`: The SPH data that is stored in `PhantomRevealerDataFrame` 
 """
-function add_mean_h!(data::PhantomRevealerDataFrame)
+@inline function add_mean_h!(data::PhantomRevealerDataFrame)
     data.params["h_mean"] = mean(data.dfdata[!, "h"])
 end
 
 """
-    get_truncated_radius(data::PhantomRevealerDataFrame, h::Float32=-1.0f0 , poffset::Float64=0.5, smoothed_kernal:: Function = M5_spline)
+    @inline get_truncated_radius(data::PhantomRevealerDataFrame, h::Float32=-1.0f0 , poffset::Float64=0.5, smoothed_kernal:: Function = M5_spline)
 Get the proper truncated radius in unit length. 
 
 The parameters `poffset` is used for doing a small positive offset on the result to make sure that all of the particles would be found while doing the `KDTree` searching.
@@ -216,7 +221,7 @@ The parameters `poffset` is used for doing a small positive offset on the result
 # Returns
 -`Float64`: The (modified) truncated radius with respect to the given kernel function
 """
-function get_truncated_radius(
+@inline function get_truncated_radius(
     data::PhantomRevealerDataFrame,
     h::Float32 = -1.0f0,
     poffset::Float64 = 0.5,
@@ -226,7 +231,7 @@ function get_truncated_radius(
         if !(haskey(data.params, "h_mean"))
             add_mean_h!(data)
         end
-        h = data.params["h_mean"]
+        h :: Float64 = data.params["h_mean"]
     end
     radius::Float64 =
         Float64((KernelFunctionValid()[nameof(smoothed_kernal)] + poffset) * h)
@@ -234,7 +239,7 @@ function get_truncated_radius(
 end
 
 """
-    get_unit_G(data::PhantomRevealerDataFrame)
+    @inline get_unit_G(data::PhantomRevealerDataFrame)
 Get the Gravitational constant G in code unit.
 
 # Parameters
@@ -243,18 +248,18 @@ Get the Gravitational constant G in code unit.
 # Returns
 -`Float64`: The Gravitational constant G in code unit.
 """
-function get_unit_G(data::PhantomRevealerDataFrame)
+@inline function get_unit_G(data::PhantomRevealerDataFrame) :: Float64
     params = data.params
     udist = params["udist"]
     umass = params["umass"]
     utime = params["utime"]
-    G_cgs = udist^3 * utime^(-2) * umass^(-1)
-    G = G_cgs / 6.672041000000001e-8
+    G_cgs :: Float64 = udist^3 * utime^(-2) * umass^(-1)
+    G ::Float64 = G_cgs / 6.672041000000001e-8
     return G
 end
 
 """
-    get_general_coordinate(data::PhantomRevealerDataFrame,particle_index::Int)
+    @inline get_general_coordinate(data::PhantomRevealerDataFrame,particle_index::Int)
 Get the general coordinate `(x,y,z,vx,vy,vz)` of a specific particles.
 
 # Parameters
@@ -264,8 +269,8 @@ Get the general coordinate `(x,y,z,vx,vy,vz)` of a specific particles.
 # Returns
 - `Vector`: The general coordinate of the particle with given index.
 """
-function get_general_coordinate(data::PhantomRevealerDataFrame, particle_index::Int)
-    coordinate = Vector{Float64}(undef, 6)
+@inline function get_general_coordinate(data::PhantomRevealerDataFrame, particle_index::Int) :: Vector{Float64}
+    coordinate :: Vector{Float64} = Vector{Float64}(undef, 6)
     variable = String["x", "y", "z", "vx", "vy", "vz"]
     for (i, var) in enumerate(variable)
         coordinate[i] = data.dfdata[particle_index, var]
@@ -421,6 +426,7 @@ function get_rnorm_ref(data::PhantomRevealerDataFrame, reference_position::Vecto
     rnorm::Vector = sqrt.((x .- xt) .^ 2 + (y .- yt) .^ 2 + (z .- zt) .^ 2)
     return rnorm
 end
+
 
 """
     get_r_ref(data::PhantomRevealerDataFrame,reference_position::Vector{Float64})
@@ -650,6 +656,50 @@ function add_rho!(data::PhantomRevealerDataFrame)
     hfact = data.params["hfact"]
     d = get_dim(data)
     data.dfdata[!, "rho"] = particle_mass .* (hfact ./ data.dfdata[!, "h"]) .^ (d)
+end
+
+
+"""
+    add_Sigma!(data::PhantomRevealerDataFrame, smoothed_kernel :: Function = M4_spline; Identical_particles::Bool = true)
+Add the local surface density of disk for each particles
+
+# Parameters
+- `data :: PhantomRevealerDataFrame`: The SPH data that is stored in `PhantomRevealerDataFrame` 
+- `smoothed_kernel :: Function = M4_spline`: The Kernel function for interpolation. (Usually M4_spline is enough for intepolating other quantities. (recommended))
+
+# Keyword argument
+- `Identical_particles :: Bool = true`: Whether all the particles is identical in `data`. If false, particle mass would try to access the mass column i.e. data.data_dict["m"].
+"""
+function add_Sigma!(data::PhantomRevealerDataFrame, smoothed_kernel :: Function = M4_spline; Identical_particles::Bool=true)
+    N = get_npart(data)
+    Sigma = zeros(Float64, N)
+    x = data[!,"x"]
+    y = data[!,"y"]
+    h = data[!,"h"]
+    truncated_radius = KernelFunctionValid()[Symbol(smoothed_kernel)] .* h
+    m = Identical_particles ? fill(data.params["mass"], N) : df[!,"m"]
+    kdtree2d = Generate_KDtree(data, 2)
+
+    points = permutedims(hcat(x, y))
+    scratch = [Int[] for _ = 1:Threads.nthreads()]
+    for buf in scratch
+        sizehint!(buf, 1024)
+    end
+    @inbounds @threads for i in 1:N
+        tid = threadid()
+        idxs = scratch[tid]
+        empty!(idxs)
+        point = @view points[:, i]
+ 
+        inrange!(idxs, kdtree2d, point, truncated_radius[i])
+        mW = 0.0
+        @inbounds @simd for j in idxs
+            rab = sqrt((point[1]-x[j])^2 + (point[2]-y[j])^2)
+            mW += m[i] * Smoothed_kernel_function(smoothed_kernel, h[i], rab, 2)
+        end 
+        Sigma[i] = mW
+    end
+    data[!,"Sigma"] = Sigma
 end
 
 """

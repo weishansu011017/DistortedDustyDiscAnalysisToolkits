@@ -264,6 +264,7 @@ function read_phantom(
                     [col for col in names(group) if !any(ismissing, group[!, col])],
                 )
                 params_group = merge(header_vars, Dict("mass" => header_vars[mass_key]))
+                params_group["h_mean"] = mean(group_clean[!,"h"])
                 push!(df_list, PhantomRevealerDataFrame(group_clean, params_group))
             end
             if !(isempty(df_sinks))
@@ -275,12 +276,14 @@ function read_phantom(
         if ((separate_types == "sinks") || (separate_types == "all")) &&
            !(isempty(df_sinks))
             params = merge(header_vars, Dict("mass" => header_vars["massoftype"]))
+            params["h_mean"] = mean(df[!,"h"])
             df = PhantomRevealerDataFrame(df, params)
             df_sinks = PhantomRevealerDataFrame(df_sinks, header_vars)
             return [df, df_sinks]
         end
         combined_df = vcat(df, df_sinks, cols = :union)
         params = merge(header_vars, Dict("mass" => header_vars["massoftype"]))
+        params["h_mean"] = mean(combined_df[!,"h"])
         df = PhantomRevealerDataFrame(combined_df, params)
         return df
     end

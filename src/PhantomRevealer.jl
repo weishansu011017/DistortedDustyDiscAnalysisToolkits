@@ -19,12 +19,14 @@ include("$_module_location/julia/physical_quantity.jl")
 include("$_module_location/julia/read_phantom.jl")
 #Level 5 (Analysis)
 include("$_module_location/julia/Grid_interpolation.jl")
+include("$_module_location/julia/ridge_detection.jl")
+include("$_module_location/julia/Hough_transform.jl")
 #Level 6 (Extract data)
 include("$_module_location/julia/Makie_backend.jl")
 include("$_module_location/julia/Extract_data.jl")
 include("$_module_location/julia/result_toolkits.jl")
 include("$_module_location/julia/growth_rate.jl")
-include("$_module_location/julia/spiral_detection.jl")
+# include("$_module_location/julia/spiral_detection.jl")
 
 
 # Initialize function
