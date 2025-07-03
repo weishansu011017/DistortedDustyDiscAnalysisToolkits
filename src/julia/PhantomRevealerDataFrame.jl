@@ -107,6 +107,9 @@ end
 end
 
 
+# Constant
+const KDSearching_scratch = Ref{Vector{Vector{Int}}}()
+
 #Method
 """
     print_params(data::PhantomRevealerDataFrame, pause::Bool=false)
@@ -196,6 +199,21 @@ Get the number of particles in `data`.
 end
 
 """
+    @inline get_init_npart(data::PhantomRevealerDataFrame)
+Get the number of particles in `data`.
+
+# Parameters
+- `data :: PhantomRevealerDataFrame`: The SPH data that is stored in `PhantomRevealerDataFrame` 
+
+# Returns
+-`Int64`: The number of particles.
+"""
+@inline function get_init_npart(data::PhantomRevealerDataFrame)
+    itype = data.params["itype"]
+    return data.params[string("npartoftype", itype == 1 ? "" : string("_", itype), )]
+end
+
+"""
     @inline add_mean_h!(data::PhantomRevealerDataFrame)
 Calculate the average smoothed radius of particles, storing into the `params` field.
 
@@ -204,38 +222,6 @@ Calculate the average smoothed radius of particles, storing into the `params` fi
 """
 @inline function add_mean_h!(data::PhantomRevealerDataFrame)
     data.params["h_mean"] = mean(data.dfdata[!, "h"])
-end
-
-"""
-    @inline get_truncated_radius(data::PhantomRevealerDataFrame, h::Float32=-1.0f0 , poffset::Float64=0.5, smoothed_kernal:: Function = M5_spline)
-Get the proper truncated radius in unit length. 
-
-The parameters `poffset` is used for doing a small positive offset on the result to make sure that all of the particles would be found while doing the `KDTree` searching.
-
-# Parameters
-- `data :: PhantomRevealerDataFrame`: The SPH data that is stored in `PhantomRevealerDataFrame` 
-- `h :: Float32 = -1.0f0`: The smoothed radius. If `h < 0` then calling the average value of smoothed radius of particles.
-- `poffset :: Float64=0.5`: A small modification to prevent the non-searched particles. Taking `0.0` would be the proper truncated radius.  
-- `smoothed_kernal :: Function = M5_spline`: The smoothed kernel function.
-
-# Returns
--`Float64`: The (modified) truncated radius with respect to the given kernel function
-"""
-@inline function get_truncated_radius(
-    data::PhantomRevealerDataFrame,
-    h::Float32 = -1.0f0,
-    poffset::Float64 = 0.5,
-    smoothed_kernal::Function = M5_spline,
-)
-    if (h < 0)
-        if !(haskey(data.params, "h_mean"))
-            add_mean_h!(data)
-        end
-        h :: Float64 = data.params["h_mean"]
-    end
-    radius::Float64 =
-        Float64((KernelFunctionValid()[nameof(smoothed_kernal)] + poffset) * h)
-    return radius
 end
 
 """
@@ -297,6 +283,89 @@ function Generate_KDtree(data::PhantomRevealerDataFrame, dim::Int)
     end
     kdtree = KDTree(position_array)
     return kdtree
+end
+
+"""
+    get_Neighbor_indices(tree::KDTree, target::NTuple{D, T}, radius_multiplier::T, h_array::AbstractVector{T})
+
+Finds neighboring particle indices around a target point using a KDTree.
+
+This function first identifies the index `i₀` of the nearest neighbor to the `target` using `knn`, then uses the corresponding smoothing length `h_array[i₀]` scaled by `radius_multiplier` to define a search radius. It then populates a thread-local buffer with all indices within this radius using `inrange!`.
+
+# Parameters
+- `tree::KDTree`: The KDTree spatial index used for neighbor search.
+- `target::NTuple{D, T}`: The coordinates of the target point in D dimensions.
+- `radius_multiplier::T`: A multiplier applied to the smoothing length to define the neighbor search radius.
+- `h_array::AbstractVector{T}`: An array of per-particle smoothing lengths or characteristic scales.
+
+# Returns
+- `idxs::Vector{Int}`: Indices of neighboring particles within the computed radius (thread-local scratch buffer; not heap-allocated).
+- `ha::T`: The smoothing length of the nearest particle to the target, i.e., `h_array[i₀]`.
+
+"""
+function get_Neighbor_indices(tree :: KDTree, target :: NTuple{D, T}, radius_multiplier::T, h_array :: AbstractVector{T}) where {T<:AbstractFloat, D}
+    tid = threadid()
+    idxs = KDSearching_scratch[][tid]
+    empty!(idxs)
+    i0 = knn(tree, SVector{D, T}(target), 1)[1][1]
+    ha = h_array[i0]
+    radius = radius_multiplier * ha
+    inrange!(idxs, tree, SVector{D, T}(target), radius)
+    return idxs, ha
+end
+
+"""
+    get_SymmetricNeighbor_indices(tree::KDTree, target::NTuple{D, T}, radius_multiplier::T, h_array::AbstractVector{T}) -> Tuple{Vector{Int}, T}
+
+Return the symmetric SPH neighbor indices for a given target point based on the enlarged kernel support.
+
+This function enforces the symmetric condition between the target point and all its neighbors by ensuring that every neighbor `j` satisfies:
+
+    ‖x_a - x_b‖ < max(κ * h_a, κ * h_b)
+
+where `κ = radius_multiplier`, `h_a` is the smoothing length of the target point, and `h_b` is that of the neighbor.  
+The final radius is iteratively expanded until this criterion is satisfied for all selected neighbors.
+
+# Parameters
+- `tree::KDTree`  
+  KDTree containing the particle positions, assumed to match the ordering of `h_array`.
+
+- `target::NTuple{D, T}`  
+  Target point in D-dimensional space (typically 2D or 3D).
+
+- `radius_multiplier::T`  
+  Support radius scaling factor `κ` (e.g., 2.0, 2.5, 3.0 for M4/M5/M6 kernels).
+
+- `h_array::AbstractVector{T}`  
+  Smoothing lengths for all particles, must align with `tree`.
+
+# Returns
+- `::Tuple{Vector{Int}, T}`  
+  A tuple `(idxs, ha)` where `idxs` is the set of symmetric neighbor indices,  
+  and `ha` is the smoothing length of the nearest particle (used as the "target").
+
+"""
+function get_SymmetricNeighbor_indices(tree :: KDTree, target :: NTuple{D, T}, radius_multiplier :: T, h_array :: AbstractVector{T}) where {T<:AbstractFloat, D}
+    tid = threadid()
+    idxs = KDSearching_scratch[][tid]
+    empty!(idxs)
+    
+    i0 = knn(tree, SVector{D, T}(target), 1)[1][1]
+    ha = h_array[i0]
+
+    rad = radius_multiplier * ha
+    inrange!(idxs, tree, SVector{D, T}(target), rad)
+
+    while !isempty(idxs)
+        hb = h_array[idxs]
+        max_hb = maximum(hb)
+        new_rad = radius_multiplier * max_hb
+        new_rad ≤ rad && break
+        rad = new_rad
+        empty!(idxs)
+        inrange!(idxs, tree, SVector{D, T}(target), rad)
+    end
+    return idxs, ha
 end
 
 """
@@ -407,6 +476,48 @@ function KDtreeNearNeighborsFilter(
     kdtf_dfdata = data.dfdata[idxs, :]
     kdtf_data = PhantomRevealerDataFrame(kdtf_dfdata, data.params)
     return kdtf_data
+end
+
+"""
+    KDtreeSymmetricFilter(
+        data::PhantomRevealerDataFrame,
+        kdtree::KDTree,
+        target::Vector,
+        radius::Float64,
+        coordinate_flag::String = "cart"
+    )
+
+Filter out particles based on symmetric smoothing-length criteria, including any neighbors for which the distance to `target` is less than `n*h_i` or less than `n*h_j`.
+
+# Parameters
+- `data :: PhantomRevealerDataFrame`: The SPH data stored in a `PhantomRevealerDataFrame`.
+- `kdtree :: KDTree`: The KDTree constructed from `data`.
+- `target :: Vector`: The reference position to search around.
+- `radius :: Float64`: The initial cutoff distance `n * h_i`, where `h_i` is the smoothing length of the particle at `target` and `n` is the kernel support multiplier.
+- `coordinate_flag :: String = "cart"`: The coordinate system of `target`. Allowed values:
+"""
+function KDtreeSymmetricFilter(
+    data::PhantomRevealerDataFrame,
+    tree::KDTree,
+    target::AbstractVector{<:Real};
+    kernel::Type{K} = M5_spline,
+) where {K<:AbstractSPHKernel}
+
+    tar = coord === :cylin ? _cylin2cart(target) : target
+
+    dim_tree = size(tree.data, 1)
+    length(tar) == dim_tree || error("KDTree is $dim_tree-D but target is $(length(tar))-D.")
+
+    # Check kernel validity
+    hT = eltype(data.dfdata[!, "h"])
+    hasmethod(KernelFunctionValid, Tuple{Type{K}, Type{hT}}) ||
+        error("No KernelFunctionValid(...) method for kernel $(K).")
+    coeff = KernelFunctionValid(kernel, hT)
+
+    # Use the shared symmetric neighbor finder
+    idxs, _ = get_SymmetricNeighbor_indices(tree, tar, coeff, data.dfdata[!, "h"])
+
+    return PhantomRevealerDataFrame(data.dfdata[idxs, :], data.params)
 end
 
 """
@@ -660,42 +771,43 @@ end
 
 
 """
-    add_Sigma!(data::PhantomRevealerDataFrame, smoothed_kernel :: Function = M4_spline; Identical_particles::Bool = true)
-Add the local surface density of disk for each particles
+    add_Sigma!(data::PhantomRevealerDataFrame, smoothed_kernel::Type{K} = M4_spline; Identical_particles::Bool = true) where {K<:AbstractSPHKernel}
+
+Compute and add the column density `Sigma` to the dataset.
+
+This function evaluates the surface density at each particle by integrating the SPH kernel in 3D along the line-of-sight (z-axis), assuming an axisymmetric disk projected onto the xy-plane. The computed values are stored in `data[!,"Sigma"]`.
 
 # Parameters
-- `data :: PhantomRevealerDataFrame`: The SPH data that is stored in `PhantomRevealerDataFrame` 
-- `smoothed_kernel :: Function = M4_spline`: The Kernel function for interpolation. (Usually M4_spline is enough for intepolating other quantities. (recommended))
+- `data::PhantomRevealerDataFrame`: The input dataset containing SPH particle properties.
+- `smoothed_kernel::Type{K}`: The smoothing kernel type (default: `M4_spline`). Must be a subtype of `AbstractSPHKernel`.
+- `Identical_particles::Bool=true`: If true, all particles are assumed to have the same mass (`data.params["mass"]`). If false, use `data[!,"m"]` as mass array.
 
-# Keyword argument
-- `Identical_particles :: Bool = true`: Whether all the particles is identical in `data`. If false, particle mass would try to access the mass column i.e. data.data_dict["m"].
+# Notes
+- The integration uses kernel weights from `LOSint_Smoothed_kernel_function`, assuming vertical integration through a 3D kernel.
 """
-function add_Sigma!(data::PhantomRevealerDataFrame, smoothed_kernel :: Function = M4_spline; Identical_particles::Bool=true)
+function add_Sigma!(data::PhantomRevealerDataFrame, smoothed_kernel :: Type{K} = M4_spline; Identical_particles::Bool=true) where {K<:AbstractSPHKernel}
     N = get_npart(data)
     Sigma = zeros(Float64, N)
     x = data[!,"x"]
     y = data[!,"y"]
     h = data[!,"h"]
-    truncated_radius = KernelFunctionValid()[Symbol(smoothed_kernel)] .* h
-    m = Identical_particles ? fill(data.params["mass"], N) : df[!,"m"]
+    truncated_radius = KernelFunctionValid(smoothed_kernel, eltype(h)) .* h
+    m = Identical_particles ? fill(data.params["mass"], N) : data[!,"m"]
     kdtree2d = Generate_KDtree(data, 2)
 
-    points = permutedims(hcat(x, y))
-    scratch = [Int[] for _ = 1:Threads.nthreads()]
-    for buf in scratch
-        sizehint!(buf, 1024)
-    end
+    points = [zeros(Float64, 2) for _ = 1:Threads.nthreads()]
     @inbounds @threads for i in 1:N
         tid = threadid()
-        idxs = scratch[tid]
+        idxs = KDSearching_scratch[][tid]
+        point = points[tid]
         empty!(idxs)
-        point = @view points[:, i]
- 
+        xi = point[1] = x[i]
+        yi = point[2] = y[i]
         inrange!(idxs, kdtree2d, point, truncated_radius[i])
         mW = 0.0
-        @inbounds @simd for j in idxs
-            rab = sqrt((point[1]-x[j])^2 + (point[2]-y[j])^2)
-            mW += m[i] * Smoothed_kernel_function(smoothed_kernel, h[i], rab, 2)
+        @inbounds for j in idxs
+            rab = sqrt((xi-x[j])^2 + (yi-y[j])^2)
+            mW += m[i] * LOSint_Smoothed_kernel_function(smoothed_kernel, rab, h[i], Val(3))
         end 
         Sigma[i] = mW
     end
@@ -715,8 +827,8 @@ function add_Kepelarian_azimuthal_velocity!(data::PhantomRevealerDataFrame)
     end
     G = get_unit_G(data)
     M = data.params["Origin_sink_mass"]
-    data.dfdata[!, "vϕ_k"] = sqrt.((G * M) ./ data.dfdata[!, "s"])
-    data.dfdata[!, "vϕ-vϕ_k"] = data.dfdata[!, "vϕ"] - data.dfdata[!, "vϕ_k"]
+    data.dfdata[!, "vϕk"] = sqrt.((G * M) ./ data.dfdata[!, "s"])
+    data.dfdata[!, "vrelϕ"] = data.dfdata[!, "vϕ"] - data.dfdata[!, "vϕk"]
 end
 
 """
@@ -727,12 +839,21 @@ Add the Kepelarian angular velocity for each particles.
 - `data :: PhantomRevealerDataFrame`: The SPH data that is stored in `PhantomRevealerDataFrame`
 """
 function add_Kepelarian_angular_velocity!(data::PhantomRevealerDataFrame)
-    if !(hasproperty(data.dfdata, "s"))
-        add_cylindrical!(data)
-    end
+    xs = data[!,"x"]
+    ys = data[!,"y"]
+    zs = data[!,"z"]
     G = get_unit_G(data)
     M = data.params["Origin_sink_mass"]
-    data.dfdata[!, "Ω_k"] = sqrt.((G * M) ./ (data.dfdata[!, "s"]).^3)
+    μ = G * M
+    Ωk = zeros(Float64, get_npart(data))
+    @inbounds @simd for i in eachindex(Ωk)
+        x = xs[i]
+        y = ys[i]
+        z = zs[i]
+        r = sqrt(x*x + y*y + z*z)
+        Ωk[i] = sqrt(μ / (r^3))
+    end
+    data.dfdata[!, "Ωk"] = Ωk
 end
 
 """
@@ -954,6 +1075,214 @@ function add_eccentricity!(data::PhantomRevealerDataFrame)
     ez = ((vrnorm2 ./ μ) .- invrnorm) .* z - (rdotv ./ μ) .* vz
     dfdata[!, "e"] = sqrt.(ex .^ 2 + ey .^ 2 + ez .^ 2)
 end
+
+"""
+    add_SI_growth_requirements!(datadust::PhantomRevealerDataFrame, datagas::PhantomRevealerDataFrame, smoothed_kernel::Type{K} = M4_spline; Identical_particles::Bool = true, cs0::Float64 = 0.158) where {K<:AbstractSPHKernel}
+
+Compute and assign dust-related quantities required for streaming instability (SI) growth analysis.
+
+This function performs SPH interpolation from the gas particles onto the positions of the dust particles to evaluate the following physical quantities:
+- Interpolated gas radial velocity (`vsg`)
+- Gas azimuthal sub-Keplerian velocity (`vrelϕg`)
+- Vertical gas velocity (`vzg`)
+- Local gas density (`rhog`)
+- Local sound speed (`cs`)
+- Dust Stokes number (`St`)
+
+All results are stored as new columns in `datadust`.
+
+# Parameters
+- `datadust::PhantomRevealerDataFrame`: Dust particle data.
+- `datagas::PhantomRevealerDataFrame`: Gas particle data.
+- `smoothed_kernel::Type{K}`: SPH kernel type for interpolation (default: `M4_spline`).
+- `Identical_particles::Bool = true`: Whether all gas particles share the same mass (reads from `params["mass"]` if true, or from column `"m"` if false).
+- `cs0::Float64 = 0.158`: Normalization constant for computing sound speed: `c_s = c_{s0} *r^{-q}`, where `q = data.params["qfacdisc"]`.
+
+# Notes
+- Requires `"rho"` and `"vrelϕ"` columns to exist in `datagas`, and `"vrelϕ"` in `datadust`. These will be automatically computed via `add_rho!` and `add_Kepelarian_azimuthal_velocity!` if missing.
+- Uses 2D and 3D KDTree neighbor searches for surface and volume interpolation, respectively.
+- Interpolation is Shepard-normalized to ensure consistency.
+- The computed Stokes number `St` is based on surface density interpolation using 2D kernel weights.
+
+"""
+function add_SI_growth_requirements!(datadust :: PhantomRevealerDataFrame, datagas :: PhantomRevealerDataFrame , smoothed_kernel :: Type{K} = M4_spline; Identical_particles::Bool=true, cs0 :: Float64 = 0.158) where {K<:AbstractSPHKernel}
+    if !hasproperty(datagas.dfdata, "rho")
+        add_rho!(datagas)
+    end
+    if !hasproperty(datadust.dfdata, "vrelϕ")
+        add_Kepelarian_azimuthal_velocity!(datadust)
+    end
+    if !hasproperty(datagas.dfdata, "vrelϕ")
+        add_Kepelarian_azimuthal_velocity!(datagas)
+    end
+
+    # Initialize arrays
+    N = get_npart(datadust)
+    vsg = zeros(Float64, N)
+    vϕgsubk = zeros(Float64, N)
+    vzg = zeros(Float64, N)
+    rhog = zeros(Float64, N)
+    St = zeros(Float64, N)
+    cs = zeros(Float64, N)
+
+    # Get intepolated datadusts
+    # From datadust
+    xd = datadust[!,"x"]
+    yd = datadust[!,"y"]
+    zd = datadust[!,"z"]
+    gs = hasproperty(datadust.dfdata, "grainsize") ? datadust[!,"grainsize"] : fill(datadust.params["grainsize"], N)
+    gd = hasproperty(datadust.dfdata, "graindens") ? datadust[!,"graindens"] : fill(datadust.params["graindens"], N)
+    q = datadust.params["qfacdisc"]
+    nq = -q
+
+    # From datagas
+    x = datagas[!,"x"]
+    y = datagas[!,"y"]
+    z = datagas[!,"z"]
+    vs = datagas[!,"vs"]
+    vϕsubk = datagas[!,"vrelϕ"]
+    vz = datagas[!,"vz"]
+    hg = datagas[!,"h"]
+    rho = datagas[!,"rho"]
+    
+    # Initialize intepolate quantities
+    truncate_multiplier = KernelFunctionValid(smoothed_kernel, eltype(hg))
+    mg = Identical_particles ? fill(datagas.params["mass"], get_npart(datagas)) : datagas[!,"m"]
+    mglρ = mg ./ rho
+
+    # Initialize KD tree of second data
+    kdtree2d = Generate_KDtree(datagas, 2)
+    kdtree3d = Generate_KDtree(datagas, 3)
+
+    # Intepolate
+    points2d = [zeros(Float64, 2) for _ = 1:Threads.nthreads()]
+    points3d = [zeros(Float64, 3) for _ = 1:Threads.nthreads()]
+    scratch2d = [Int[] for _ = 1:Threads.nthreads()]
+    scratch3d = [Int[] for _ = 1:Threads.nthreads()]
+    
+    for buf in scratch2d
+        sizehint!(buf, 1024)
+    end
+    for buf in scratch3d
+        sizehint!(buf, 1024)
+    end
+    @inbounds @threads for i in 1:N
+        tid = threadid()
+        idxs2d = scratch2d[tid]
+        idxs3d = scratch3d[tid]
+        point2d = points2d[tid]
+        point3d = points3d[tid]
+        empty!(idxs2d)
+        empty!(idxs3d)
+        
+        xdi = point2d[1] = point3d[1] = xd[i]
+        ydi = point2d[2] = point3d[2] = yd[i]
+        zdi = point3d[3] = zd[i]
+
+        h2d = hg[knn(kdtree2d, point2d, 1)[1]][1]
+        h3d = hg[knn(kdtree3d, point3d, 1)[1]][1]
+
+        inrange!(idxs2d, kdtree2d, point2d, truncate_multiplier * h2d)
+        inrange!(idxs3d, kdtree3d, point3d, truncate_multiplier * h3d)
+
+        rdi = sqrt((xdi*xdi) + (ydi*ydi) + (zdi*zdi))
+        
+        cs[i] = cs0 * (rdi^nq)
+
+        mWlρ = 0.0
+        vsgitp = 0.0
+        vϕgsubkitp = 0.0
+        vzgitp = 0.0
+        rhogitp = 0.0
+        Sigmagitp = 0.0
+        if !isempty(idxs3d)
+            @inbounds for j in idxs3d
+                rab2 = (xdi-x[j])^2 + (ydi-y[j])^2 + (zdi-z[j])^2
+                W3d = Smoothed_kernel_function(smoothed_kernel, sqrt(rab2), h3d, Val(3))
+                sphfrac = mglρ[j] * W3d
+                rhogitp += mg[j] * W3d
+                mWlρ += sphfrac
+                vsgitp += sphfrac * vs[j]
+                vϕgsubkitp += sphfrac * vϕsubk[j]
+                vzgitp += sphfrac * vz[j]
+            end 
+            # Calculate difference and Shepard Normalization
+            vsg[i] = vsgitp/mWlρ
+            vϕgsubk[i] = vϕgsubkitp/mWlρ
+            vzg[i] = vzgitp/mWlρ
+            rhog[i] = rhogitp
+        else
+            vsg[i] = NaN64
+            vϕgsubk[i] = NaN64
+            vzg[i] = NaN64
+            rhog[i] = 0.0
+        end
+        if !isempty(idxs2d)
+            @inbounds for j in idxs2d
+                sab2 = (xdi-x[j])^2 + (ydi-y[j])^2
+                W2d = Smoothed_kernel_function(smoothed_kernel, sqrt(sab2), h2d, Val(2))
+                Sigmagitp += mg[j] * W2d
+            end 
+        end
+        St[i] = iszero(Sigmagitp) ? NaN64 : (π/2)*(gs[i]*gd[i])./Sigmagitp
+    end
+    datadust[!,"vsg"] = vsg
+    datadust[!,"vrelϕg"] = vϕgsubk
+    datadust[!,"vzg"] = vzg
+    datadust[!,"rhog"] = rhog
+    datadust[!,"St"] = St
+    datadust[!,"cs"] = cs
+end
+
+function add_SI_growth_rate!(datadust :: PhantomRevealerDataFrame; Κxrange :: Tuple{Float64, Float64, Int64} = (1.0, 10000.0, 50), Κzrange :: Tuple{Float64, Float64, Int64} = (1.0, 10000.0, 51))
+    if !hasproperty(datadust.dfdata, "vsg") || !hasproperty(datadust.dfdata, "vrelϕg") || !hasproperty(datadust.dfdata, "rhog") || !hasproperty(datadust.dfdata, "St")
+        error("Missing requirement for calculating SI dust growth rate! Use `add_SI_growth_requirements!` before calling this function")
+    end
+    if !hasproperty(datadust.dfdata, "rho")
+        add_rho!(datadust)
+    end
+    originBLASthreads = BLAS.get_num_threads()
+    BLAS.set_num_threads(1)
+
+    Κxs = logrange(Κxrange...)
+    Κzs = logrange(Κzrange...)
+
+    Npart = get_npart(datadust)
+    St_array = datadust[!,"St"]
+    rhod_array = datadust[!,"rho"]
+    cs_array = datadust[!,"cs"]
+    vx_array = copy(datadust[!, "vsg"])
+    vy_array = copy(datadust[!, "vrelϕg"])
+    ωx_array = copy(datadust[!, "vs"])
+    ωy_array = copy(datadust[!, "vrelϕ"])
+    rhog_array = datadust[!,"rhog"]
+
+    growth_array = zeros(Float64, Npart)
+
+    @inbounds @threads for i in 1:Npart
+        csi = cs_array[i]
+        ωx_array[i] /= csi                      # Normalized in cs
+        ωy_array[i] /= csi                      # Normalized in cs
+        vx_array[i] /= csi                      # Normalized in cs
+        vy_array[i] /= csi                      # Normalized in cs
+    end
+    
+    @inbounds @threads for i in 1:Npart
+        St = St_array[i]                        # Dimensionless
+        ρg = rhog_array[i]                      # Calculate dust-to-gas ratio
+        ρd = rhod_array[i]                      # Calculate dust-to-gas ratio
+        vx = vx_array[i]                        # Normalized in cs
+        vy = vy_array[i]                        # Normalized in cs
+        ωx = ωx_array[i]                        # Normalized in cs
+        ωy = ωy_array[i]                        # Normalized in cs
+        growth_array[i] = maximum(growthrateSI(Κxs, Κzs; St = St, ρg = ρg, ρd = ρd, vx = vx, vy = vy, ωx = ωx, ωy = ωy))
+    end
+    datadust[!, "growthSI"] = growth_array
+    BLAS.set_num_threads(originBLASthreads)
+end
+
+
+
 
 """
     get_disk_mass(data::PhantomRevealerDataFrame, sink_data::PhantomRevealerDataFrame, disk_radius::Float64=120.0, sink_particle_id::Int64=1)

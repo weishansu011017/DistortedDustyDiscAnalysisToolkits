@@ -7,6 +7,10 @@ module BackendExtra
         GLMakie.activate!()
     end
 
+    function open_GLscreen()
+        return GLMakie.Screen()
+    end
+
     function close_Fig!(Fax :: FigureAxes)
         GLMakie.close(Fax.screen)
     end

@@ -103,9 +103,10 @@ function _contructing_axes_from_axes_type(Fax :: FigureAxes)
 end
 
 """
-    FigureAxes(nrows::Int, ncols::Int; figsize::Tuple{Int, Int}=(8,6), 
-               polar_axis::Union{Nothing,Matrix{Bool}}=nothing, 
-               ThreeDim_axis::Union{Nothing,Matrix{Bool}}=nothing)
+    function FigureAxes(nrows::Int64,ncols::Int64;
+        figsize::Tuple{Int64,Int64}=(8,6),
+        sharex::Bool = true, sharey::Bool = true,
+        polar_axis::Union{Nothing,Matrix{Bool}}=nothing,ThreeDim_axis::Union{Nothing,Matrix{Bool}}=nothing)
 
 Create a `FigureAxes` object with a structured `Figure` containing different types of axes.
 
@@ -247,9 +248,10 @@ Draw the content that saves insinde the given `FigureAxes`.
 function draw_Fig!(Fax :: FigureAxes)
     if current_backend() == "GL"
         if isnothing(Fax.screen)
-            screen = display(Fax.fig)
-            Fax.screen = screen
+            ext = Base.get_extension(PhantomRevealer, :BackendExtra)
+            Fax.screen = ext.open_GLscreen()
         end
+        display(Fax.screen, Fax.fig)
     end
 end
 
@@ -741,7 +743,7 @@ end
         colorscale = identity,
         fxaa = true,
         interpolate = false,
-        nan_color = :transparent,
+        nan_color = :white,
         overdraw = false,
         ssao = false,
         transparency = false,
@@ -790,6 +792,8 @@ function Makie.plot!(plot::PolarHeatmap)
     matrix = plot.matrix
     attr = plot.attributes
 
+    cmin = attr.colorrange[][1]
+
     mesh_obj = Observable(GeometryBasics.Mesh(Point3f[], TriangleFace{Int}[]))
     color_obj = Observable(Float32[])
 
@@ -816,6 +820,9 @@ function Makie.plot!(plot::PolarHeatmap)
                 t2 = θ[][j+1]
 
                 cellval = Float32(matrix[][j, i])
+                if isnan(cellval)
+                    cellval = cmin
+                end
 
                 vertices[vertidx] = Point3f(t1, r1, 0)
                 colors[vertidx]   = cellval
@@ -885,7 +892,7 @@ function Makie.plot!(plot::PolarHeatmap)
         colormap    = attr.colormap,
         colorrange  = attr.colorrange,
         colorscale  = attr.colorscale,
-        nan_color   = attr.nan_color,
+        nan_color   = to_color(attr.nan_color[]),
         fxaa        = attr.fxaa,
         interpolate = attr.interpolate,
         overdraw    = attr.overdraw,
@@ -1038,43 +1045,65 @@ Accepts all keyword arguments supported by `heatmap!` and `polarheatmap!`, such 
 - Other attributes related to appearance and scaling.
 """
 function lazypcolor!(Fax::FigureAxes, axis_index::Tuple{Int,Int}, x, y, matrix; kwargs...)
-    function update_necessary_attribute!(plot::Makie.ScenePlot;kwargs...)
+    function update_necessary_attribute!(plot::Makie.ScenePlot; kwargs...)
         if haskey(kwargs,:colorrange)
-            oldplot.colorrange = kwargs[:colorrange]
+            if (oldplot.colorrange[] != kwargs[:colorrange]) && (kwargs[:colorrange][2] > kwargs[:colorrange][1])
+                oldplot.colorrange[] = kwargs[:colorrange]
+            end
         end
         if haskey(kwargs,:colorscale)
-            oldplot.colorscale = kwargs[:colorscale]
+            if oldplot.colorscale[] != kwargs[:colorscale]
+                oldplot.colorscale[] = kwargs[:colorscale]
+            end
         end
         if haskey(kwargs,:colormap)
-            oldplot.colormap = kwargs[:colormap]
+            if oldplot.colormap[] != kwargs[:colormap]
+                oldplot.colormap[] = kwargs[:colormap]
+            end
         end
     end
     axis = Fax.axes[axis_index...]
     axis_type = Fax.axes_type[axis_index...]
+
     if axis_type == "Cartesian" || current_backend()=="Cairo"
         if axis_type == "Polar"
             x,y = y,x
             matrix = transpose(matrix)
         end
-        if any(p -> typeof(p) <: Makie.ScenePlot, axis.scene.plots)
-            oldplot = axis.scene.plots[1]
+        oldplot = nothing
+        for p in axis.scene.plots
+            if p.label[] == "lazypcolor"
+                oldplot = p
+                break
+            end
+        end
+        if isnothing(oldplot)
+            hm = heatmap!(axis, x, y, matrix; kwargs...)
+            hm.label = "lazypcolor"
+        else
             oldplot.converted[1][] = _center_to_edges(x)        
             oldplot.converted[2][] = _center_to_edges(y)         
             oldplot.converted[3][] = matrix   
             update_necessary_attribute!(oldplot; kwargs...)
-        else
-            heatmap!(axis, x, y, matrix; kwargs...)
         end
     elseif axis_type == "Polar" 
-        if any(p -> typeof(p) <: Makie.ScenePlot, axis.scene.plots)
+        oldplot = nothing
+        for p in axis.scene.plots
+            if p.label[] == "lazypcolor"
+                oldplot = p
+                break
+            end
+        end
+        if isnothing(oldplot)
+            hm = polarheatmap!(axis, y, x, matrix; kwargs...)
+            hm.label = "lazypcolor"
+        else
             oldplot = axis.scene.plots[1]
             θedge, redge, newmatrix = Makie.convert_arguments(PolarHeatmap, y ,x, matrix)
             oldplot.θ[] = θedge
             oldplot.r[] = redge
             oldplot.matrix[] = newmatrix
             update_necessary_attribute!(oldplot; kwargs...)
-        else
-            polarheatmap!(axis, y, x, matrix; kwargs...)
         end
         rlims!(axis, x[1], x[end])
     else
@@ -1113,6 +1142,6 @@ function Get_vminmax(arr::Array)
         end
     end
 
-    println("Warning: Automatically calculate (vmin, vmax) = ($(vmin), $(vmax))")
+    @warn "Warning: Automatically calculate (vmin, vmax) = ($(vmin), $(vmax))" 
     return (vmin, vmax)
 end

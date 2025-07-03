@@ -1,5 +1,6 @@
 # Pkg Module
 const MODULE_LIST = [
+    :BenchmarkTools,
     :CairoMakie,
     :Clustering,
     :CSV,
@@ -14,6 +15,7 @@ const MODULE_LIST = [
     :GeometryBasics,
     :HDF5,
     :ImageFiltering,
+    :ImageMorphology,
     :Interpolations,
     :LaTeXStrings,
     :LinearAlgebra,
@@ -27,6 +29,7 @@ const MODULE_LIST = [
     :Printf,
     :QuadGK,
     :Requires,
+    :StaticArrays,
     :Statistics,
     :StatsBase,
 ]

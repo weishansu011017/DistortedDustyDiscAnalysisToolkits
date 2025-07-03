@@ -253,10 +253,10 @@ function read_phantom(
         end
 
         if (separate_types == "all") &&
-           (hasproperty(df, :"itype")) &&
+           (hasproperty(df, :itype)) &&
            (length(unique(df.itype)) > 1)
             df_list = []
-            for group in groupby(df, :"itype")
+            for group in groupby(df, :itype)
                 itype::Int = Int(group[!, "itype"][1])
                 mass_key = itype == 1 ? "massoftype" : "massoftype_$(itype)"
                 group_clean = select(
@@ -265,6 +265,7 @@ function read_phantom(
                 )
                 params_group = merge(header_vars, Dict("mass" => header_vars[mass_key]))
                 params_group["h_mean"] = mean(group_clean[!,"h"])
+                params_group["itype"] = itype
                 push!(df_list, PhantomRevealerDataFrame(group_clean, params_group))
             end
             if !(isempty(df_sinks))
@@ -277,6 +278,7 @@ function read_phantom(
            !(isempty(df_sinks))
             params = merge(header_vars, Dict("mass" => header_vars["massoftype"]))
             params["h_mean"] = mean(df[!,"h"])
+            params_group["itype"] = NaN
             df = PhantomRevealerDataFrame(df, params)
             df_sinks = PhantomRevealerDataFrame(df_sinks, header_vars)
             return [df, df_sinks]
@@ -284,6 +286,7 @@ function read_phantom(
         combined_df = vcat(df, df_sinks, cols = :union)
         params = merge(header_vars, Dict("mass" => header_vars["massoftype"]))
         params["h_mean"] = mean(combined_df[!,"h"])
+        params_group["itype"] = NaN
         df = PhantomRevealerDataFrame(combined_df, params)
         return df
     end

@@ -4,122 +4,148 @@ Useful mathematical toolkit.
     June 27, 2024
 """
 
-"""
-    _cart2cylin(point::Vector)
-Transfer a cartesian coordinate into cylindrical coordinate.
+# Cartesian ⟹ Cylindrical/Polar
+# Coordinate transform 
+@inline function _cart2cylin(x :: T, y :: T) where {T<:Real}
+    s = sqrt(x*x + y*y)
+    ϕ = mod(atan(y, x), 2π)
+    return (T(s), T(ϕ))
+end
 
-# Parameters
-- `point :: Vector`: The point with a set of cartesian coordinate.
+@inline function _cart2cylin(x :: T, y :: T, z :: T) where {T<:Real}
+    s = sqrt(x*x + y*y)
+    ϕ = mod(atan(y, x), 2π)
+    return (T(s), T(ϕ), T(z))
+end
 
-# Returns
-- `Vector`: The point with a set of cylindrical coordinate.
-"""
-function _cart2cylin(point::Vector)
-    s = sqrt(point[1]^2 + point[2]^2)
-    if point[2] >= 0.0
-        theta = acos(point[1]/s)
+@inline function _cart2cylin(point::AbstractVector{<:Real})
+    x, y = @inbounds point[1], point[2]
+    if length(point) > 2
+        return _cart2cylin(x, y, point[3])
     else
-        theta = abs(acos(point[1]/s) - 2π)
-    end
-    if length(point) == 2
-        return [s, theta]
-    else
-        return [s, theta, point[3]]
+        return _cart2cylin(x, y)
     end
 end
 
-"""
-    _cylin2cart(point::Vector)
-Transfer a cylindrical coordinate into cartesian coordinate.
+@inline function _cart2cylin(point::Tuple{T,T}) where {T<:Real}
+    x, y = point
+    return _cart2cylin(x, y)
+end
 
-# Parameters
-- `point :: Vector`: The point with a set of cylindrical coordinate..
+@inline function _cart2cylin(point::Tuple{T,T,T}) where {T<:Real}
+    x, y, z = point
+    return _cart2cylin(x, y, z)
+end
 
-# Returns
-- `Vector`: The point with a set of cartesian coordinate
-"""
-function _cylin2cart(point::Vector)
-    x = point[1] * cos(point[2])
-    y = point[1] * sin(point[2])
-    if length(point) == 2
-        return [x, y]
+# Vector transform 
+@inline function _vector_cart2cylin(ϕ::T, A::AbstractVector{<:T}) where {T<:Real}
+    Ax, Ay = @inbounds A[1], A[2]
+    if length(A) > 2
+        return _vector_cart2cylin(ϕ, Ax, Ay, A[3])
     else
-        return [x, y, point[3]]
+        return _vector_cart2cylin(ϕ, Ax, Ay)
     end
 end
 
-"""
-    _vector_cart2cylin(ϕ::Float64, Ax::Float64, Ay::Float64, Az::Union{Nothing,Float64}=nothing)
-Transform a vector from Cartesian coordinates to cylindrical coordinates.
-
-# Parameters
-- `ϕ :: Float64`: The azimuth angle of the position of the vector (in radians).
-- `Ax :: Float64`: The x-component of the vector.
-- `Ay :: Float64`: The y-component of the vector.
-- `Az :: Union{Nothing, Float64} = nothing`: The z-component of the vector (optional).
-
-# Returns
-- `Vector{Float64}`: The vector in cylindrical coordinates, with components `[Ar, Aϕ, Az]` where:
-  - `Ar`: Radial component.
-  - `Aϕ`: Azimuthal component.
-  - `Az`: Axial (z) component (included if `Az` is provided).
-"""
-function _vector_cart2cylin(
-    ϕ::Float64,
-    Ax::Float64,
-    Ay::Float64,
-    Az::Union{Nothing, Float64} = nothing
-)::Vector{Float64}
-    cosϕ = cos(ϕ)
-    sinϕ = sin(ϕ)
-
-    cylin_vector = Vector{Float64}(undef, isnothing(Az) ? 2 : 3)
-
-    cylin_vector[1] = cosϕ * Ax + sinϕ * Ay  # Radial component
-    cylin_vector[2] = -sinϕ * Ax + cosϕ * Ay # Azimuthal component
-    if !isnothing(Az)
-        cylin_vector[3] = Az # Axial component remains unchanged
-    end
-
-    return cylin_vector
+@inline function _vector_cart2cylin(ϕ::T, A::Tuple{T, T}) where {T<:Real}
+    Ax, Ay = @inbounds A[1], A[2]
+    return _vector_cart2cylin(ϕ, Ax, Ay)
 end
 
-"""
-    _vector_cylin2cart(ϕ::Float64, As::Float64, Aϕ::Float64, Az::Union{Nothing, Float64} = nothing)
-Transform a vector from cylindrical coordinates to Cartesian coordinates.
+@inline function _vector_cart2cylin(ϕ::T, A::Tuple{T, T, T}) where {T<:Real}
+    Ax, Ay, Az = @inbounds A[1], A[2], A[3]
+    return _vector_cart2cylin(ϕ, Ax, Ay, Az)
+end
 
-# Parameters
-- `ϕ :: Float64`: The azimuth angle of the position of the vector (in radians).
-- `As :: Float64`: The radial component of the vector.
-- `Aϕ :: Float64`: The azimuthal component of the vector.
-- `Az :: Union{Nothing, Float64} = nothing`: The vertical (z) component of the vector (optional).
+@inline function _vector_cart2cylin(x::T, y::T, A::AbstractVector{<:T}) where {T<:Real}
+    ϕ = mod(atan(y, x), 2π)
+    return _vector_cart2cylin(ϕ, A)
+end
 
-# Returns
-- `Vector{Float64}`: The vector in Cartesian coordinates, with components `[Ax, Ay, Az]` where:
-  - `Ax`: x-component.
-  - `Ay`: y-component.
-  - `Az`: z-component (included if `Az` is provided).
-"""
-function _vector_cylin2cart(
-    ϕ::Float64,
-    As::Float64,
-    Aϕ::Float64,
-    Az::Union{Nothing, Float64} = nothing
-)::Vector{Float64}
-    cosϕ = cos(ϕ)
-    sinϕ = sin(ϕ)
+@inline function _vector_cart2cylin(ϕ::T, Ax::T, Ay::T) where {T<:Real}
+    cosϕ, sinϕ = cos(ϕ), sin(ϕ)
+    return (T(cosϕ*Ax + sinϕ*Ay),
+            T(-sinϕ*Ax + cosϕ*Ay))
+end
 
-    # Determine the length of the resulting vector
-    cart_vector = Vector{Float64}(undef, isnothing(Az) ? 2 : 3)
+@inline function _vector_cart2cylin(ϕ::T, Ax::T, Ay::T, Az::T) where {T<:Real}
+    cosϕ, sinϕ = cos(ϕ), sin(ϕ)
+    return (T(cosϕ*Ax + sinϕ*Ay),
+            T(-sinϕ*Ax + cosϕ*Ay),
+            T(Az))
+end
 
-    # Transform components
-    cart_vector[1] = cosϕ * As - sinϕ * Aϕ  # x-component
-    cart_vector[2] = sinϕ * As + cosϕ * Aϕ  # y-component
-    if !isnothing(Az)
-        cart_vector[3] = Az # z-component remains unchanged
+
+# Cylindrical/Polar ⟹ Cartesian
+# Coordinate transform 
+@inline function _cylin2cart(s :: T, ϕ :: T) where {T<:Real}
+    x = s * cos(ϕ)
+    y = s * sin(ϕ)
+    return (T(x), T(y))
+end
+
+@inline function _cylin2cart(s :: T, ϕ :: T, z :: T) where {T<:Real}
+    x = s * cos(ϕ)
+    y = s * sin(ϕ)
+    return (T(x), T(y), T(z))
+end
+
+
+@inline function _cylin2cart(point::AbstractVector{<:Real})
+    s, ϕ = @inbounds point[1], point[2]
+    if length(point) > 2
+        return _cylin2cart(s, ϕ, point[3])
+    else
+        return _cylin2cart(s, ϕ)
     end
+end
 
-    return cart_vector
+@inline function _cylin2cart(point::Tuple{T,T}) where {T<:Real}
+    s, ϕ = point
+    return _cylin2cart(s, ϕ)
+end
+
+@inline function _cylin2cart(point::Tuple{T,T,T}) where {T<:Real}
+    s, ϕ, z = point
+    return _cylin2cart(s, ϕ, z)
+end
+
+# Vector transform 
+@inline function _vector_cylin2cart(ϕ::T, A::AbstractVector{<:T}) where {T<:Real}
+    As, Aϕ = @inbounds A[1], A[2]
+    if length(A) > 2
+        return _vector_cylin2cart(ϕ, As, Aϕ, A[3])
+    else
+        return _vector_cylin2cart(ϕ, As, Aϕ)
+    end
+end
+
+@inline function _vector_cylin2cart(ϕ::T, A::Tuple{T, T}) where {T<:Real}
+    As, Aϕ = @inbounds A[1], A[2]
+    return _vector_cylin2cart(ϕ, As, Aϕ)
+end
+
+@inline function _vector_cylin2cart(ϕ::T, A::Tuple{T, T, T}) where {T<:Real}
+    As, Aϕ, Az = @inbounds A[1], A[2], A[3]
+    return _vector_cylin2cart(ϕ, As, Aϕ, Az)
+end
+
+@inline function _vector_cylin2cart(x::T, y::T, A::AbstractVector{<:T}) where {T<:Real}
+    ϕ = mod(atan(y, x), 2π)
+    return _vector_cylin2cart(ϕ, A)
+end
+
+@inline function _vector_cylin2cart(ϕ::T, As::T, Aϕ::T) where {T<:Real}
+    cosϕ, sinϕ = cos(ϕ), sin(ϕ)
+    return (T(cosϕ*As - sinϕ*Aϕ),
+            T(sinϕ*As + cosϕ*Aϕ))
+end
+
+@inline function _vector_cylin2cart(ϕ::T, As::T, Aϕ::T, Az::T) where {T<:Real}
+    cosϕ, sinϕ = cos(ϕ), sin(ϕ)
+    return (T(cosϕ*As - sinϕ*Aϕ),
+            T(sinϕ*As + cosϕ*Aϕ),
+            T(Az))
 end
 
 """
@@ -319,7 +345,7 @@ function AssignBinIndices(array::AbstractArray, boxes::AbstractVector; mode::Sym
 end
 
 """
-    @inline function _angular_distance(θ1, θ2) 
+    @inline function angular_distance(θ1, θ2) 
 
 Calculate the angular distances between (θ1, θ2) 
 
@@ -330,6 +356,42 @@ Calculate the angular distances between (θ1, θ2)
 # Returns
 - `Float64`: The angular distances between (θ1, θ2).
 """
-@inline function _angular_distance(θ1 :: Real, θ2 :: Real) :: Float64
+@inline function angular_distance(θ1 :: Real, θ2 :: Real) :: Float64
     return abs(mod(θ1 - θ2 + π, 2π) - π)
+end
+
+"""
+    @inline function k2pitch(k::Real)::Float64
+
+Convert the logarithmic spiral parameter `k` to pitch angle in degrees.
+
+The pitch angle is defined as the angle between the spiral arm and a circle,
+and relates to `k` through: `pitch = arctangent(k)` in radians, converted to degrees.
+
+# Parameters
+- `k::Real`: The logarithmic spiral parameter in the function `r(θ) = a * exp(kθ)`.
+
+# Returns
+- `Float64`: Pitch angle in degrees.
+"""
+@inline function k2pitch(k :: Real) :: Float64
+    return rad2deg(tan(k))
+end
+
+"""
+    @inline function pitch2k(pitchdeg::Real)::Float64
+
+Convert the pitch angle in degrees to the logarithmic spiral parameter `k`.
+
+The logarithmic spiral parameter `k` determines the tightness of the spiral arm.
+It is derived from the pitch angle via: `k = tan(pitch)` where pitch is in radians.
+
+# Parameters
+- `pitchdeg::Real`: Pitch angle in degrees.
+
+# Returns
+- `Float64`: The logarithmic spiral parameter `k`.
+"""
+@inline function pitch2k(pitchdeg :: Real) :: Float64
+    return atan(deg2rad(pitchdeg))
 end

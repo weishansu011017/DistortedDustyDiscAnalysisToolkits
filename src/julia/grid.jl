@@ -5,19 +5,36 @@ The grid construction for SPH interpolation
 """
 
 """
-    struct gridbackend
-The struct for storeing data and axes. 
+    struct gridbackend{D, T <: AbstractFloat, V <: AbstractVector{T}, A <: AbstractArray{T, D}}
+
+A structure for storing grid-based scalar or vector field data and its corresponding coordinate axes.
+
+This structure packages a multi-dimensional grid (`grid`) together with its axis definitions (`axes`) and resolution (`dimension`). It is designed to be compatible with both CPU and GPU backends (e.g., `Array`, `CuArray`), and can be adapted using `Adapt.jl` for GPU kernel usage.
 
 # Fields
-- `grid :: Array`: A ndarray for storeing data.
-- `axes :: Vector{LinRange{Float64,Int64}}`: The axes array for each dimension of grid.
-- `dimension :: Vector{Int}`: The dimension of the grid (how much do the axes been separated.) e.g 3x3x4 matrix => [3,3,4]
+- `grid::A`  
+  The underlying D-dimensional data array, typically an `Array{T,D}` or `CuArray{T,D}`.
+
+- `axes::NTuple{D, V}`  
+  A tuple of coordinate vectors, each representing the grid points along one dimension. Each element is a 1D array (e.g., `LinRange`, `Vector`, or `CuVector`), aligned with the grid shape.
+
+- `dimension::NTuple{D, Int}`  
+  The number of divisions (i.e., resolution) in each dimension of the grid, usually equal to `size(grid)`.
+
+# Notes
+- The type parameters are:
+  - `D`: Dimensionality of the grid (e.g., 2 for 2D, 3 for 3D)
+  - `T`: Element type (e.g., `Float32`, `Float64`)
+  - `V`: Vector type used in axes (e.g., `Vector{T}`, `SVector{N, T}`, `CuVector{T}`)
+  - `A`: Array type used in grid (e.g., `Array{T, D}`, `CuArray{T, D}`)
+
 """
-struct gridbackend
-    grid::Array
-    axes::Vector{LinRange{Float64,Int64}}
-    dimension::Vector{Int64}
+struct gridbackend{D, T <: AbstractFloat, V <: AbstractVector{T}, A <: AbstractArray{T, D}}
+    grid :: A
+    axes :: NTuple{D, V}
+    dimension::NTuple{D, Int}
 end
+
 
 """
     function meshgrid(arrays::AbstractVector...)
@@ -27,24 +44,22 @@ Mesh multiple arrays, get the meshgrid arrays
 - `arrays :: AbstractVector`: The array that would be meshed. Can applied any number of arrays.
 
 # Returns
-- `Vector`: The vector that contains all of the meshgrids
+- `Tuple`: The vector that contains all of the meshgrids
 
 # Examples
 ```julia
 x = LinRange(0,10,250)
 y = LinRange(0,2π,301)
-meshgrids = meshgrid(x,y)
+X, Y = meshgrid(x,y)
 ```
 """
 function meshgrid(arrays::AbstractVector...)
-    nd::Int = length(arrays)
-    grids::Vector = [
-        repeat(
-            reshape(a, ntuple(d -> d == i ? length(a) : 1, nd)...),
-            ntuple(d -> d == i ? 1 : length(arrays[d]), nd)...,
-        ) for (i, a) in enumerate(arrays)
-    ]
-    return grids
+    nd = length(arrays)
+    grids = ntuple(i->repeat(
+            reshape(arrays[i], ntuple(d->d==i ? length(arrays[i]) : 1,nd)...),
+            ntuple(d->d==i ? 1 : length(arrays[d]), nd)...
+        ), nd)
+    return grids 
 end
 
 """
@@ -55,13 +70,13 @@ Mesh multiple arrays from 'gridbackend', get the meshgrid arrays
 - `gbe :: gridbackend`: The 'gridbackend' that contain all of the axes information
 
 # Returns
-- `Vector`: The vector that contains all of the meshgrids
+- `Tuple`: The tuple that contains all of the meshgrids
 
 # Examples
 ```julia
 x = LinRange(0,10,250)
 y = LinRange(0,2π,301)
-meshgrids = meshgrid(x,y)
+X, Y = meshgrid(x,y)
 ```
 """
 function meshgrid(gbe::gridbackend)
@@ -71,141 +86,153 @@ function meshgrid(gbe::gridbackend)
 end
 
 """
-    function generate_empty_grid(imin::Vector{Float64}, imax::Vector{Float64}, dimension::Vector{Int}, type::Type = Float64)
-Generate an 'gridbackend'
+    generate_empty_grid(imin, imax, iN; FloatType=Float64, VectorType=Vector, ArrayType=Array)
+
+Construct an empty structured grid and its coordinate axes.
+
+This function generates a D-dimensional grid structure with associated coordinate axes.
+It returns a `gridbackend{D, T, V, A}` object, where:
+- `grid` is an array of zeros with the specified size,
+- `axes` is a tuple of D 1D coordinate vectors spanning the range from `imin[d]` to `imax[d]`,
+- `dimension` stores the size of each axis.
+
+The method accepts either tuples or vectors for input.
 
 # Parameters
-- `imin::Vector{Float64}`: The minimum value of each axes. e.g.[x1min, x2min, x3min]
-- `imax::Vector{Float64}`: The maximum value of each axes. e.g.[x1max, x2max, x3max]
-- `dimension::Vector{Int}`: The dimension of the grid (how much does the axes been separated.) e.g [x1n, x2n, x3n]
-- `type::Type = Float64`: Type of the data e.g. Float64
+- `imin::NTuple{D, <:Real}` or `AbstractVector{<:Real}`  
+  The lower bound of each axis.
+- `imax::NTuple{D, <:Real}` or `AbstractVector{<:Real}`  
+  The upper bound of each axis.
+- `iN::NTuple{D, <:Integer}` or `AbstractVector{<:Integer}`  
+  The number of grid points along each axis.
+
+# Keyword Arguments
+| Name         | Default     | Description                                  |
+|--------------|-------------|----------------------------------------------|
+| `FloatType`  | `Float64`   | Floating-point type for all grid values.     |
+| `VectorType` | `Vector`    | Type constructor for 1D coordinate vectors.  |
+| `ArrayType`  | `Array`     | Type constructor for the full grid array.    |
 
 # Returns
-- `gridbackend`: An 'gridbackend' that contain all of the axes information with empty data storage.
+- `gridbackend{D, FloatType, VectorType{FloatType}, ArrayType{FloatType,D}}`  
+  An initialized `gridbackend` object containing zero-initialized data and associated coordinate axes.
 
-# Examples
+# Notes
+- The NTuple variant will fail at compile-time if the dimensions are inconsistent.
+- The Vector variant performs a runtime check for matching lengths.
+- The grid values are initialized with `zero(FloatType)`.
+
+# Example
 ```julia
-# radial parameters
-rmin :: Float64 = 0.0
-rmax :: Float64 = 100.0
-rn :: Int64 = 251
-
-# azimuthal parameters
-ϕmin :: Float64 = 0.0
-ϕmax :: Float64 = 2π
-ϕn :: Int64 = 301
-
-# Constructing gbe
-imin :: Vector{Float64} = [rmin, ϕmin]
-imax :: Vector{Float64} = [rmax, ϕmax]
-dimensions :: Vector{Int64} = [rn,ϕn]
-
-grid :: gridbackend = generate_empty_grid(imin, imax, dimensions)
+imin = (0.0, 0.0)
+imax = (1.0, 1.0)
+iN   = (100, 200)
+g    = generate_empty_grid(imin, imax, iN; FloatType=Float32, VectorType=SVector, ArrayType=CuArray)
 ```
 """
-function generate_empty_grid(
-    imin::Vector{Float64},
-    imax::Vector{Float64},
-    dimension::Vector{Int},
-    type::Type = Float64,
-)
-    if size(imin) == size(imax) == size(dimension)
+function generate_empty_grid(imin :: NTuple{D, <:Real}, imax :: NTuple{D, <:Real}, iN :: NTuple{D, <:Integer}; 
+    FloatType::Type{<:AbstractFloat} = Float64, VectorType::Type{<:AbstractVector} = Vector, ArrayType::Type{<:AbstractArray} = Array) where {D}
+    dimension = ntuple(i -> iN[i], D)
+    VT :: Type = VectorType{FloatType}
+    AT :: Type = ArrayType{FloatType, D}
+    iaxes :: NTuple{D, VT} = ntuple(i -> VT(collect(LinRange(imin[i], imax[i], iN[i]))),D)
+    grid = ArrayType{FloatType, D}(undef, dimension...)
+    fill!(grid, zero(FloatType))
+    return gridbackend{D, FloatType, VT, AT}(grid, iaxes, dimension)
+end
+
+function generate_empty_grid(imin :: AbstractVector{<:Real}, imax :: AbstractVector{<:Real}, iN :: AbstractVector{Int}; 
+    FloatType::Type{<:AbstractFloat} = Float64, VectorType::Type{<:AbstractVector} = Vector, ArrayType::Type{<:AbstractArray} = Array)
+    if length(imin) == length(imax) && length(imax) == length(iN)
         nothing
     else
         error("GridGeneratingError: Illegal input value.")
     end
-    iaxes = Array{LinRange}(undef, length(dimension))
-    for (i, num) in enumerate(dimension)
-        iaxes[i] = LinRange(imin[i], imax[i], num)
-    end
-    grid::Array = zeros(type, dimension...)
-    return gridbackend(grid, iaxes, dimension)
+    D = length(iN)
+    iminT = ntuple(i -> imin[i],D)
+    imaxT = ntuple(i -> imax[i],D)
+    iNT = ntuple(i -> iN[i],D)
+    return generate_empty_grid(iminT, imaxT, iNT, FloatType=FloatType, VectorType=VectorType, ArrayType=ArrayType)
 end
 
 """
-    generate_empty_grid(iaxes::Vector{LinRange{Float64,Int64}}, type::Type = Float64)
-Generate an 'gridbackend'
+    generate_empty_grid(iaxes::NTuple{D, V}, ::Type{T}, ::Type{A}) -> gridbackend{D, T, V, A}
+
+Generate an empty structured grid initialized with zeros based on provided axes and array types.
+
+This function creates a `gridbackend` struct with specified axis definitions and underlying array type.
+Each axis is represented by an `AbstractVector{T}` (e.g., `LinRange` or `SVector`), and the data array
+(`grid`) is allocated using the given `ArrayType`, filled with zeros of type `T`.
 
 # Parameters
-- `iaxes::Vector{LinRange{Float64,Int64}}`: The `LinRange` array with each axes
-- `type::Type = Float64`: Type of the data e.g. Float64
+- `iaxes::NTuple{D, V}`  
+  A tuple of 1D coordinate arrays for each dimension. Each element must be a vector of type `V <: AbstractVector{T}`.
+- `::Type{T}`  
+  The floating-point type used for both the grid and axes (e.g., `Float64` or `Float32`).
+- `::Type{A}`  
+  The concrete array type for the data grid, e.g., `Array{T,D}` or `CuArray{T,D}`.
 
 # Returns
-- `gridbackend`: An 'gridbackend' that contain all of the axes information with empty data storage.
+- `::gridbackend{D, T, V, A}`  
+  A structured grid container containing the data array and axes metadata.
 
-# Examples
+# Example
 ```julia
-# Initialize iaxes
-iaxes = Vector{LinRange{Float64,Int64}}(undef,2)
-# Add axes
-iaxes[1] = LinRange(0.0,100.0,251)
-iaxes[2] = LinRange(0.0,2π,301)
-
-grid :: gridbackend = generate_empty_grid(iaxes)
+iaxes = ntuple(i -> collect(range(0.0, 1.0; length=32)), 3)
+grid = generate_empty_grid(iaxes, Float64, Array{Float64, 3})
 ```
 """
-function generate_empty_grid(iaxes::Vector{LinRange{Float64,Int64}}, type::Type = Float64)
-    dimension::Vector{Int64} = length.(iaxes)
-    grid::Array = zeros(type, dimension...)
-    return gridbackend(grid, iaxes, dimension)
+function generate_empty_grid(iaxes::NTuple{D, V}, ::Type{T}, ::Type{A}) where {D, T <: AbstractFloat, V <: AbstractVector{T}, A <: AbstractArray{T, D}}
+    dimension = ntuple(i -> length(iaxes[i]), D)
+    grid = A(undef, dimension...)
+    fill!(grid, zero(T))
+    return gridbackend{D, T, V, A}(grid, iaxes, dimension)
 end
 
 """
-    coordinate(gbe :: gridbackend, element :: Tuple)
-Finding the corresponding coordinates for a specific element with given indices in the array of `gridbackend` data.
+    @inline coordinate(gbe::gridbackend{D, T, V, A}, element::NTuple{D, Int}) -> NTuple{D, T}
+
+Return the physical coordinate corresponding to a grid index.
 
 # Parameters
-- `gbe :: gridbackend`: The 'gridbackend' that contain all of the axes information
-- `element :: Tuple`: The indices of the element.
+- `gbe::gridbackend{D, T, V, A}`  
+  The structured grid container.
+- `element::NTuple{D, Int}`  
+  Index tuple (e.g., `(i, j, k)`) of the grid point.
 
 # Returns
-- `Vector`: The coordinates vector
-
-# Examples
-```julia
-grid :: gridbackend = generate_empty_grid(imin, imax, dimensions)
-target_indices = [2,2,3]
-coordinates = coordinate(grid, target_indices)
-```
+- `::NTuple{D, T}`  
+  A tuple of coordinates `(x, y, z, ...)` corresponding to the grid point.
 """
-function coordinate(gbe::gridbackend, element::Tuple)
-    """
-    Returning the corresponding coordinate of specific element.
-    """
-    if length(gbe.dimension) != length(element)
-        error("GridLodingError: Mismatching of dimension between input element and grid.")
-    end
-
-    result::Vector = zeros(Float64, length(gbe.dimension))
-    for i in eachindex(result)
-        result[i] = gbe.axes[i][element[i]]
-    end
-    return result
+@inline function coordinate(gbe::gridbackend{D, T, V, A}, element::NTuple{D, Int}) where {D, T <: AbstractFloat, V <: AbstractVector{T}, A <: AbstractArray{T, D}}
+    return ntuple(i -> gbe.axes[i][element[i]], D)
 end
 
 """
-    generate_coordinate_grid(gbe :: gridbackend)
-Finding the corresponding coordinates for a specific element for the entire array of `gridbackend` data.
+    generate_coordinate_grid(gbe::gridbackend{D, T, V, A}) -> Array{NTuple{D, T}, D}
+
+Generate a full coordinate grid from a `gridbackend` definition.
+
+For each grid index `(i, j, ...)`, returns a corresponding physical coordinate `(x, y, ...)` using `gbe.axes`.
 
 # Parameters
-- `gbe :: gridbackend`: The 'gridbackend' that contain all of the axes information
+- `gbe::gridbackend{D, T, V, A}`  
+  The structured grid container, with axes and scalar field.
 
 # Returns
-- `Array{Vector{Float64}}`: The array that contains all of the vector of coordinate for each element in the data.
+- `::Array{NTuple{D, T}, D}`  
+  An array of the same shape as `gbe.grid`, where each element is a tuple of physical coordinates at that grid point.
 
-# Examples
+# Example
 ```julia
-grid :: gridbackend = generate_empty_grid(imin, imax, dimensions)
-coordinates_array = generate_coordinate_grid(grid)
+gbe = generate_empty_grid((0.0, 0.0), (1.0, 1.0), (3, 3))
+coord_grid = generate_coordinate_grid(gbe)
+coord_grid[2, 3]  # returns something like (0.5, 1.0)
 ```
 """
-function generate_coordinate_grid(gbe::gridbackend)
-    """
-    Returning an Array which contain the coordinate of the coorespoing element.
-    """
-    dims = gbe.dimension
+function generate_coordinate_grid(gbe::gridbackend{D, T, V, A}) where {D, T <: AbstractFloat, V <: AbstractVector{T}, A <: AbstractArray{T, D}}
+    coordinates_array = Array{NTuple{D, T}, D}(undef, gbe.dimension...)
 
-    coordinates_array = Array{Vector{Float64},length(dims)}(undef, dims...)
     for idx in CartesianIndices(coordinates_array)
         element_index = Tuple(idx)
         coordinates_array[idx] = coordinate(gbe, element_index)
@@ -213,6 +240,34 @@ function generate_coordinate_grid(gbe::gridbackend)
     return coordinates_array
 end
 
+"""
+    grid_reduction(array::AbstractArray, averaged_axis_id::Int64 = 1) -> AbstractArray
+
+Reduce a multidimensional array by averaging over one axis.
+
+This function computes the mean along the specified axis and returns the result with that dimension removed, i.e., the output has one fewer dimension than the input.
+
+# Parameters
+- `array::AbstractArray`  
+  The input array of arbitrary dimension to be reduced.
+- `averaged_axis_id::Int64`  
+  The axis over which to compute the mean (1-based indexing). Default is `1`.
+
+# Returns
+- `::AbstractArray`  
+  A new array with dimension `ndims(array) - 1`, containing the mean values over the specified axis.
+
+# Examples
+```julia
+A = rand(4, 3, 2)
+B = grid_reduction(A, 2)  # average over the 2nd axis → size(B) = (4, 2)
+```
+"""
+function grid_reduction(array::AbstractArray, averaged_axis_id::Int64 = 1)
+    return dropdims(mean(array, dims = averaged_axis_id), dims = averaged_axis_id)
+end
+
+_array_type_reduced(::Type{A}, ::Val{D}) where {T, D, A<:AbstractArray{T, D}} = A.name.wrapper{T, D-1}
 """
     grid_reduction(gbe :: gridbackend, averaged_axis_id:: Int64 = 1)
 Reducing the grid in the `gridbackend` by taking the average along a specific axes.
@@ -224,171 +279,192 @@ Reducing the grid in the `gridbackend` by taking the average along a specific ax
 # Returns
 - `gridbackend`: The `gridbackend` that reduce from the original data.
 """
-function grid_reduction(gbe::gridbackend, averaged_axis_id::Int64 = 1)
-    new_data::Array =
-        dropdims(mean(gbe.grid, dims = averaged_axis_id), dims = averaged_axis_id)
-    newaxes = deepcopy(gbe.axes)
+function grid_reduction(gbe::gridbackend{D, T, V, A}, averaged_axis_id::Int64 = 1) where {D, T <: AbstractFloat, V <: AbstractVector{T}, A <: AbstractArray{T, D}}
+    new_data = grid_reduction(gbe.grid, averaged_axis_id)
+
+    newaxes = collect(gbe.axes)
     deleteat!(newaxes, averaged_axis_id)
-    type = typeof(newaxes[1][1])
-    newgrid::gridbackend = generate_empty_grid(newaxes, type)
-    if !(size(newgrid.grid) == size(new_data))
+    newaxes_tuple::NTuple{D-1, V} = Tuple(newaxes)
+
+    Ared = _array_type_reduced(A, Val(D))
+    newgrid = generate_empty_grid(newaxes_tuple, T, Ared)
+
+    if size(newgrid.grid) != size(new_data)
         error("ReductionError: Failed to reduce the gridbackend.")
-    else
-        newgrid.grid .= new_data
     end
+
+    newgrid.grid .= new_data
     return newgrid
 end
 
 """
-    grid_reduction(gbe_dict :: Dict, averaged_axis_id:: Int64 = 1)
-Reducing all of the grid in the dictionary by taking the average along a specific axis.
+    disc_grid_generator(rmin::Real, rmax::Real, in::NTuple{2, Int};
+        FloatType::Type{<:AbstractFloat}=Float64,
+        VectorType::Type{<:AbstractVector}=Vector,
+        ArrayType::Type{<:AbstractArray}=Array
+    ) -> gridbackend{2, FloatType, VectorType{FloatType}, ArrayType{FloatType,2}}
+
+Generate a 2D structured polar grid in (r, ϕ) space for disk-like geometry.
+
+This utility builds a polar grid with uniform radial and angular resolution,
+and returns a `gridbackend` object that stores both the coordinate axes and the data array.
+
+The azimuthal angle ϕ ranges from 0 to just below 2π to avoid duplication at the periodic boundary.
 
 # Parameters
-- `gbe_dict :: Dict`: The dictionary that contains all of the 'gridbackend'
-- `averaged_axis_id :: Int64 = 1`: The axis that would be chosen for taking average along it.
+- `rmin::Real`  
+  Inner radius of the disk (must be ≥ 0).
+- `rmax::Real`  
+  Outer radius of the disk (must be > rmin).
+- `in::NTuple{2, Int}`  
+  Tuple `(Nr, Nϕ)` specifying the number of radial and angular divisions.
+
+# Keyword Arguments
+| Name         | Default     | Description                                  |
+|--------------|-------------|----------------------------------------------|
+| `FloatType`  | `Float64`   | Floating-point type for all grid values.     |
+| `VectorType` | `Vector`    | Type constructor for 1D coordinate vectors.  |
+| `ArrayType`  | `Array`     | Type constructor for the full grid array.    |
 
 # Returns
-- `Dict`: The The dictionary that contains all of the 'gridbackend' from the original data.
+- `gridbackend{2, FloatType, VectorType{FloatType}, ArrayType{FloatType,2}}`  
+  A polar grid backend representing the (r, ϕ) domain with zero-initialized data.
+
+# Notes
+The azimuthal coordinate uses  
+ϕ ∈ [0, 2π - Δϕ)  
+to ensure periodicity without duplicating the endpoint.
 """
-function grid_reduction(gbe_dict::Dict, averaged_axis_id::Int64 = 1)
-    newdict = Dict()
-    for key in keys(gbe_dict)
-        gbe = gbe_dict[key]
-        newdict[key] = grid_reduction(gbe, averaged_axis_id)
-    end
-    return newdict
+function disc_grid_generator(rmin :: Real, rmax :: Real, in :: NTuple{2, Int};
+    FloatType::Type{<:AbstractFloat} = Float64, VectorType::Type{<:AbstractVector} = Vector, ArrayType::Type{<:AbstractArray} = Array)
+    T = FloatType
+    ϕmin = T(0.0)
+    ϕmax = (2*T(π) - (2*T(π) / (in[2] + 1)))
+    imin = (T(rmin), ϕmin)
+    imax = (T(rmax), ϕmax)
+    gbe = generate_empty_grid(imin, imax, in, FloatType=FloatType, VectorType=VectorType, ArrayType=ArrayType)
+    return gbe
 end
 
 """
-    grid_reduction(gbe_dict :: Dict, averaged_axis_id:: Int64 = 1)
-Reducing array by taking average along a axis with given id
+    cylinder_grid_generator(rmin::Real, rmax::Real, zmin::Real, zmax::Real, in::NTuple{3, Int};
+        FloatType::Type{<:AbstractFloat}=Float64,
+        VectorType::Type{<:AbstractVector}=Vector,
+        ArrayType::Type{<:AbstractArray}=Array
+    ) -> gridbackend{3, FloatType, VectorType{FloatType}, ArrayType{FloatType,3}}
+
+Generate a 3D structured polar grid in (r, ϕ, z) space for disk-like geometry.
+
+This function creates a cylindrical grid covering the radial range `[rmin, rmax]`, the azimuthal angle `[0, 2π)`,
+and the vertical extent `[zmin, zmax]`, and returns a `gridbackend` containing the initialized axes and data array.
+
+To preserve angular periodicity, the azimuthal coordinate spans up to `2π - Δϕ`.
 
 # Parameters
-- `array :: Array`: The array with n-dimension.
-- `averaged_axis_id :: Int64 = 1`: The axis that would be chosen for taking average along it.
+- `rmin::Real`  
+  Inner radius of the disk.
+- `rmax::Real`  
+  Outer radius of the disk.
+- `zmin::Real`  
+  Lower bound in the vertical direction.
+- `zmax::Real`  
+  Upper bound in the vertical direction.
+- `in::NTuple{3, Int}`  
+  Number of grid points in `(Nr, Nϕ, Nz)` directions.
+
+# Keyword Arguments
+| Name         | Default     | Description                                  |
+|--------------|-------------|----------------------------------------------|
+| `FloatType`  | `Float64`   | Floating-point type for all grid values.     |
+| `VectorType` | `Vector`    | Type constructor for 1D coordinate vectors.  |
+| `ArrayType`  | `Array`     | Type constructor for the full grid array.    |
 
 # Returns
-- `Array`: The array which has been reduce to (n-1)-dimension.
+- `gridbackend{3, FloatType, VectorType{FloatType}, ArrayType{FloatType,3}}`  
+  A cylindrical (r, ϕ, z) grid with zero-initialized values.
+
+# Notes
+The angular coordinate ϕ is truncated at `2π - Δϕ` to avoid overlapping the periodic endpoint.
 """
-function grid_reduction(array::Array, averaged_axis_id::Int64 = 1)
-    return dropdims(mean(array, dims = averaged_axis_id), dims = averaged_axis_id)
+function cylinder_grid_generator(rmin :: Real, rmax :: Real, zmin :: Real, zmax :: Real, in :: NTuple{3, Int};
+    FloatType::Type{<:AbstractFloat} = Float64, VectorType::Type{<:AbstractVector} = Vector, ArrayType::Type{<:AbstractArray} = Array)
+    T = FloatType
+    ϕmin = T(0.0)
+    ϕmax = (2*T(π) - (2*T(π) / (in[2] + 1)))
+    imin = (T(rmin), ϕmin, T(zmin))
+    imax = (T(rmax), ϕmax, T(zmax))
+    gbe = generate_empty_grid(imin, imax, in, FloatType=FloatType, VectorType=VectorType, ArrayType=ArrayType)
+    return gbe
 end
 
 """
-    disk_2d_grid_generator(imin::Vector ,imax::Vector, in::Vector)
-Generate a face-on disk grid base on the polar/cylindrical coordinate (r,ϕ).
+    func2gbe(rmin, rmax, in::NTuple{3, Int}; func, FloatType=Float64, VectorType=Vector, ArrayType=Array)
 
-Note: If the azimuthal range is equal to 2π, the upper limit will be subtracted by 
-    ϕmax_new = ϕmax - (2π/(ϕn+1))
+Generate a `gridbackend` in cylindrical coordinates and populate it with values from a user-defined function `f(s, ϕ)`.
+
+This function constructs a 2D grid in (s, ϕ) space using the specified radial bounds, then evaluates the provided function `func` at each grid point's physical location to fill the data array.
 
 # Parameters
-- `imin :: Vector`: The minimum value of radial and azimuthal grid [rmin, ϕmin]
-- `imax :: Vector`: The maximum value of radial and azimuthal grid [rmax, ϕmax]
-- `in :: Vector`: The numbers of separattion of radial and azimuthal grid [rn, ϕn]
+- `rmin::Real`, `rmax::Real`  
+  Radial bounds of the disk (minimum and maximum radius).
+- `in::NTuple{2, Int}`  
+  Number of grid points along `(s, ϕ)` dimensions.
+
+# Keyword Arguments
+| Name         | Default     | Description                                  |
+|--------------|-------------|----------------------------------------------|
+| `func`       | —           | Function `f(s, ϕ)` to evaluate on the grid.  |
+| `FloatType`  | `Float64`   | Floating-point type for all grid values.     |
+| `VectorType` | `Vector`    | Type constructor for 1D coordinate vectors.  |
+| `ArrayType`  | `Array`     | Type constructor for the full grid array.    |
 
 # Returns
-- `gridbackend`: An 'gridbackend' that contain all of the axes information with empty data storage.
-
-# Examples
-```julia
-rmin :: Float64 = 10.0
-rmax :: Float64 = 100.0
-rn :: Int64 = 251
-ϕn :: Int64 = 301
-grid :: gridbackend = disk_2d_grid_generator([rmin, 0.0], [rmax, 2π], [rn, ϕn])
-```
+- `::gridbackend{2, FloatType, VectorType{FloatType}, ArrayType{FloatType,2}}`  
+  A structured grid containing `func(s, ϕ)` evaluated at each point.
 """
-function disk_2d_grid_generator(imin::Vector, imax::Vector, in::Vector)
-    if size(imin) == size(imax) == size(in)
-        nothing
-    else
-        error("GridGeneratingError: Illegal input value.")
+function func2gbe(rmin :: Real, rmax :: Real, in::NTuple{2, Int}; func,
+    FloatType::Type{<:AbstractFloat} = Float64, VectorType::Type{<:AbstractVector} = Vector, ArrayType::Type{<:AbstractArray} = Array)
+    gbe = disc_grid_generator(rmin, rmax, in, FloatType=FloatType, VectorType=VectorType, ArrayType=ArrayType)
+    coordinate = generate_coordinate_grid(gbe)
+    @inbounds for i in eachindex(coordinate)
+        gbe.grid[i] = func(coordinate[i]...)
     end
-    if (imax[2] > 2 * pi) || (imin[2] < 0)
-        error("GridGeneratingError: Illegal theta value.")
-    end
-    if (imax[2] - imin[2]) == 2 * pi
-        imax[2] -= (2 * pi / (in[2] + 1))
-    end
-    backend = generate_empty_grid(imin, imax, in)
-    return backend
+    return gbe
 end
 
 """
-    disk_3d_grid_generator(imin::Vector ,imax::Vector, in::Vector)
-Generate a disk grid base on the cylindrical coordinate (r,ϕ,z).
-Note: If the azimuthal range is equal to 2π, the upper limit will be subtracted by 
-    ϕmax_new = ϕmax - (2π/(ϕn+1))
+    func2gbe(rmin, rmax, zmin, zmax, in::NTuple{3, Int}; func, FloatType=Float64, VectorType=Vector, ArrayType=Array)
+
+Generate a `gridbackend` in cylindrical coordinates and populate it with values from a user-defined function `f(s, ϕ, z)`.
+
+This function constructs a 3D grid in (s, ϕ, z) space using the specified radial and vertical bounds, then evaluates the provided function `func` at each grid point's physical location to fill the data array.
 
 # Parameters
-- `imin :: Vector`: The minimum value of radial and azimuthal grid [rmin, ϕmin, zmin]
-- `imax :: Vector`: The maximum value of radial and azimuthal grid [rmax, ϕmax, zmax]
-- `in :: Vector`: The numbers of separattion of radial and azimuthal grid [rn, ϕn, zn]
+- `rmin::Real`, `rmax::Real`  
+  Radial bounds of the disk (minimum and maximum radius).
+- `zmin::Real`, `zmax::Real`  
+  Vertical bounds of the disk.
+- `in::NTuple{3, Int}`  
+  Number of grid points along `(s, ϕ, z)` dimensions.
+
+# Keyword Arguments
+| Name         | Default     | Description                                  |
+|--------------|-------------|----------------------------------------------|
+| `func`       | —           | Function `f(s, ϕ, z)` to evaluate on the grid.|
+| `FloatType`  | `Float64`   | Floating-point type for all grid values.     |
+| `VectorType` | `Vector`    | Type constructor for 1D coordinate vectors.  |
+| `ArrayType`  | `Array`     | Type constructor for the full grid array.    |
 
 # Returns
-- `gridbackend`: An 'gridbackend' that contain all of the axes information with empty data storage.
-
-# Examples
-```julia
-rmin :: Float64 = 10.0
-rmax :: Float64 = 100.0
-zmin :: Float64 = -8
-zmax :: Float64 = 8
-rn :: Int64 = 251
-ϕn :: Int64 = 16
-zn :: Int64 = 101
-grid :: gridbackend = disk_3d_grid_generator([rmin, 0.0, zmin], [rmax, 2π, zmax], [rn, ϕn, zn])
-```
+- `::gridbackend{3, FloatType, VectorType{FloatType}, ArrayType{FloatType,3}}`  
+  A structured grid containing `func(s, ϕ, z)` evaluated at each point.
 """
-function disk_3d_grid_generator(imin::Vector, imax::Vector, in::Vector)
-    if size(imin) == size(imax) == size(in)
-        nothing
-    else
-        error("GridGeneratingError: Illegal input value.")
+function func2gbe(rmin :: Real, rmax :: Real, zmin :: Real, zmax :: Real, in::NTuple{3, Int}; func,
+    FloatType::Type{<:AbstractFloat} = Float64, VectorType::Type{<:AbstractVector} = Vector, ArrayType::Type{<:AbstractArray} = Array)
+    gbe = cylinder_grid_generator(rmin, rmax, zmin, zmax, in, FloatType=FloatType, VectorType=VectorType, ArrayType=ArrayType)
+    coordinate = generate_coordinate_grid(gbe)
+    @inbounds for i in eachindex(coordinate)
+        gbe.grid[i] = func(coordinate[i]...)
     end
-    if (imax[2] > 2 * pi) || (imin[2] < 0)
-        error("GridGeneratingError: Illegal phi value.")
-    end
-    if (imax[2] - imin[2]) == 2 * pi
-        imax[2] -= (2 * pi / (in[2] + 1))
-    end
-    backend = generate_empty_grid(imin, imax, in)
-    return backend
-end
-
-"""
-    func2gbe(imin::Vector, imax::Vector, in::Vector; func)
-Transfer the function into a gridbackend.
-
-# Parameters
-- `imin :: Vector`: The minimum value of grid e.g[rmin, ϕmin, zmin]
-- `imax :: Vector`: The maximum value of grid e.g[rmax, ϕmax, zmax]
-- `in :: Vector`: The numbers of separattion of grid e.g[rn, ϕn, zn]
-
-# Keyword arguments
-- `func`: The function that contain the information.
-
-# Returns
-- `gridbackend`: An 'gridbackend' that contain all of the axes information with data storage.
-"""
-function func2gbe(imin::Vector, imax::Vector, in::Vector; func)
-    if size(imin) == size(imax) == size(in)
-        nothing
-    else
-        error("GridGeneratingError: Illegal input value.")
-    end
-    if (imax[2] > 2 * pi) || (imin[2] < 0)
-        error("GridGeneratingError: Illegal phi value.")
-    end
-    if (imax[2] - imin[2]) == 2 * pi
-        imax[2] -= (2 * pi / (in[2] + 1))
-    end
-    iLinRange = Vector{LinRange{Float64,Int64}}(undef,length(in))
-    for i in eachindex(in)
-        iLinRange[i] = LinRange(imin[i],imax[i],in[i])
-    end
-    meshgrids = meshgrid(iLinRange...)
-    grid :: Array = Array{Float64}(undef,in...)
-    grid = func.(meshgrids...)
-    return gridbackend(grid,iLinRange,in)
+    return gbe
 end

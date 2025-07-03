@@ -15,12 +15,137 @@ The structure that contains all of the analysis result but not prepare for extra
 - `column_names :: Dict{Int,String}`: The column name of each data.
 - `params :: Dict{String, Any}`: Other information of analysis/simulation.
 """
-struct Analysis_result_buffer <: PhantomRevealerDataStructures
-    time::Float64
+struct Analysis_result_buffer{D, T <: AbstractFloat, V <: AbstractVector{T}} <: PhantomRevealerDataStructures
+    time::T
     data_dict::Dict{Int,gridbackend}
-    axes::Vector{LinRange{Float64,Int64}}
+    axes::NTuple{D, V}
     column_names::Dict{Int,String}
     params::Dict{String,Any}
+end
+
+const _GREEK2LATEX = Dict(
+    'α'=>"\\alpha",    'β'=>"\\beta",    'γ'=>"\\gamma",
+    'δ'=>"\\delta",    'ε'=>"\\epsilon", 'ζ'=>"\\zeta",
+    'η'=>"\\eta",      'θ'=>"\\theta",   'ϑ'=>"\\vartheta",   # ← 兩種 theta
+    'ι'=>"\\iota",     'κ'=>"\\kappa",   'λ'=>"\\lambda",
+    'μ'=>"\\mu",       'ν'=>"\\nu",      'ξ'=>"\\xi",
+    'ο'=>"o",          'π'=>"\\pi",      'ρ'=>"\\rho",
+    'σ'=>"\\sigma",    'τ'=>"\\tau",     'υ'=>"\\upsilon",
+    'φ'=>"\\phi",      'ϕ'=>"\\varphi",                       # ← 兩種 phi
+    'χ'=>"\\chi",      'ψ'=>"\\psi",     'ω'=>"\\omega",
+)
+
+greek2latex(str::AbstractString) = replace(str, _GREEK2LATEX...)
+
+const _SYMBOL = Dict(
+    "Sigma" => raw"\Sigma",   
+    "rho" => raw"\rho",    
+    "v"   => raw"v",     
+    "cs"  => raw"c_s",
+    "e"     => raw"e",
+)
+
+const _UNIT_EXP = Dict(
+    "Sigma" => ( 1, -2,  0),    # g cm⁻²
+    "rho"   => ( 1, -3,  0),    # g cm⁻³
+    "v"     => ( 0,  1, -1),    # cm s⁻¹
+    "cs"    => ( 0,  1, -1),    # cm s⁻¹
+    "e"     => ( 0,  0,  0),    # No dimension
+)
+
+const _LAT_M = raw"\mathrm{g}"
+const _LAT_L = raw"\mathrm{cm}"
+const _LAT_T = raw"\mathrm{s}"
+
+function _exp2latex(exp::NTuple{3,Int})
+    a,b,c = exp
+    parts = String[]
+    if a != 0; push!(parts, _LAT_M * "^{$a}") end
+    if b != 0; push!(parts, _LAT_L * "^{$b}") end
+    if c != 0; push!(parts, _LAT_T * "^{$c}") end
+    return isempty(parts) ? "" : join(parts, raw"\,")
+end
+
+const _RULES = [
+    # ∇Sigma_x  →  ∂ₓ Σ  
+    r"^∇([A-Za-z]+)([xyzrsϕθ])$" => m -> begin
+        base, dir = String.(m.captures)
+        (
+            "\\partial_{$dir}\\," * _SYMBOL[base],    # latex
+            _exp2latex(_UNIT_EXP[base] .+ (0,-1,0)),   # unit
+            (; dir_consumed = true)                  # 不再下標方向
+        )
+    end,
+
+    # ∇·v 
+    r"^∇·([A-Za-z]+)$" => m -> begin
+        base = String(m.captures[1])
+        (
+            raw"\nabla\!\cdot\vec{" * _SYMBOL[base] * "}",
+            _exp2latex(_UNIT_EXP[base] .+ (0,-1,0)),
+            NamedTuple()
+        )
+    end,
+
+    # ∇×v_y  
+    r"^∇×([A-Za-z]+)([xyzrsϕθ])$" => m -> begin
+        base, comp = String.(m.captures)
+        (
+            "(\\nabla\\times\\vec{" * _SYMBOL[base] * "})",
+            _exp2latex(_UNIT_EXP[base] .+ (0,-1,0)),
+            (; dir = comp)
+        )
+    end,
+
+    r"^rho$"      => _ -> (_SYMBOL["rho"],   _exp2latex(_UNIT_EXP["rho"]),   NamedTuple()),
+    r"^Sigma$"    => _ -> (_SYMBOL["Sigma"], _exp2latex(_UNIT_EXP["Sigma"]), NamedTuple()),
+    r"^cs$"       => _ -> (_SYMBOL["cs"],    _exp2latex(_UNIT_EXP["cs"]),    NamedTuple()),
+    r"^e$"        => _ -> (_SYMBOL["e"],     _exp2latex(_UNIT_EXP["e"]),     NamedTuple()),
+    r"^v([xyzrsϕθ])$" => m -> begin
+        dir = String(m.captures[1])
+        (_SYMBOL["v"], _exp2latex(_UNIT_EXP["v"]), (; dir))
+    end,
+]
+
+function _to_latex(col::AbstractString)::LaTeXString
+    s = replace(strip(col, ['[', ']']), r"^\d+\s*" => "")
+
+    header, material = occursin('_', s) ? rsplit(s, '_'; limit=2) : (s, "")
+    mid  = endswith(header, 'm')
+    base = mid ? first(header, prevind(header, lastindex(header))) : header
+
+    for (rx, f) in _RULES
+        if (m = match(rx, base)) !== nothing
+            latex, unit, opts = f(m)
+            return _build(latex, unit;
+                         dir       = get(opts, :dir, nothing),
+                         dir_used  = get(opts, :dir_consumed, false),
+                         mid       = mid,
+                         material  = material)
+        end
+    end
+    return greek2latex(_build(raw"\mathrm{" * base * "}", raw"\mathrm{-}";
+                 mid = mid, material = material))
+end
+
+function _build(latex::AbstractString, unit::AbstractString;
+                dir::Union{Nothing,String}=nothing,
+                dir_used::Bool=false,
+                mid::Bool=false,
+                material::AbstractString="")
+    subs = String[]
+    if !dir_used && dir !== nothing
+        push!(subs, dir)
+    end
+    if mid
+        push!(subs, "m")
+    end
+    if !isempty(material)
+        push!(subs, material)
+    end
+    subtxt = isempty(subs) ? "" : "_{" * join(subs, ",") * "}"
+    emptyunit = isempty(unit)
+    return latexstring(latex * subtxt * " \\;",(emptyunit ? "" : "[") * unit * (emptyunit ? "" : "]"))
 end
 
 """
@@ -97,7 +222,7 @@ function convert_field(value)
             converted_value[key] = value[key].grid
         end
         return converted_value
-    elseif typeof(value) <: Vector{LinRange{Float64,Int64}}
+    elseif typeof(value) <: NTuple
         converted_value = Dict{Int,Vector{Float64}}()
         for i in eachindex(value)
             converted_value[i] = collect(value[i])
@@ -146,6 +271,17 @@ function create_column_names(keys_order::Vector{String}, suffixes::Vector, midz:
     return column_names
 end
 
+function _format_column_names(index :: Int64, name :: String; total_length = 16, index_length = 2, max_name_length = 11)
+    index_str = lpad(index, index_length, '0')
+    if length(name) > max_name_length
+        formatted_name = "[" * index_str * " " * name * "]"
+    else
+        space_padding = total_length - length(index_str) - length(name) - 3
+        formatted_name = "[" * index_str * " " * repeat(" ", space_padding) * name * "]"
+    end
+    return formatted_name
+end
+
 """
     create_column_dict(column_names::Array{String})
 Create the dictionary of column names in the `[0X     NAME]`-alike format. If the column name length exceeds 11 characters, the format will be `[0X NAME]` without a fixed total length.
@@ -156,26 +292,12 @@ Create the dictionary of column names in the `[0X     NAME]`-alike format. If th
 # Returns
 - `Dict{Int, String}`: The column name dictionary.
 """
-function create_column_dict(column_names::Array{String})
+function create_column_dict(column_names::Array{String}; total_length = 16, index_length = 2, max_name_length = 11)
     column_format = Dict{Int, String}()
-    
-    total_length = 16
-    index_length = 2
-    max_name_length = 11
 
     for (i, name) in enumerate(column_names)
-        index_str = lpad(i, index_length, '0')
-        
-        if length(name) > max_name_length
-            formatted_name = "[" * index_str * " " * name * "]"
-        else
-            space_padding = total_length - length(index_str) - length(name) - 3
-            formatted_name = "[" * index_str * " " * repeat(" ", space_padding) * name * "]"
-        end
-        
-        column_format[i] = formatted_name
+        column_format[i] = _format_column_names(i, name, total_length = total_length, index_length = index_length, max_name_length = max_name_length)
     end
-    
     return column_format
 end
 
@@ -278,6 +400,29 @@ function Analysis_result_buffer(
                 data_dict[i] = prepare_dict[suffix][column]
             end
         end
+    end
+    return Analysis_result_buffer(time, data_dict, axes, column_dict, params)
+end
+
+function Analysis_result_buffer(
+                time::Float64,
+                gbe_pairs::Vector{Pair{String, gridbackend}},
+                params::Dict{String,Any},
+                midz_gbe::Union{Nothing,gridbackend} = nothing)
+
+    column_names = [p[1] for p in gbe_pairs]
+    axes = gbe_pairs[1][2].axes
+    column_dict = create_column_dict(column_names)
+
+    data_dict = Dict{Int,gridbackend}()
+    for i in eachindex(column_names)
+        column = column_names[i]
+        data_dict[i] = gbe_pairs[i][2]
+    end
+
+    if !isnothing(midz_gbe)
+        data_dict[0] = midz_gbe
+        column_dict[0] = _format_column_names(0, "midz")
     end
     return Analysis_result_buffer(time, data_dict, axes, column_dict, params)
 end
@@ -440,41 +585,6 @@ Transfer all the quantities into cgs unit, and also add another dictionary about
 
 """
 function transfer_cgs!(data::Analysis_result, year::Bool = true)
-    function replace_grident_exp!(latex_str)
-        str = latex_str.s
-        regex = r"cm\$\^\{(-?\d+)\}"
-        m = match(regex, str)
-        if m !== nothing
-            exponent = parse(Int, m.captures[1]) - 1
-            new_exponent_str = "cm\$^{$exponent}"
-            new_str = replace(str, m.match => new_exponent_str)
-            return LaTeXString(new_str)
-        else
-            return latex_str
-        end
-    end
-    function extract_suffix(str::String)
-        idx = findlast(isequal('_'), str)
-        if idx === nothing
-            return ""
-        else
-            result = str[idx+1:end]
-            if endswith(result, "]")
-                result = chop(result)
-            end
-            return result
-        end
-    end
-    function extract_label(s::String)::String
-        pattern = r"\[\d+\s+(.*?)\]"
-        match_result = match(pattern, s)
-        if match_result !== nothing
-            return match_result.captures[1]
-        else
-            return ""
-        end
-    end
-    
     umass = data.params["umass"]
     udist = data.params["udist"]
     utime = data.params["utime"]
@@ -502,65 +612,20 @@ function transfer_cgs!(data::Analysis_result, year::Bool = true)
         data.params["graindens"] *= urho
         data.params["grainsize"] *= udist
 
+        # Assign unit for plotting
+        # Format: L"$ {header}{_suffix}\ {unit}$"
 
         column_unit = Dict{Int,LaTeXString}()
         for key in keys(data.column_names)
-            column_name = data.column_names[key]
-            suffix = extract_suffix(column_name)
-
-            if occursin("sigma", column_name) || occursin("Sigma", column_name)
-                data.data_dict[key] *= usigma
-                if occursin("s_", column_name)
-                    header = LaTeXString(L"$\Sigma_{s,")
-                    suffix = LaTeXString(suffix* "}")
-                    unit = LaTeXString(L"$ [g cm$^{-2}$]")
-                elseif occursin("ϕ_", column_name)
-                    header = LaTeXString(L"$\Sigma_{\phi,")
-                    suffix = LaTeXString(suffix* "}")
-                    unit = LaTeXString(L"$ [g cm$^{-2}$]")
-                else
-                    header = LaTeXString(L"$\Sigma_")
-                    unit = LaTeXString(L"$ [g cm$^{-2}$]")
-                end
-                
-            elseif occursin("rho", column_name)
-                data.data_dict[key] *= urho
-                header = LaTeXString(L"$\rho_")
-                unit = LaTeXString(L"$ [g cm$^{-3}$]")
-            elseif occursin("vs", column_name)
-                data.data_dict[key] *= uv
-                header = LaTeXString(L"$v_{s,")
-                suffix = LaTeXString(suffix* "}")
-                unit = LaTeXString(L"$ [cm s$^{-1}$]")
-            elseif occursin("vphi", column_name) || occursin("vϕ", column_name)
-                data.data_dict[key] *= uv
-                header = LaTeXString(L"$v_{\phi,")
-                suffix = LaTeXString(suffix* "}")
-                unit = LaTeXString(L"$ [cm s$^{-1}$]")
-            elseif occursin("vz", column_name)
-                data.data_dict[key] *= uv
-                header = LaTeXString(L"$v_{z,")
-                suffix = LaTeXString(suffix* "}")
-                unit = LaTeXString(L"$ [cm s$^{-1}$]")
-            else
-                header = LaTeXString(extract_label(column_name))
-                suffix = LaTeXString(L"")
-                unit = LaTeXString(L"")
+            if occursin("Sigma", data.column_names[key])
+                data.data_dict[key] .*= usigma  
             end
-            column_unit[key] = latexstring(header, suffix, unit)
+            column_name = data.column_names[key]
             if occursin("∇", column_name)
                 data.data_dict[key] /= udist
-                if occursin("⋅",column_name)
-                        column_unit[key] =
-                    latexstring(L"$\nabla\cdot$", replace_grident_exp!(column_unit[key]))
-                elseif occursin("×",column_name)
-                    column_unit[key] =
-                        latexstring(L"$\nabla\times$", replace_grident_exp!(column_unit[key]))
-                else
-                    column_unit[key] =
-                        latexstring(L"$\nabla$", replace_grident_exp!(column_unit[key]))
-                end
             end
+            column_unit[key] = _to_latex(column_name)
+            println(column_name, "  →  ", column_unit[key])
         end
         data.params["column_units"] = deepcopy(column_unit)
     end

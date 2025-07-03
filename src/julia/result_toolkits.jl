@@ -5,11 +5,11 @@
 """
 initialization_modules()
 const TRANSFER_DICT = Dict{String, LaTeXString}(
-    "∇" => L"$\nabla$",
-    "ϕ" => L"$\phi$",
-    "θ" => L"$\theta$",
-    "ρ" => L"$\rho$",
-    "Σ" => L"$\Sigma$",
+    "∇" => "\\nabla",
+    "ϕ" => L"\\phi",
+    "θ" => L"\\theta",
+    "ρ" => L"\\rho",
+    "Σ" => L"\\Sigma",
 )
 """
     replace_trans_LaTeXStr(str::String)
@@ -87,7 +87,7 @@ function Faceon_polar_plot!(Disk2Ddata :: Analysis_result, array_index :: Int64;
     else
         z_unit = Disk2Ddata.column_names[array_index]
     end
-    println(z_unit)
+    @info "Unit: $z_unit"
     time = Disk2Ddata.time
     label_left = latexstring(L"$t = ",Int64(round(time)), L"$", time_unit)
     label_right = Disk2Ddata.column_names[array_index]
@@ -113,7 +113,6 @@ function Faceon_polar_plot!(Disk2Ddata :: Analysis_result, array_index :: Int64;
     set_colorbar!(Fax,(1,1),clabel=z_unit)
     set_annotation!(Fax,(1,1),label_left,halign=:left, valign= :top)
     set_annotation!(Fax,(1,1),label_right,halign=:right, valign= :top)
-    draw_Fig!(Fax)
     return Fax
 end
 
@@ -155,7 +154,6 @@ function Faceon_plot!(data :: Analysis_result, array_index :: Int64;
     yunit::Union{Nothing,String,LaTeXString} = nothing,
     zlabel::Union{Nothing,String,LaTeXString} = nothing, time_unit::String = "yr")
 
-    # 檢查數據維度
     if length(data.axes) !== 2
         if isnothing(z_plane)
             error("InputError: The Analysis type of data needs to be in 2D grid!")
@@ -187,22 +185,18 @@ function Faceon_plot!(data :: Analysis_result, array_index :: Int64;
     time = data.time
     label_left = latexstring(L"$t = ", Int64(round(time)), L"$", time_unit)
 
-    # 啟動 Makie
     activate_backend("GL")
 
-    # 如果沒有提供 `Fax`，則創建一個新的 `FigureAxes`
     if isnothing(Fax)
         Fax = FigureAxes(1,1, figsize=figsize)
     end
 
-    # 設定 colorbar 範圍
     if isnothing(vlim)
         entervlim = Get_vminmax(z)
     else
         entervlim = vlim
     end
 
-    # 設定色彩縮放方式
     scale::Union{Function,ReversibleScale} = identity
     if cbar_log
         if entervlim[1] <= 0.0
@@ -211,10 +205,9 @@ function Faceon_plot!(data :: Analysis_result, array_index :: Int64;
             scale = log10
         end
     end
-    # 繪製 pcolor 圖
+
     lazypcolor!(Fax, (1,1), x, y, z, colormap=colormap, colorrange=entervlim, colorscale=scale)
 
-    # 設定 colorbar 和標籤
     set_colorbar!(Fax, (1,1), clabel=z_unit)
     set_annotation!(Fax, (1,1), label_left, halign=:left, valign=:top)
     set_xlabel!(Fax,xlabel)
@@ -264,11 +257,116 @@ function Check_array_quantities(data :: Analysis_result, array_index :: Int64)
     println("STD: $STD")
     println("----------------------------------------------------------------")
 end
+"""
+    spirals_detection(Disk2Ddata::Analysis_result, array_index::Int64, ϕend_spiral1 = 0.0;
+                      Fax::Union{FigureAxes,Nothing}=nothing,
+                      slim::Union{Nothing,Tuple{Float64,Float64}}=(50.0,100.0),
+                      Faxacc::Union{FigureAxes,Nothing}=nothing,
+                      width_pixel_range :: Tuple{Float64, Float64} = (8.0,12.0),
+                      width_resolution :: Int64         = 24
+                      boxfactor::Float64                = 8.0,
+                      a_range::Tuple{Float64,Float64}   = (30.0,300.0),
+                      k_range::Tuple{Float64,Float64}   = (-0.5,-0.06),
+                      num_a_bins::Int                   = 800,
+                      num_k_bins::Int                   = 200,
+                      Nmax::Int                         = 2,
+                      beam_ratio::Float64               = 0.2,
+                      score_gain_thr::Float64           = 0.003,
+                      λ_angle::Float64                  = 1.0,
+                      λ_overlap::Float64                = 1.0)
 
+Detects one-armed or multi-armed logarithmic spirals in a **face-on** disc snapshot,  
+using the pipeline *ridge detection → Hough transform → beam search clustering*.  
 
-function twoarms_spiral_detection(Disk2Ddata :: Analysis_result, array_index :: Int64, ϕend_spiral1 = 0.0;
-    Fax::Union{FigureAxes, Nothing} = nothing, slim = (50.0,100.0),
-    boxfactor = 8.0,a_range::Tuple{Float64,Float64} = (30.0, 300.0), k_range::Tuple{Float64,Float64} = (-0.5, -0.06), num_a_bins::Int = 800, num_k_bins::Int = 200,width=5.0)
+The spiral detection follow the following process
+
+                       2D-density map
+                           │
+                           ▼
+                   [Ridge detection & automatic scale-selection]
+                           ⇒ Lindeberg 1996, 1998
+                           │  (scale-space γ-norm ridge + σ̂ selection)
+                           │
+                           ▼
+                   Detected ridge points  +  ridge strength  +  ridge width
+                           │
+                           ▼
+                   [Log-polar Hough transform for logarithmic spirals]
+                           ⇒ Duda & Hart 1972   (Hough framework)
+                           │
+                           ▼
+                   Accumulator in (ln a, k) space
+                           │
+                           ▼
+                   [Local peak selection - Non-Maximum Suppression]
+                           ⇒ Canny 1986   (NMS on gray-scale image)
+                           │
+                           ▼
+                   Potential spiral peaks  (aᵢ , kᵢ)
+                           │
+                           ▼
+                   [Coverage-penalty Beam Search]
+                           ⇒ Lowerre 1976 / Graves 2012  (beam-search strategy)
+                           ⇒ Su, et al (in prep.)         (gain & penalty objective)
+                           │
+                           ▼
+                   Final best-fit spiral arm set
+
+Optional plotting hooks allow the routine to update / reuse Makie figures in real-time.
+
+# Positional Arguments
+- `Disk2Ddata::Analysis_result` — A PhantomRevealer face-on data object (`Analysis_type = "Faceon_disk"`).
+- `array_index::Int64`          — Column index of the physical quantity to analyse (e.g. Σ_d).
+- `ϕend_spiral1` = 0.0          — Reference azimuth (rad) used to order the detected spirals.
+
+# Keyword Arguments
+### Global
+| kw | default | meaning |
+|---|---|---|
+| `Fax`        | `nothing` | FigureAxes with `(nrow, ncol) = (1, 1)` (The return `Fax` from `Faceon_polar_plot!` is recommended) for the *polar map* (points + fitted spirals). If `nothing`, nothing is drawn. |
+| `Faxacc`     | `nothing` | FigureAxes with `(nrow, ncol) = (1, 2)` that hosts *(1)* smoothed accumulator with peak markers, *(2)* strength histogram. (a Figure)|
+| `slim`       | `(50,100)`| Radial range (same unit as `Disk2Ddata.axes[1]`) to search for ridges. `nothing` = full range. |
+### Ridge detection
+| kw | default | meaning |
+|---|---|---|
+| `width_pixel_range` | `(8.0, 12.0)`  | The range of width of ridge IN PIXEL.|
+| `width_resolution`  | `24`  | The resolution of t-scaling for scale selection.. |
+| `boxfactor`         | `8.0`  | Spatial box factor passed to ridge detection. |
+
+### Hough transform
+| kw | default | meaning |
+|---|---|---|
+| `a_range`    | `(30,300)` | Search range for the logarithmic-spiral scale length *a* (same unit as *s*). |
+| `k_range`    | `(-0.5,-0.06)` | Search range for pitch parameter *k*. |
+| `num_a_bins` | `800`  | Radial bins in Hough space. |
+| `num_k_bins` | `200`  | Pitch-angle bins in Hough space. |
+
+### Beam-search clustering
+| kw | default | meaning |
+|---|---|---|
+| `Nmax`          | `2`     | Max number of spirals to return. |
+| `beam_ratio`    | `0.1`   | Beam width = `beam_ratio*length(peaks)` (hard-capped internally). |
+| `score_gain_thr`| `0.003` | Relative score gain below which the search stops early. |
+| `λ_angle`       | `1.0`   | Weight of angle-spread penalty.|
+| `λ_overlap`     | `1.0`   | Weight of inter-arm overlap penalty.|
+
+# Returns
+`Vector{NamedTuple}` — ordered list of detected spirals.  
+Each tuple contains  
+```julia
+(a   = best_a,      # scale length
+ k   = best_k,      # pitch parameter
+ ϕ_end = phi_end,   # azimuth at s_max
+ pointsset = Set{Tuple{Float64,Float64}}  # ridge pixels classified to this arm
+)
+```
+"""
+function spirals_detection(Disk2Ddata :: Analysis_result, array_index :: Int64, ϕend_spiral1 = 0.0;
+    Fax::Union{FigureAxes, Nothing} = nothing, slim = (50.0,100.0), 
+    width_pixel_range :: Tuple{Float64, Float64} = (8.0,12.0), width_resolution :: Int64 = 24,                                                                                                                                                            # Range of spiral detection
+    Faxacc::Union{FigureAxes, Nothing} = nothing, boxfactor ::Float64 = 12.0, a_range::Tuple{Float64,Float64} = (30.0, 300.0), k_range::Tuple{Float64,Float64} = (-0.5, -0.06), num_a_bins::Int = 800, num_k_bins::Int = 200,                                                    # Parameters for Hough transform
+    Nmax:: Int64 = 2, beam_ratio :: Float64 = 0.2, score_gain_thr :: Float64 = 0.003, λ_angle :: Float64 = 1.0, λ_overlap :: Float64 = 1.0  # Parameters of Beam search
+)
     if Disk2Ddata.params["Analysis_type"] != "Faceon_disk"
         error("InputError: The Analysis type of data needs to be `Faceon_disk`!")
     end
@@ -277,31 +375,282 @@ function twoarms_spiral_detection(Disk2Ddata :: Analysis_result, array_index :: 
     else
         srange = value2closestvalueindex(Disk2Ddata.axes[1],slim[1]):value2closestvalueindex(Disk2Ddata.axes[1],slim[2])
     end
-    s = Disk2Ddata.axes[1][srange]
-    ϕ = Disk2Ddata.axes[2]
-    axes = (s, ϕ)
-    z = Disk2Ddata.data_dict[array_index]
-    
-
-    pointsset_binary_full, weight_array_full, _ = ridge_detection_automatic_scale_selection(z, width_pixel_range = (8.0,12.0), width_resolution = 24, boxfactor = boxfactor)
-    pointsset_binary = pointsset_binary_full[srange,:]
-    weight_array = weight_array_full[srange,:]
-    spiral1, spiral2 = Hough_transform_fitting_twolines(pointsset_binary, axes, weight_array, a_range=a_range, k_range=k_range, num_a_bins=num_a_bins, num_k_bins=num_k_bins,ϕend_spiral1=ϕend_spiral1,width=width)
-
-    # Draw point
-    S, Φ = meshgrid(Disk2Ddata.axes[1], Disk2Ddata.axes[2])
-    ss = S[pointsset_binary_full]
-    phis = Φ[pointsset_binary_full]
-    weight_color = weight_array_full[pointsset_binary_full]
-
     if !isnothing(Fax)
-        ϕ1 = _logarithmic_spiral_ϕ.(s, a = spiral1.params["a"], k = spiral1.params["k"])
-        ϕ2 = _logarithmic_spiral_ϕ.(s, a = spiral2.params["a"], k = spiral2.params["k"])
-        scatter!(Fax.axes[1,1],phis,ss ; markersize = 5, color=weight_color,colormap=:plasma, colorrange=(1.0,maximum(weight_color)), colorscale=log10)
-        lines!(Fax.axes[1,1], ϕ1,s , color=:blue)
-        lines!(Fax.axes[1,1], ϕ2,s , color=:red)
-        draw_Fig!(Fax)
+        # Clear spiral
+        for p in Fax.axes[1,1].scene.plots
+            if occursin("spiral_detection_s", p.label[])
+                p.converted[1][] = Point{2,Float64}.([], [])
+            end
+        end
     end
 
-    return spiral1, spiral2
+    s = Disk2Ddata.axes[1][srange]
+    ϕ = Disk2Ddata.axes[2]
+    z = Disk2Ddata.data_dict[array_index]
+    
+    # Assign mutithreading
+    FFTW.set_num_threads(nthreads())
+
+    # Process: Ridge detection -> Hough transform -> Beam search
+    ## Ridge detection
+    pointsset_binary_full, strength_array_full, best_t_full = ridge_detection_automatic_scale_selection(z,  padax1_mode=0.0 , padax2_mode=:circular,  width_pixel_range = width_pixel_range, width_resolution = width_resolution, boxfactor = boxfactor)
+    pointsset_binary = pointsset_binary_full[srange,:]          # points set binary 
+    strength_array = strength_array_full[srange,:]              # strength_array
+    best_t = best_t_full[srange,:]
+
+    if (sum(pointsset_binary) == 0)
+        if !isnothing(Fax)
+            # Clear points
+            for p in Faxacc.axes[1,1].scene.plots
+                if p.label[] == "PeakPoints"
+                    peakpoint_plot = p
+                    peakpoint_plot.converted[1][] = Point{2,Float64}.([],[])
+                    break
+                end
+            end
+            for p in Faxacc.axes[1,1].scene.plots
+                if p.label[] == "BestPeak"
+                    bestpeak_plot = p
+                    bestpeak_plot.converted[1][] = Point{2,Float64}.([],[])
+                    break
+                end
+            end
+        end
+        spirals = NamedTuple[]
+        @info "End spirals detection. No points has detected in given region!"
+        return spirals
+    end
+
+    weighted_array = log10.(strength_array)
+    clamp!(weighted_array, 0.0, maximum(weighted_array))
+    for (i, value) in enumerate(weighted_array)
+        if value <= 0.0
+            pointsset_binary[i] = false
+        end
+    end
+
+    # Generate meshgrid
+    S, Φ = meshgrid(s, ϕ)
+    detected_s = S[pointsset_binary]
+    detected_ϕ = Φ[pointsset_binary]
+    detected_color = weighted_array[pointsset_binary]
+    if !isnothing(Fax)
+        @info "Start plotting ridge points (colored by log strength)"
+        # Plot points
+        points_sc = nothing
+        for p in Fax.axes[1,1].scene.plots
+            if p.label[] == "spiral_detection_points"
+                points_sc = p
+            end
+        end
+        if isnothing(points_sc)
+            points_sc = scatter!(Fax.axes[1,1],detected_ϕ,detected_s ; markersize = 5, color=detected_color,colormap=:amp, colorrange=(0.0,maximum(detected_color)))
+            points_sc.label = "spiral_detection_points"
+        else
+            points_sc.converted[1][] = Point{2,Float64}.(detected_ϕ, detected_s)
+            points_sc.color[] = detected_color
+        end
+    end
+
+
+    ## Hough transform
+    accumulator, a_array, k_array = Hough_transform_logarithmic_spiral(pointsset_binary, (s, ϕ), weighted_array, a_range=a_range, k_range=k_range, num_a_bins=num_a_bins, num_k_bins=num_k_bins, npattern = Nmax)
+    
+    if (iszero(accumulator))
+        spirals = NamedTuple[]
+        @info "End spirals detection. No peaks has detected in given region!"
+        return spirals
+    end
+    log_accumulator :: Matrix{Float64} = @. log10(accumulator + 1e-9)  
+    log_accumulator_non0 = log_accumulator[log_accumulator .> 0.0]
+
+    if !isnothing(Faxacc)
+        @info "Start plotting Accumelator"
+        # First panel: Accumelator
+        lazypcolor!(Faxacc,(1,1),collect(log.(a_array)),collect(k_array),log_accumulator ,colormap=:binary, colorrange=(0.0, maximum(log_accumulator)))
+        set_xlim!(Faxacc, (1,1), (minimum(log.(a_array)), maximum(log.(a_array))))
+        set_ylim!(Faxacc, (1,1), (minimum(k_array), maximum(k_array)))
+        Faxacc.axes[1,1].xlabel[] = L"$\ln a$"
+        Faxacc.axes[1,1].ylabel[] = L"$k$"
+        set_colorbar!(Faxacc,(1,1), clabel=L"$\log \sum_{\mathrm{bin}} \mathcal{N}_{\gamma\text{-norm}} L$")
+        # Second panel: histogram of weighted_array
+        vec_weighted = detected_color[detected_color .> 0.0]
+        mean_weighted = mean(vec_weighted)
+        median_weighted = median(vec_weighted)
+        std_weighted = std(vec_weighted)
+        binbox = LinRange(0.0, maximum(vec_weighted), 40)  # 40 centers
+        binindex_array = AssignBinIndices(vec_weighted, binbox, mode = :nearest)
+
+        valid_bins = binindex_array
+        valid_weights = vec_weighted
+
+        nbins = length(binbox)
+        weighted_hist = zeros(Float64, nbins)
+
+        for (bin, w) in zip(valid_bins, valid_weights)
+            weighted_hist[bin] += 1
+        end
+
+        StrengthBar = nothing
+        for p in Faxacc.axes[1,2].scene.plots
+            if p.label[] == "StrengthBar"
+                StrengthBar = p
+            end
+        end
+        if isnothing(StrengthBar)
+            barplot = barplot!(Faxacc.axes[1,2], binbox, weighted_hist)
+
+            barplot.label = "StrengthBar"
+        else
+            StrengthBar.converted[1][] = Point{2,Float64}.(binbox, weighted_hist)
+        end
+
+        meanindicator = nothing
+        for p in Faxacc.axes[1,2].scene.plots
+            if p.label[] == "meanindicator"
+                meanindicator = p
+            end
+        end
+        if isnothing(meanindicator)
+            vli = vlines!(Faxacc.axes[1,2], [mean_weighted - std_weighted, mean_weighted, mean_weighted + std_weighted])
+            vli.color = :red
+            vli.label = "meanindicator"
+        else
+            meanindicator.converted[1][] = [mean_weighted - std_weighted, mean_weighted, mean_weighted + std_weighted]
+            meanindicator.color[] = :red
+        end
+
+        medianindicator = nothing
+        for p in Faxacc.axes[1,2].scene.plots
+            if p.label[] == "medianindicator"
+                medianindicator = p
+            end
+        end
+        if isnothing(medianindicator)
+            vm = vlines!(Faxacc.axes[1,2], [median_weighted])
+            vm.color = :green
+            vm.label = "medianindicator"
+        else
+            medianindicator.converted[1][] =  [median_weighted]
+            medianindicator.color[] = :green
+        end
+
+        Faxacc.axes[1,2].xlabel[] = L"$\log \mathcal{N}_{\gamma\text{-norm}} L$"
+ 
+    end
+
+    if isempty(log_accumulator_non0)
+        if !isnothing(Fax)
+            # Clear spiral
+            for p in Fax.axes[1,1].scene.plots
+                if occursin("spiral_detection_s", p.label[])
+                    p.converted[1][] = Point{2,Float64}.([], [])
+                end
+            end
+        end
+        spirals = NamedTuple[]
+        @info "End spirals detection. No reliable Hough peaks exist in accumulator!"
+        return spirals
+    end
+    ## Beam search 
+    peaks :: Vector{PeakCandidate} = pickup_accumelator_peaks(log_accumulator, s[end], a_array, k_array; r = 2, threshold = 0.0) 
+        
+    best_combination :: SpiralState = Beam_search_logarithmic_spiral(peaks, a_array, k_array, S, Φ, weighted_array, best_t; 
+                                                                    Nmax = Nmax,
+                                                                    beam_ratio = beam_ratio,
+                                                                    score_gain_thr = score_gain_thr,
+                                                                    λ_angle = λ_angle,
+                                                                    λ_overlap = λ_overlap)
+
+    reordered_best_combination = reorder_spirals(best_combination, ϕend_spiral1)
+    spirals = NamedTuple[]
+    for peak in reordered_best_combination.peaks
+        apk = a_array[peak.a_idx]
+        kpk = k_array[peak.k_idx]
+        subpointsset_binary = get_subpointsset(apk, kpk, pointsset_binary, S, Φ, best_t)
+        subpointsset = bitarray2pointsset(subpointsset_binary, (s, ϕ))
+
+        spiral = (; :a => apk, :k => kpk, :pointsset => subpointsset, :ϕ_end => peak.ϕ_end)
+        push!(spirals, spiral)
+    end
+    # Plot accumulator
+    if !isnothing(Faxacc)
+        # Draw peak points
+        peak_lna = zeros(Float64, length(peaks)) 
+        peak_k = zeros(Float64, length(peaks)) 
+        for i in eachindex(peaks)
+            peak_lna[i] = log(a_array[peaks[i].a_idx])
+            peak_k[i] = k_array[peaks[i].k_idx]
+        end
+        peakpoint_plot = nothing 
+        for p in Faxacc.axes[1,1].scene.plots
+            if p.label[] == "PeakPoints"
+                peakpoint_plot = p
+                break
+            end
+        end
+        if isnothing(peakpoint_plot)
+            peakpoint_plot = scatter!(Faxacc.axes[1,1],peak_lna,peak_k , markersize = 3, color=:orange)
+            peakpoint_plot.label = "PeakPoints"
+        else
+            peakpoint_plot.converted[1][] = Point{2,Float64}.(peak_lna,peak_k)
+        end
+
+        bestpeak_plot = nothing 
+        for p in Faxacc.axes[1,1].scene.plots
+            if p.label[] == "BestPeak"
+                bestpeak_plot = p
+                break
+            end
+        end
+        if isnothing(bestpeak_plot)
+            bestpeak_plot = scatter!(Faxacc.axes[1,1],[log(a_array[pk.a_idx]) for pk in best_combination.peaks],[k_array[pk.k_idx] for pk in best_combination.peaks] , markersize = 5, color=:cyan)
+            bestpeak_plot.label = "BestPeak"
+        else
+            bestpeak_plot.converted[1][] = Point{2,Float64}.([log(a_array[pk.a_idx]) for pk in best_combination.peaks],[k_array[pk.k_idx] for pk in best_combination.peaks])
+        end
+    end
+    # Plot points
+    if !isnothing(Fax)
+        if length(spirals) > 0
+            # Plot spiral
+            @info "Start plotting spirals"
+            colormap = [:blue, :red, :green, :orange, :purple, :cyan, :magenta]
+            color_of(i) = colormap[mod1(i, length(colormap))]
+
+            ϕs = [_logarithmic_spiral_ϕ.(s, a = spiral.a, k = spiral.k) for spiral in spirals]
+            for i in eachindex(ϕs)
+                spiral_plot = nothing
+                for p in Fax.axes[1,1].scene.plots
+                    if p.label[] == "spiral_detection_s$i"
+                        spiral_plot = p
+                        break
+                    end
+                end
+                if isnothing(spiral_plot)
+                    spiral_plot = lines!(Fax.axes[1,1], ϕs[i],s , color=color_of(i))
+                    spiral_plot.label = "spiral_detection_s$i"
+                else
+                    spiral_plot.converted[1][] = Point{2,Float64}.(ϕs[i], s)
+                end
+            end
+            # Plot points
+            points_sc = nothing
+            for p in Fax.axes[1,1].scene.plots
+                if p.label[] == "spiral_detection_points"
+                    points_sc = p
+                end
+            end
+            if isnothing(points_sc)
+                points_sc = scatter!(Fax.axes[1,1],detected_ϕ,detected_s ; markersize = 5, color=detected_color,colormap=:amp, colorrange=(0.0,maximum(detected_color)))
+                points_sc.label = "spiral_detection_points"
+            else
+                points_sc.converted[1][] = Point{2,Float64}.(detected_ϕ, detected_s)
+                points_sc.color[] = detected_color
+            end
+        end
+    end
+    # Turn Back FFTW threads for safty
+    FFTW.set_num_threads(1)
+    return spirals
 end

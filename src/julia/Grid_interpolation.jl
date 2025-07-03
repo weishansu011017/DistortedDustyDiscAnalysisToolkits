@@ -10,390 +10,428 @@ Step 1. Generate a 3d KDTree to speed up the searching of particles
 
 Step 2. Generate a grid for analysis. The grid is base on a struct gridbackend which is defined in the "grid.jl" file
 
-Step 3. Calculate the result for each point by using the SPH intepolation. The calculation for each point is defined in "physical_quantity.jl"
+Step 3. Calculate the result for each point by using the SPH interpolation. The calculation for each point is defined in "physical_quantity.jl"
 """
 
+
 """
-    Disk_3D_Grid_analysis(
-        data::PhantomRevealerDataFrame,
-        s_params::Tuple{Float64,Float64,Int},
-        ϕ_params::Tuple{Float64,Float64,Int},
-        z_params::Tuple{Float64,Float64,Int};
-        column_names::Union{Nothing,Vector{String}}=nothing,
-        gradient_column_names::Union{Nothing,Vector{String}}=nothing,
-        divergence_column_names::Union{Nothing,Vector{String}}=nothing,
-        curl_column_names::Union{Nothing,Vector{String}}=nothing,
-        smoothed_kernel::Function = M5_spline,
-        h_mode::String = "closest",
-        Identical_particles::Bool = true
-    )
-Calculate the SPH interpolation on a grid that is described as a cylindrical coordinate (s,ϕ,z) for a disk.
-
-The density `rho` and its gradient vector `∇rho` will be calculated automatically. The `∇rho` values are returned in cylindrical coordinates (∇rho_s, ∇rho_ϕ, ∇rho_z).
-
-# Parameters
-- `data :: PhantomRevealerDataFrame`: The SPH data stored in `PhantomRevealerDataFrame`. 
-- `s_params :: Tuple{Float64,Float64,Int}`: The radial parameters [smin, smax, sn].
-- `ϕ_params :: Tuple{Float64,Float64,Int}`: The azimuthal parameters [ϕmin, ϕmax, ϕn].
-- `z_params :: Tuple{Float64,Float64,Int}`: The vertical parameters [zmin, zmax, zn].
-
-# Keyword Arguments
-- `column_names :: Union{Nothing, Vector{String}}=nothing`: The quantities to interpolate. If `nothing`, no additional quantities will be interpolated.
-- `gradient_column_names :: Union{Nothing, Vector{String}}=nothing`: The gradient value of quantities to interpolate. If `nothing`, no additional quantities will be interpolated.
-- `divergence_column_names :: Union{Nothing, Vector{String}}=nothing`: The divergence value of quantities to interpolate. For vector quantities (e.g., data columns named "vx", "vy", "vz"), you only need to provide the common prefix of the vector name, such as "v". If `nothing`, no additional quantities will be interpolated.
-- `curl_column_names :: Union{Nothing, Vector{String}}=nothing`: The curl value of quantities to interpolate. For vector quantities (e.g., data columns named "vx", "vy", "vz"), you only need to provide the common prefix of the vector name, such as "v". If `nothing`, no additional quantities will be interpolated.
-- `smoothed_kernel :: Function = M5_spline`: The kernel function for SPH interpolation.
-- `h_mode :: String = "closest"`: The mode for determining the smoothing radius. Allowed values are `"closest"` and `"mean"`.
-- `Identical_particles :: Bool = true`: Whether the particles are identical (default: `true`).
-
-# Returns
-- `Dict{String, gridbackend}`: A dictionary containing the interpolated results in the form of `gridbackend`.
-
-# Examples
-```julia
-data :: PhantomRevealerDataFrame = read_phantom("dumpfile_00000", "all")[1]
-add_cylindrical!(data)
-s_params :: Tuple{Float64,Float64,Int} = (10.0,100.0,91)
-ϕ_params :: Tuple{Float64,Float64,Int} = (0.0,2π,12)
-z_params :: Tuple{Float64,Float64,Int} = (0.0,30.0,151)
-smoothed_kernel :: Function = M6_spline
-column_names :: Vector = ["vs", "vϕ", "vz"]
-
-result :: Dict{String, gridbackend} = Disk_3D_Grid_analysis(
-    data, s_params, ϕ_params, z_params;
-    column_names=column_names,
-    smoothed_kernel=smoothed_kernel
-)
-println(keys(result))  # Output: ["rho", "∇rhos", "∇rhoϕ", "∇rhoz", "vs", "vϕ", "vz"]
-```
-"""
-function Disk_3D_Grid_analysis(
+Cylinder_Grid_analysis(
     data::PhantomRevealerDataFrame,
     s_params::Tuple{Float64,Float64,Int},
-    ϕ_params::Tuple{Float64,Float64,Int},
+    ϕn :: Int,
     z_params::Tuple{Float64,Float64,Int};
-    column_names::Union{Nothing,Vector{String}}=nothing,
-    gradient_column_names::Union{Nothing,Vector{String}}=nothing,
-    divergence_column_names::Union{Nothing,Vector{String}}=nothing,
-    curl_column_names::Union{Nothing,Vector{String}}=nothing,
-    smoothed_kernel::Function = M5_spline,
-    h_mode::String = "closest",
+    column_names::Vector{Symbol}=Symbol[],
+    gradient_column_names::Vector{Symbol}=Symbol[],
+    divergence_column_names::Vector{Symbol}=Symbol[],
+    curl_column_names::Vector{Symbol}=Symbol[],
+    smoothed_kernel::Type{K}=M5_spline,
     Identical_particles::Bool=true
-)
-    @info "Start 3D disk grid analysis."
+) where {K<:AbstractSPHKernel}
+
+Perform 3D SPH interpolation and differential analysis over a cylindrical grid.
+
+This function generates a cylindrical grid in (s, ϕ, z) coordinates and evaluates interpolated physical quantities (e.g., density, gradients, divergences, curls) from SPH particle data. Results are stored in gridbackend objects matching the geometry of the grid.
+
+# Parameters
+- `data`: The input SPH particle data (`PhantomRevealerDataFrame`).
+- `s_params`: Tuple specifying (s_min, s_max, s_resolution).
+- `ϕn`: Number of bins in the azimuthal direction (ϕ).
+- `z_params`: Tuple specifying (z_min, z_max, z_resolution).
+
+# Keyword Arguments
+| Argument                | Default       | Description                                                  |
+|-------------------------|---------------|--------------------------------------------------------------|
+| `column_names`          | `Symbol[]`    | List of scalar field names to interpolate.                   |
+| `gradient_column_names` | `Symbol[]`    | List of scalar fields to compute ∇field in cylindrical form. |
+| `divergence_column_names` | `Symbol[]`  | List of vector fields to compute ∇⋅field. DO NOT PASS THE DIRECTION SUFFIX                   |
+| `curl_column_names`     | `Symbol[]`    | List of vector fields to compute ∇×field in cylindrical form. DO NOT PASS THE DIRECTION SUFFIX     |
+| `smoothed_kernel`       | `M5_spline`   | SPH kernel type used in interpolation.                       |
+| `Identical_particles`   | `true`        | Whether all particles have identical mass.                   |
+
+# Returns
+A tuple of interpolated results (in the order of column names, gradients, divergences, curls), each entry being a `gridbackend`. If `:rho` is included, the corresponding density and ∇ρ fields are prepended to the output.
+
+The result ordering matches the `result_column_names` string vector constructed internally.
+
+"""
+function Cylinder_Grid_analysis(
+    data::PhantomRevealerDataFrame,
+    s_params::Tuple{Float64,Float64,Int},
+    ϕn :: Int,
+    z_params::Tuple{Float64,Float64,Int};
+    column_names::Vector{Symbol}=Symbol[],
+    gradient_column_names::Vector{Symbol}=Symbol[],
+    divergence_column_names::Vector{Symbol}=Symbol[],
+    curl_column_names::Vector{Symbol}=Symbol[],
+    smoothed_kernel::Type{K}=M5_spline,
+    Identical_particles::Bool=true
+) where {K<:AbstractSPHKernel}
+    @info "Start 3D cylinder grid analysis."
     
-    # The column subfix in cylindrical coordinate system
-    column_suffixes = ["s", "ϕ", "z"]
+    # The column subfix in cartisian coordinate system
+    column_suffixes = ["x", "y", "z"]
+    cylin_column_suffixes = ["s", "ϕ", "z"]
 
     # Checking data before interpolation
-    ###############################
-    # Checking the necessity of intepolation
-    # Regular intepolation
-    columnNotEmpty = true
-    if isnothing(column_names) || isempty(column_names)
-        columnNotEmpty = false
-    end
-
-    # Gradient intepolation
-    gradcolumnNotEmpty = true
-    if isnothing(gradient_column_names) || isempty(gradient_column_names)
-        gradcolumnNotEmpty = false
-    end
-
-    # Divergence intepolation
-    divercolumnNotEmpty = true
-    if isnothing(divergence_column_names) || isempty(divergence_column_names)
-        divercolumnNotEmpty = false
-    end
-
-    # Curl intepolation
-    curlcolumnNotEmpty = true
-    if isnothing(curl_column_names) || isempty(curl_column_names)
-        curlcolumnNotEmpty = false
-    end
-
     ###############################
     if (data.params["Origin_sink_id"] == -1)
         error("IntepolateError: Wrong origin located!")
     end
 
-    # Check missing columns. Also checking if the regular intepolation also intepolate the same column in the first deriviative intepolation to reduce the error of estimation.
-    if columnNotEmpty
-        for column_name in column_names
-            if !(hasproperty(data.dfdata, column_name))
-                error("IntepolateError: Missing column name $column_name !")
-            end
-        end
-    end
-
-    if gradcolumnNotEmpty
-        grad_value_exist :: Vector{Bool} = Vector{Bool}(undef,length(gradient_column_names))
-        for column_name in gradient_column_names
-            if !(hasproperty(data.dfdata, column_name))
-                error("IntepolateError: Missing column name $column_name !")
-            end
-        end
-        for (i,gradcolumn) in enumerate(gradient_column_names)
-            if gradcolumn in column_names
-                grad_value_exist[i] = true
-            else
-                grad_value_exist[i] = false
-            end
-        end
-    end
-
-    if divercolumnNotEmpty
-        diver_value_exist :: Vector{Bool} = Vector{Vector{Bool}}(undef,length(divergence_column_names))
-        for (i,rawdivercolumn) in enumerate(divergence_column_names)
-            for suffix in column_suffixes
-                divercolumn = rawdivercolumn * suffix
-                if !(hasproperty(data.dfdata, divercolumn))
-                    error("IntepolateError: Missing column name $divercolumn !")
-                end
-                if divercolumn in column_names
-                    diver_value_exist[i] = true
-                else
-                    diver_value_exist[i] = false
-                    break
-                end
-            end
-        end
-    end
-
-    if curlcolumnNotEmpty
-        curl_value_exist :: Vector{Bool} = Vector{Bool}(undef,length(curl_column_names))
-        for (i,rawcurlcolumn) in enumerate(curl_column_names)
-            for suffix in column_suffixes
-                curlcolumn = rawcurlcolumn * suffix
-                if !(hasproperty(data.dfdata, curlcolumn))
-                    error("IntepolateError: Missing column name $curlcolumn !")
-                end
-                if curlcolumn in column_names
-                    curl_value_exist[i] = true
-                else
-                    curl_value_exist[i] = false
-                    break
-                end
-            end
+    # Filter rho in column names
+    pure_column_names = [column for column in column_names if column != :rho]
+    pure_gradient_column_names = [column for column in gradient_column_names if column != :rho]
+    pure_divergence_column_names = [column for column in divergence_column_names if column != :rho]
+    pure_curl_column_names = [column for column in curl_column_names if column != :rho]
+    
+    # Check missing columns. 
+    required_column_names :: Vector{Symbol} = [pure_column_names...,
+                                               pure_gradient_column_names..., 
+                                               [Symbol(cn, sf) for sf in column_suffixes for cn in pure_divergence_column_names]...,  
+                                               [Symbol(cn, sf) for sf in column_suffixes for cn in pure_curl_column_names]...,]
+    for column in required_column_names
+        if !(hasproperty(data.dfdata, column))
+            error("IntepolateError: Missing column name $column !")
         end
     end
 
     # Generate kd tree in 3D space
     kdtree3d = Generate_KDtree(data, 3)
-
+    
     # Generate Edge-on grid 
-    imin::Vector = [s_params[1], ϕ_params[1], z_params[1]]
-    imax::Vector = [s_params[2], ϕ_params[2], z_params[2]]
-    iaxen::Vector = [s_params[3], ϕ_params[3], z_params[3]]
-    empty_gridbackend::gridbackend = disk_3d_grid_generator(imin, imax, iaxen)
+    iN = (s_params[3], ϕn, z_params[3])
+    empty_gridbackend::gridbackend = cylinder_grid_generator(s_params[1], s_params[2], z_params[1], z_params[2], iN)
 
     # Generate the coordinate array for the grid interpolation
-    gridv::Array{Vector{Float64}} = generate_coordinate_grid(empty_gridbackend)
+    gridv = generate_coordinate_grid(empty_gridbackend)
 
     # Preparation of result dictionary
-    Result_dict = Dict{String,gridbackend}()
-    Result_dict["rho"] = deepcopy(empty_gridbackend)
-    if columnNotEmpty
-        for column_name in column_names
-            (column_name == "rho") && continue
-            Result_dict[column_name] = deepcopy(empty_gridbackend)
-        end
-    end
-    if gradcolumnNotEmpty
-        for column_name in gradient_column_names
-            Result_dict["∇$(column_name)s"] = deepcopy(empty_gridbackend)
-            Result_dict["∇$(column_name)ϕ"] = deepcopy(empty_gridbackend)
-            Result_dict["∇$(column_name)z"] = deepcopy(empty_gridbackend)
-        end
-    end
-    if divercolumnNotEmpty
-        for column_name in divergence_column_names
-            Result_dict["∇⋅$(column_name)"] = deepcopy(empty_gridbackend)
-        end
-    end
-    if curlcolumnNotEmpty
-        for column_name in curl_column_names
-            Result_dict["∇×$(column_name)s"] = deepcopy(empty_gridbackend)
-            Result_dict["∇×$(column_name)ϕ"] = deepcopy(empty_gridbackend)
-            Result_dict["∇×$(column_name)z"] = deepcopy(empty_gridbackend)
-        end
+    Ncolumnitp = length(pure_column_names)
+    Ngradcolumnitp = length(pure_gradient_column_names)
+    Ndivcolumnitp = length(pure_divergence_column_names)
+    Ncurlcolumnitp = length(pure_curl_column_names)
+
+    # Check whether density is in the column name
+    hasrho = false
+    rhoitp = nothing
+    if :rho in column_names
+        hasrho = true
+        rhoitp = deepcopy(empty_gridbackend)
     end
 
-    # Prepare a roughly truncate radius for KD-tree filtering.
-    roughly_truncated_radius::Float64 =
-        get_truncated_radius(data, -1.0f0, 0.5, smoothed_kernel)
+    has∇rho = false
+    ∇rhoitp = nothing
+    if :rho in gradient_column_names
+        has∇rho = true
+        ∇rhoitp = ntuple(i -> deepcopy(empty_gridbackend), 3)
+    end
+
+    # Constructing result Tuple
+    columnitp_Tuple = ntuple(i -> deepcopy(empty_gridbackend), Ncolumnitp)
+    gradcolumnitp_Tuple = ntuple(j -> ntuple(i -> deepcopy(empty_gridbackend),3),  Ngradcolumnitp)
+    divcolumnitp_Tuple = ntuple(i -> deepcopy(empty_gridbackend), Ndivcolumnitp)
+    curlcolumnitp_Tuple = ntuple(j -> ntuple(i -> deepcopy(empty_gridbackend), 3), Ncurlcolumnitp)
+
+    
+    
+
+    # Make the overall column names
+    result_column_names :: Vector{String} = [string.(pure_column_names)..., 
+                                            [string("∇", cn, sf) for sf in cylin_column_suffixes for cn in pure_gradient_column_names]..., 
+                                            [string("∇⋅", cn) for cn in pure_divergence_column_names]...,  
+                                            [string("∇×", cn, sf) for sf in cylin_column_suffixes for cn in pure_curl_column_names]...,]
+    if has∇rho
+        pushfirst!(result_column_names, "∇rhoz")
+        pushfirst!(result_column_names, "∇rhoy")
+        pushfirst!(result_column_names, "∇rhox")
+    end
+    if hasrho
+        pushfirst!(result_column_names, "rho")
+    end
+    # Prepare the full InterpolationInput
+    input_normal_interpolation = InterpolationInput(data, pure_column_names, smoothed_kernel, Identical_particles=Identical_particles)
+    input_first_deriviative_interpolation = InterpolationInput(data, required_column_names, smoothed_kernel, Identical_particles=Identical_particles)
+
+    # Prepare h_array
+    h_array = input_normal_interpolation.h
+
+    # Get Valid Kernel range
+    multiplier = KernelFunctionValid(K, eltype(h_array))
+
+    # Generate workspace
+    workspace = zeros(Float64, Ncolumnitp)
+
     # Iteration
     @threads for i in eachindex(gridv)
-        target = gridv[i]
-        kdtf_data = KDtreeRadiusFilter(data, kdtree3d, target, roughly_truncated_radius, "polar") # New data that has been filtered.
-        Result_dict["rho"].grid[i] = density(kdtf_data, target, smoothed_kernel, h_mode, "polar", Identical_particles=Identical_particles)
-        # Interpolate 
-        if columnNotEmpty
-            quantity_interpolation_dict::Dict{String,Float64} = quantity_intepolate(kdtf_data, target, column_names, smoothed_kernel, h_mode, "polar",Identical_particles=Identical_particles)
-            if all(key -> haskey(Result_dict, key), keys(quantity_interpolation_dict))
-                for key in keys(quantity_interpolation_dict)
-                    Result_dict[key].grid[i] = quantity_interpolation_dict[key]
-                end
-            else
-                error("IntepolateError: Missing column name!")
-            end
-        end 
-        # Gradient intepoate
-        if gradcolumnNotEmpty
-            input_density = Result_dict["rho"].grid[i]
-            grad_quantity_interpolation_dict::Dict{String,Float64} = Dict{String,Float64}()
-            for n in eachindex(gradient_column_names)
-                column_name = gradient_column_names[n]
-                input_value = NaN
-                if grad_value_exist[n]
-                    input_value = Result_dict[column_name].grid[i]
-                end
-                buffer_array = gradient_quantity_intepolate(kdtf_data, target, column_names, smoothed_kernel, h_mode, "polar", Identical_particles=Identical_particles, density_value=input_density, quantity_value=input_value)
-                grad_quantity_interpolation_dict["∇$(column_name)s"],grad_quantity_interpolation_dict["∇$(column_name)ϕ"],grad_quantity_interpolation_dict["∇$(column_name)z"] = buffer_array
-            end
-            if all(key -> haskey(Result_dict, key), keys(grad_quantity_interpolation_dict))
-                for key in keys(grad_quantity_interpolation_dict)
-                    Result_dict[key].grid[i] = grad_quantity_interpolation_dict[key]
-                end
-            else
-                error("IntepolateError: Missing column name!")
-            end
+        target_cylin = gridv[i]
+        ϕ = target_cylin[2]
+        target = _cylin2cart(target_cylin)
+        neighbor_indices, ha = get_Neighbor_indices(kdtree3d, target, multiplier, h_array)
+
+        # Interpolate density
+        if hasrho
+            rhoitp.grid[i] = density(input_normal_interpolation, target, ha, neighbor_indices, itpGather)
         end
-        # Divergence intepolate
-        if divercolumnNotEmpty
-            input_density = Result_dict["rho"].grid[i]
-            diver_quantity_interpolation_dict::Dict{String,Float64} = Dict{String,Float64}()
-            for n in eachindex(divergence_column_names)
-                column_name = divergence_column_names[n]
-                input_value = fill(NaN, 3)
-                if diver_value_exist[n]
-                    input_value[1] = Result_dict["$(column_name)s"].grid[i]
-                    input_value[2] = Result_dict["$(column_name)ϕ"].grid[i]
-                    input_value[3] = Result_dict["$(column_name)z"].grid[i]
-                end
-                diver_quantity_interpolation_dict["∇⋅$(column_name)"] = divergence_quantity_intepolate(kdtf_data, target, column_name, smoothed_kernel, h_mode, "polar", Identical_particles=Identical_particles, density_value=input_density, quantity_value=input_value, quantity_coordinate_flag="polar")
-            end
-            if all(key -> haskey(Result_dict, key), keys(diver_quantity_interpolation_dict))
-                for key in keys(diver_quantity_interpolation_dict)
-                    Result_dict[key].grid[i] = diver_quantity_interpolation_dict[key]
-                end
-            else
-                error("IntepolateError: Missing column name!")
-            end
-        end  
-        if curlcolumnNotEmpty
-            input_density = Result_dict["rho"].grid[i]
-            curl_quantity_interpolation_dict::Dict{String,Float64} = Dict{String,Float64}()
-            for n in eachindex(curl_column_names)
-                column_name = curl_column_names[n]
-                input_value = fill(NaN, 3)
-                if curl_value_exist[n]
-                    input_value[1] = Result_dict["$(column_name)s"].grid[i]
-                    input_value[2] = Result_dict["$(column_name)ϕ"].grid[i]
-                    input_value[3] = Result_dict["$(column_name)z"].grid[i]
-                end
-                buffer_array = curl_quantity_intepolate(kdtf_data, target, column_name, smoothed_kernel, h_mode, "polar", Identical_particles=Identical_particles, density_value=input_density, quantity_value=input_value, quantity_coordinate_flag="polar")
-                curl_quantity_interpolation_dict["∇×$(column_name)s"],curl_quantity_interpolation_dict["∇×$(column_name)ϕ"],curl_quantity_interpolation_dict["∇×$(column_name)z"] = buffer_array
-            end
-            if all(key -> haskey(Result_dict, key), keys(curl_quantity_interpolation_dict))
-                for key in keys(curl_quantity_interpolation_dict)
-                    Result_dict[key].grid[i] = curl_quantity_interpolation_dict[key]
-                end
-            else
-                error("IntepolateError: Missing column name!")
-            end
-        end  
-    end
+        if has∇rho
+            ∇rhoitp[1].grid[i], ∇rhoitp[2].grid[i], ∇rhoitp[3].grid[i] = gradient_density(input_normal_interpolation, target, ha, neighbor_indices, itpGather)
+        end
 
-    @info "End 3D disk grid analysis."
-    return Result_dict
-end
+        # Get subarray for interpolation
+        buf = ntuple(n -> @view(columnitp_Tuple[n].grid[i]), Ncolumnitp)
 
-"""
-    Disk_scale_height_analysis(edgeon_data_3D :: Dict{String, gridbackend})
-Calculate the scale height of disk from existing edgeon data.
+        # quantities intepolate
+        quantities_interpolate!(buf, workspace, input_normal_interpolation, target, ha, neighbor_indices, itpGather)
 
-# Parameters
-- `edgeon_data_3D :: Dict{String, gridbackend}`: The result from a edge-on analysis.
+        # Gradient intepolate
+        for j in eachindex(pure_gradient_column_names)
+            grad_result_cart = gradient_quantity_intepolate(input_first_deriviative_interpolation, target, ha, neighbor_indices, j, itpGather)
+            gradcolumnitp_Tuple[j][1].grid[i], gradcolumnitp_Tuple[j][2].grid[i], gradcolumnitp_Tuple[j][3].grid[i] = _vector_cart2cylin(ϕ, grad_result_cart...)
+        end
 
-# Returns
-- `Interpolations.Extrapolation`: The interpolation object of scale height as the function of `s`
-"""
-function Disk_scale_height_analysis(edgeon_data_3D :: Dict{String, gridbackend})
-    rho_grid = grid_reduction(edgeon_data_3D["rho"], 2)
-    s_separate = rho_grid.dimension[1]
-    z_separate = rho_grid.dimension[2]
-    s_array = rho_grid.axes[1]
-    z_array = collect(rho_grid.axes[2])
-    H_array = zeros(Float64, s_separate)
-    @threads for i = 1:s_separate
-        rho_array = rho_grid.grid[i, :]
-        rho_sum = cumsum(rho_array) ./ maximum(rho_array)
-        rho_cdf = rho_sum ./ maximum(rho_sum)
-        for j = 1:z_separate
-            cdfrho = rho_cdf[j]
-            if cdfrho > 0.99999999
-                H_array[i] = z_array[j]
-                break
-            end
+        # Divergence
+        for j in eachindex(pure_divergence_column_names)
+            ingrident = (3*(j-1) + 1, 3*(j-1) + 2, 3*(j-1) + 3)
+            divcolumnitp_Tuple[j].grid[i] = divergence_quantity_intepolate(input_first_deriviative_interpolation, target, ha, neighbor_indices, ingrident..., itpGather)
+        end
+
+        # Curl intepolate
+        for j in eachindex(pure_curl_column_names)
+            ingrident = (3*(j-1) + 1, 3*(j-1) + 2, 3*(j-1) + 3)
+            curl_result_cart = curl_quantity_intepolate(input_first_deriviative_interpolation, target, ha, neighbor_indices, ingrident..., itpGather)
+            curlcolumnitp_Tuple[j][1].grid[i], curlcolumnitp_Tuple[j][2].grid[i], curlcolumnitp_Tuple[j][3].grid[i] = _vector_cart2cylin(ϕ, curl_result_cart...)
         end
     end
-    result = CubicSplineInterpolation(s_array, H_array, extrapolation_bc = Line())
+
+    # Construct result
+    result_value = typeof(empty_gridbackend)[]
+    if hasrho
+        push!(result_value, rhoitp)
+    end
+    if has∇rho
+        push!(result_value, ∇rhoitp...)
+    end
+    push!(result_value, columnitp_Tuple...)
+    for subtuple in gradcolumnitp_Tuple
+        push!(result_value, subtuple...)
+    end
+    push!(result_value, divcolumnitp_Tuple...)
+    for subtuple in curlcolumnitp_Tuple
+        push!(result_value, subtuple...)
+    end
+
+    @assert length(result_column_names) == length(result_value)
+
+    result = Dict{String, typeof(empty_gridbackend)}()
+    for (key, val) in zip(result_column_names, result_value)
+        result[key] = val
+    end
+    @info "End 3D cylinder grid analysis."
     return result
 end
 
 """
-    Disk_scale_height_analysis(data::PhantomRevealerDataFrame, s_params::Tuple{Float64,Float64,Int}, ϕ_params :: Tuple{Float64,Float64,Int} = (0.0,2π,8) ,z_params::Tuple{Float64,Float64,Int} = (0.0, 28.0, 70),smoothed_kernel:: Function = M5_spline,h_mode::String="closest")
-Calculate the scale height of disk.
-
-# Parameters
-- `data :: PhantomRevealerDataFrame`: The SPH data that is stored in `PhantomRevealerDataFrame` 
-- `s_params :: Tuple{Float64,Float64,Int}`: The radial parameters with [smin, smax, sn]
-- `ϕ_params :: Tuple{Float64,Float64,Int}`: The azimuthal parameters with [ϕmin, ϕmax, ϕn]
-- `z_params :: Tuple{Float64,Float64,Int}`: The height parameters with [zmin, zmax, zn]
-- `smoothed_kernel :: Function = M5_spline`: The Kernel function for interpolation.
-- `h_mode :: String="closest"`: The mode for finding a proper smoothed radius. (Allowed value: "closest", "mean")
-
-# Returns
-- `Interpolations.Extrapolation`: The interpolation object of scale height as the function of `s`
-"""
-function Disk_scale_height_analysis(
+Disc_Grid_analysis(
     data::PhantomRevealerDataFrame,
     s_params::Tuple{Float64,Float64,Int},
-    ϕ_params::Tuple{Float64,Float64,Int} = (0.0, 2π, 8),
-    z_params::Tuple{Float64,Float64,Int} = (0.0, 28.0, 70),
-    smoothed_kernel::Function = M5_spline,
-    h_mode::String = "closest";
+    ϕn::Int,
+    ϕnmid::Int = 16,
+    z_params_mid::Tuple{Float64,Float64,Int} = (-28.0, 28.0, 100);
+    midz_func :: Union{Nothing, Interpolations.Extrapolation, Function} = nothing,
+    column_names::Vector{Symbol}=Symbol[],
+    midplane_column_names::Vector{Symbol}=Symbol[],
+    smoothed_kernel::Type{K}=M5_spline,
     Identical_particles::Bool=true
-)
-    edgeon_data_3D = Disk_3D_Grid_analysis(
-        data,
-        s_params,
-        ϕ_params,
-        z_params,
-        smoothed_kernel=smoothed_kernel,
-        h_mode=h_mode,
-        Identical_particles=Identical_particles
-    )
-    result = Disk_scale_height_analysis(edgeon_data_3D)
+) where {K<:AbstractSPHKernel}
+
+Perform SPH interpolation over a 2D cylindrical disc grid with optional midplane sampling.
+
+This function interpolates physical quantities onto a 2D (s, ϕ) cylindrical grid using SPH data. If midplane quantities are requested, the function computes the midplane height at each grid point and interpolates corresponding 3D values at that height. Midplane height can be automatically computed via vertical SPH interpolation or supplied by user-defined `midz_func`.
+
+# Parameters
+- `data`: The SPH particle dataset (`PhantomRevealerDataFrame`).
+- `s_params`: Tuple `(s_min, s_max, s_resolution)` defining radial bins.
+- `ϕn`: Number of bins in azimuthal angle ϕ.
+- `ϕnmid`: Number of azimuthal bins used for midplane estimation (default: 16).
+- `z_params_mid`: Tuple `(z_min, z_max, z_resolution)` for midplane vertical density integration.
+
+# Keyword Arguments
+| Name                  | Default         | Description                                                                 |
+|-----------------------|-----------------|-----------------------------------------------------------------------------|
+| `midz_func`           | `nothing`       | Optional function to supply midplane height. If `nothing`, computed internally. |
+| `column_names`        | `Symbol[]`      | Scalar fields to interpolate along the 2D LOS (line-of-sight) projection.  |
+| `midplane_column_names` | `Symbol[]`    | Scalar fields to interpolate at the computed midplane height (3D).         |
+| `smoothed_kernel`     | `M5_spline`     | SPH kernel used in all interpolations.                                     |
+| `Identical_particles` | `true`          | Whether all particles share the same mass.                                 |
+
+# Returns
+A `Dict{String, gridbackend}` mapping quantity names to their interpolated grid results.
+"""
+function Disc_Grid_analysis(
+    data::PhantomRevealerDataFrame,
+    s_params::Tuple{Float64,Float64,Int},
+    ϕn::Int,
+    ϕnmid::Int = 16,
+    z_params_mid::Tuple{Float64,Float64,Int} = (-28.0, 28.0, 100);
+    midz_func :: Union{Nothing, Interpolations.Extrapolation, Function} = nothing,
+    column_names::Vector{Symbol}=Symbol[],
+    midplane_column_names::Vector{Symbol}=Symbol[],
+    smoothed_kernel::Type{K}=M5_spline,
+    Identical_particles::Bool=true
+) where {K<:AbstractSPHKernel}
+    @info "Start 2D disc grid analysis."
+
+    # Checking data before interpolation
+    ###############################
+    if (data.params["Origin_sink_id"] == -1)
+        error("IntepolateError: Wrong origin located!")
+    end
+
+    # Filter Sigma/rho in column names
+    pure_column_names = [column for column in column_names if (column ∉ (:rho, :Sigma))]
+    pure_midplane_column_names = [column for column in midplane_column_names if (column ∉ (:rho, :Sigma))]
+    
+    # Check missing columns. 
+    required_column_names :: Vector{Symbol} = [pure_column_names...,
+                                               pure_midplane_column_names...]
+    for column in required_column_names
+        if !(hasproperty(data.dfdata, column))
+            error("IntepolateError: Missing column name $column !")
+        end
+    end
+
+    # Generate kd tree in 3D space
+    kdtree2d = Generate_KDtree(data, 2)
+    kdtree3d = Generate_KDtree(data, 3)
+
+    # Generate Face-on grid 
+    iN = (s_params[3], ϕn)
+    empty_gridbackend::gridbackend = disc_grid_generator(s_params[1], s_params[2], iN)
+
+    # Generate the coordinate array for the grid interpolation
+    gridv = generate_coordinate_grid(empty_gridbackend)
+
+    # Preparation of result dictionary
+    Ncolumnitp = length(pure_column_names)
+    Nmidcolumnitp = length(pure_midplane_column_names)
+
+
+    # Check whether density is in the column name
+    hasSigma = false
+    if :Sigma in column_names
+        hasSigma = true
+        Sigmaitp = deepcopy(empty_gridbackend)
+    end
+
+    hasrho = false
+    if :rho in midplane_column_names
+        hasrho = true
+        rhoitp = deepcopy(empty_gridbackend)
+    end
+
+    # Constructing result Tuple
+    columnitp_Tuple = ntuple(i -> deepcopy(empty_gridbackend), Ncolumnitp)
+    midcolumnitp_Tuple = ntuple(i -> deepcopy(empty_gridbackend), Nmidcolumnitp)
+
+    # Make the overall column names
+    result_column_names :: Vector{String} = [string.(pure_column_names)..., 
+                                            [string(cn,"m") for cn in pure_midplane_column_names]...]
+    if hasrho
+        pushfirst!(result_column_names, "rhom")
+    end
+    if hasSigma
+        pushfirst!(result_column_names, "Sigma")
+    end
+    # Prepare the full InterpolationInput
+    input_interpolation = InterpolationInput(data, pure_column_names, smoothed_kernel, Identical_particles=Identical_particles)
+    input_midplane_interpolation = InterpolationInput(data, pure_midplane_column_names, smoothed_kernel, Identical_particles=Identical_particles)
+
+    # Prepare h_array
+    h_array = input_interpolation.h
+
+    # Get Valid Kernel range
+    multiplier = KernelFunctionValid(K, eltype(h_array))
+
+    # Generate workspace
+    workspace2d = zeros(get_type(input_interpolation), Ncolumnitp)
+    workspace3d = zeros(get_type(input_midplane_interpolation), Nmidcolumnitp)
+
+    # Prepare midplane
+    midz = nothing
+    if !isempty(midplane_column_names)
+        if isnothing(midz_func)
+            iN3d = (s_params[3], ϕnmid, z_params_mid[3])
+            rhoitp3d::gridbackend = cylinder_grid_generator(s_params[1], s_params[2], z_params_mid[1], z_params_mid[2], iN3d)
+            gridv3d = generate_coordinate_grid(rhoitp3d)
+            @threads for i in eachindex(gridv3d)
+                target_cylin = gridv3d[i]
+                target = _cylin2cart(target_cylin)
+                nbur, ha = get_Neighbor_indices(kdtree3d, target, multiplier, h_array)
+                rhoitp3d.grid[i] = density(input_midplane_interpolation, target, ha, nbur, itpGather)
+            end
+            midz_func = Disc_2D_midplane_function_generator(rhoitp3d)
+            midz = func2gbe(s_params[1], s_params[2], iN, func=midz_func)
+        else
+            midz = func2gbe(s_params[1], s_params[2], iN, func=midz_func)
+        end
+    end
+
+    # Iteration
+    @threads for i in eachindex(gridv)
+        target_cylin = gridv[i]
+        target = _cylin2cart(target_cylin)
+        neighbor_indices, ha = get_Neighbor_indices(kdtree2d, target, multiplier, h_array)
+
+        # Interpolate 2D
+        if hasSigma
+            Sigmaitp.grid[i] = LOS_density(input_interpolation, target, ha, neighbor_indices, itpGather)
+        end
+
+        # Get subarray for interpolation
+        buf = ntuple(n -> @view(columnitp_Tuple[n].grid[i]), Ncolumnitp)
+        LOS_quantities_interpolate!(buf, workspace2d, input_interpolation, target, ha, neighbor_indices, itpGather)
+
+        # Interpolate midplane
+        if !isempty(midplane_column_names)
+            mid_target = (target..., midz.grid[i])
+            mid_neighbor_indices, midha = get_Neighbor_indices(kdtree3d, mid_target, multiplier, h_array)
+            if hasrho
+                rhoitp.grid[i] = density(input_midplane_interpolation, mid_target, midha, mid_neighbor_indices, itpGather)
+            end
+            # Get subarray for interpolation
+            midbuf = ntuple(n -> @view(midcolumnitp_Tuple[n].grid[i]), Nmidcolumnitp)
+
+            # quantities intepolate
+            quantities_interpolate!(midbuf, workspace3d, input_midplane_interpolation, mid_target, midha, mid_neighbor_indices, itpGather)
+        end
+    end
+
+    # Construct result
+    result_value = typeof(empty_gridbackend)[]
+    if hasSigma
+        push!(result_value, Sigmaitp)
+    end
+    if hasrho
+        push!(result_value, rhoitp)
+        
+    end
+    push!(result_value, columnitp_Tuple...)
+    push!(result_value, midcolumnitp_Tuple...)
+
+    @assert length(result_column_names) == length(result_value)
+
+    result = Dict{String, typeof(empty_gridbackend)}()
+    for (key, val) in zip(result_column_names, result_value)
+        result[key] = val
+    end
+    @info "End 2D disc grid analysis."
     return result
 end
 
-"""
-    Disk_2D_midplane_function_generator(edgeon_data_3D::Dict{String, gridbackend}, circular_axis::Int64=[2])
-Generate an function f(s,ϕ) which represent the midplane of the disk.
-
-# Parameters
-- `edgeon_data_3D :: Dict{String, gridbackend}`: The result from a edge-on analysis.
-- `azimuthal_circular :: Bool = true`: Boolean of a circular azimuthal grid.
-
-# Returns
-- `Interpolations.Extrapolation`: The interpolation object of midplane as the function of `s` and `ϕ`.
-"""
-function Disk_2D_midplane_function_generator(edgeon_data_3D::Dict{String, gridbackend}, azimuthal_circular::Bool = true)
-    rho_gbe :: gridbackend = deepcopy(edgeon_data_3D["rho"])
-    z_grid :: Array = zeros(Float64,rho_gbe.dimension[1],rho_gbe.dimension[2])
+function Disc_2D_midplane_function_generator(rho_gbe::gridbackend)
+    s_array = rho_gbe.axes[1]
     z_array = rho_gbe.axes[3]
+    z_grid :: Array = zeros(Float64,rho_gbe.dimension[1],rho_gbe.dimension[2])
+    
     grid3d = rho_gbe.grid
     @threads for idx in CartesianIndices(z_grid)
         rhos ::Vector{Float64} = grid3d[idx[1],idx[2],:]
@@ -403,653 +441,34 @@ function Disk_2D_midplane_function_generator(edgeon_data_3D::Dict{String, gridba
             z_grid[idx] = z_array[findmax(rhos)[2]]
         end
     end
-    if azimuthal_circular
-        z_grid = hcat(z_grid,z_grid[:,1])
-        rho_gbe.axes[2] = LinRange(0.0,2π,length(rho_gbe.axes[2])+1)
-    end
-    zfunc :: Interpolations.Extrapolation = LinearInterpolation((rho_gbe.axes[1],rho_gbe.axes[2]),z_grid)
+    z_grid = hcat(z_grid,z_grid[:,1])
+    ϕ_array = LinRange(0.0,2π,length(rho_gbe.axes[2])+1)
+    zfunc :: Interpolations.Extrapolation = LinearInterpolation((s_array,ϕ_array),z_grid)
     return zfunc
 end
 
-"""
-    Disk_2D_midplane_function_generator(   
-        data::PhantomRevealerDataFrame,
-        s_params::Tuple{Float64,Float64,Int} = (10.0, 120.0, 111),
-        ϕ_params::Tuple{Float64,Float64,Int} = (0.0, 2π, 24),
-        z_params::Tuple{Float64,Float64,Int} = (-28.0, 28.0, 100),
-        smoothed_kernel::Function = M5_spline,
-        h_mode::String = "closest"
-    )
-Generate an function f(s,ϕ) which represent the midplane of the disk.
-
-# Parameters
-- `data :: PhantomRevealerDataFrame`: The SPH data that is stored in `PhantomRevealerDataFrame` 
-- `s_params :: Tuple{Float64,Float64,Int}`: The radial parameters with [smin, smax, sn]
-- `ϕ_params :: Tuple{Float64,Float64,Int}`: The azimuthal parameters with [ϕmin, ϕmax, ϕn]
-- `z_params :: Tuple{Float64,Float64,Int}`: The height parameters with [zmin, zmax, zn]
-
-# Keyword Arguments
-- `smoothed_kernel :: Function = M5_spline`: The Kernel function for interpolation.
-- `h_mode :: String="closest"`: The mode for finding a proper smoothed radius. (Allowed value: "closest", "mean")
-- `Identical_particles :: Bool = true`: Whether the particles are identical (default: `true`).
-
-# Returns
-- `Interpolations.Extrapolation`: The interpolation object of midplane as the function of `s` and `ϕ`.
-"""
-function Disk_2D_midplane_function_generator(   
+function Disc_2D_midplane_function_generator(   
     data::PhantomRevealerDataFrame,
     s_params::Tuple{Float64,Float64,Int} = (10.0, 120.0, 111),
-    ϕ_params::Tuple{Float64,Float64,Int} = (0.0, 2π, 24),
+    ϕn::Int = 16,
     z_params::Tuple{Float64,Float64,Int} = (-28.0, 28.0, 100);
-    smoothed_kernel::Function = M5_spline,
-    h_mode::String = "closest",
+    smoothed_kernel::Type{K} = M5_spline,
     Identical_particles::Bool=true
-)
-    edgeon_data_3D = Disk_3D_Grid_analysis(
-        data,
-        s_params,
-        ϕ_params,
-        z_params,
-        smoothed_kernel=smoothed_kernel,
-        h_mode=h_mode,
-        Identical_particles=Identical_particles
-    )
-    if ϕ_params[2] == 2π
-        circ_flag = true
-    else
-        circ_flag = false
-    end
-    zfunc :: Interpolations.Extrapolation = Disk_2D_midplane_function_generator(edgeon_data_3D,circ_flag)
-    return zfunc
-end
-
-"""
-    Disk_2D_FaceOn_Grid_analysis(
-        data::PhantomRevealerDataFrame,
-        s_params::Tuple{Float64,Float64,Int},
-        ϕ_params::Tuple{Float64,Float64,Int};
-        column_names::Union{Nothing,Vector{String}}=nothing,
-        mid_column_names::Union{Nothing,Vector{String}}=nothing,
-        midz_func::Union{Nothing,Interpolations.Extrapolation}=nothing,
-        smoothed_kernel::Function = M5_spline,
-        h_mode::String = "closest",
-        Identical_particles::Bool = true
-    )
-Calculate the SPH interpolation on a face-on grid described in polar coordinates (s,ϕ) for a disk.
-
-Note: The gradient values of arbitrary quantities are not yet supported.
-
-The surface density `Sigma` and its gradient vector `∇Sigma` will be calculated automatically. The `∇Sigma` values are returned in polar/cylindrical coordinates (∇Sigma_s, ∇Sigma_ϕ).
-
-For quantities calculated using mid-plane averages, the results will have a suffix `m`. For example, `rho` becomes `rhom`, `vs` becomes `vsm`, etc.
-
-# Parameters
-- `data :: PhantomRevealerDataFrame`: The SPH data stored in `PhantomRevealerDataFrame`. 
-- `s_params :: Tuple{Float64,Float64,Int}`: The radial parameters [smin, smax, sn].
-- `ϕ_params :: Tuple{Float64,Float64,Int}`: The azimuthal parameters [ϕmin, ϕmax, ϕn].
-
-# Keyword Arguments
-- `column_names :: Union{Nothing,Vector{String}}=nothing`: The quantities to interpolate. If `nothing`, only density-related values will be interpolated.
-- `mid_column_names :: Union{Nothing,Vector{String}}=nothing`: Quantities to evaluate by taking mid-plane averages.
-- `midz_func :: Union{Nothing,Interpolations.Extrapolation}=nothing`: The interpolation function for the z-component of midplane `H_mid(s)`.
-- `smoothed_kernel :: Function = M5_spline`: The kernel function for SPH interpolation.
-- `h_mode :: String="closest"`: The mode for determining the smoothing radius. Allowed values are `"closest"` and `"mean"`.
-- `Identical_particles :: Bool = true`: Whether the particles are identical (default: `true`).
-
-# Returns
-- `Dict{String, gridbackend}`: A dictionary containing the interpolated results in the form of `gridbackend`.
-
-# Examples
-```julia
-data :: PhantomRevealerDataFrame = read_phantom("./temp/st15co_00107", "all")[1]
-add_cylindrical!(data)
-s_params :: Tuple{Float64,Float64,Int} = (10.0,100.0,91)
-ϕ_params :: Tuple{Float64,Float64,Int} = (0.0,2π,12)
-smoothed_kernel :: Function = M6_spline
-midz_func = Disk_2D_midplane_function_generator(data, s_params)
-
-column_names :: Vector = ["e"]
-mid_column_names :: Vector = ["rho", "vs", "vϕ"]
-
-result :: Dict{String, gridbackend} = Disk_2D_FaceOn_Grid_analysis(
-    data, s_params, ϕ_params;
-    column_names=column_names,
-    mid_column_names=mid_column_names,
-    midz_func=midz_func,
-    smoothed_kernel=smoothed_kernel
-)
-println(keys(result))  # Output: ["Sigma", "∇Sigmas", "∇Sigmaϕ", "e", "rhom", "vsm", "vϕm"]
-```
-"""
-function Disk_2D_FaceOn_Grid_analysis(
-    data::PhantomRevealerDataFrame,
-    s_params::Tuple{Float64,Float64,Int},
-    ϕ_params::Tuple{Float64,Float64,Int};
-    column_names::Union{Nothing,Vector{String}}=nothing,
-    mid_column_names::Union{Nothing,Vector{String}}=nothing,
-    midz_func::Union{Nothing,Interpolations.Extrapolation}=nothing,
-    smoothed_kernel::Function = M5_spline,
-    h_mode::String = "closest",
-    Identical_particles::Bool=true
-)
-    @info "Start 2D disk grid analysis."
-
-    # Checking data before interpolation
-    ###############################
-    # Checking the necessity of intepolation
-    # Regular intepolation
-    columnNotEmpty = true
-    if isnothing(column_names)
-        columnNotEmpty = false
-    elseif isempty(column_names)
-        columnNotEmpty = false
-    end
-    # Midplane intepolation
-    midcolumnNotEmpty = true
-    if isnothing(mid_column_names)
-        midcolumnNotEmpty = false
-    elseif isempty(mid_column_names)
-        columnNotEmpty = false
-    end
-    if (data.params["Origin_sink_id"] == -1)
-        error("IntepolateError: Wrong origin located!")
-    end
-    ###############################
-
-    if columnNotEmpty
-        for column_name in column_names
-            if !(hasproperty(data.dfdata, column_name))
-                error("IntepolateError: Missing column name $column_name !")
-            end
-        end
-    end
-    if midcolumnNotEmpty
-        for column_name in mid_column_names
-            if !(hasproperty(data.dfdata, column_name))
-                error("IntepolateError: Missing column name $column_name !")
-            end
-        end
-    end
-    # Generate kd tree
-    kdtree3d = Generate_KDtree(data, 3)
-    kdtree2d = Generate_KDtree(data, 2)
-
-    # Generate Face-on grid 
-    imin::Vector = [s_params[1], ϕ_params[1]]
-    imax::Vector = [s_params[2], ϕ_params[2]]
-    iaxen::Vector = [s_params[3], ϕ_params[3]]
-    empty_gridbackend::gridbackend = disk_2d_grid_generator(imin, imax, iaxen)
-
-    # Generate the coordinate array for the grid interpolation
-    gridv::Array{Vector{Float64}} = generate_coordinate_grid(empty_gridbackend)
-
-    # Preparation of result dictionary
-    Result_dict = Dict{String,gridbackend}()
-    Result_dict["Sigma"] = deepcopy(empty_gridbackend)
-    if columnNotEmpty
-        for column_name in column_names
-            (column_name == "Sigma") && continue
-            Result_dict[column_name] = deepcopy(empty_gridbackend)
-        end
-    end
-    if midcolumnNotEmpty
-        imid_column_names = mid_column_names .* "m"
-        for column_name in imid_column_names
-            Result_dict[column_name] = deepcopy(empty_gridbackend)
-        end
-    end
-
-    # Prepare a roughly truncate radius for KD-tree filtering.
-    roughly_truncated_radius::Float64 =
-        get_truncated_radius(data, -1.0f0, 0.5, smoothed_kernel)
-
-    # Iteration
+    ) where {K<:AbstractSPHKernel}
+    # Generate a simple cylinder
+    iN = (s_params[3], ϕn, z_params[3])
+    rhoitp = cylinder_grid_generator(s_params[1], s_params[2], z_params[1], z_params[2], iN)
+    gridv = generate_coordinate_grid(rhoitp)
+    input = InterpolationInput(data, Symbol[], smoothed_kernel, Identical_particles=Identical_particles)
+    kdtree = Generate_KDtree(data, 3)
+    multiplier = KernelFunctionValid(K, eltype(input.h))
     @threads for i in eachindex(gridv)
-        target = gridv[i]
-        # 2D intepolation
-        kdtf_data2d =
-            KDtreeRadiusFilter(data, kdtree2d, target, roughly_truncated_radius, "polar") # New data that has been filtered.
-        Result_dict["Sigma"].grid[i] = surface_density(kdtf_data2d, target, smoothed_kernel, h_mode, "polar", Identical_particles=Identical_particles)
-        if columnNotEmpty
-            quantity_interpolation_dict::Dict{String,Float64} = quantity_intepolate_2D(kdtf_data2d, target, column_names, smoothed_kernel, h_mode, "polar", Identical_particles=Identical_particles)
-            if all(key -> haskey(Result_dict, key), keys(quantity_interpolation_dict))
-                for key in keys(quantity_interpolation_dict)
-                    Result_dict[key].grid[i] = quantity_interpolation_dict[key]
-                end
-            else
-                error("IntepolateError: Missing column name!")
-            end
-        end
-        # 3D midplane intepolation
-        if midcolumnNotEmpty
-            midz = midz_func(target...)
-            if midz == NaN64
-                for j in eachindex(mid_column_names)
-                    Result_dict[imid_column_names[j]].grid[i] = NaN64
-                end
-            else
-                target3D = [target..., midz]
-                kdtf_data3d = KDtreeRadiusFilter(data, kdtree3d, target3D, roughly_truncated_radius, "polar") # New data that has been filtered.
-                mid_interpolation_dict::Dict{String,Float64} = quantity_intepolate(kdtf_data3d, target3D, mid_column_names, smoothed_kernel, h_mode, "polar", Identical_particles=Identical_particles)
-                for j in eachindex(mid_column_names)
-                    Result_dict[imid_column_names[j]].grid[i] = mid_interpolation_dict[mid_column_names[j]]
-                end
-            end
-        end
-        
+        target_cylin = gridv[i]
+        target = _cylin2cart(target_cylin)
+
+        nbur, ha = get_Neighbor_indices(kdtree, target, multiplier, input.h)
+
+        rhoitp.grid[i] = density(input, target, ha, nbur)
     end
-    @info "End 2D disk grid analysis."
-    return Result_dict
-end
-
-
-"""
-    Cube_3D_Grid_analysis(
-        data::PhantomRevealerDataFrame,
-        x_params::Tuple{Float64,Float64,Int},
-        y_params::Tuple{Float64,Float64,Int},
-        z_params::Tuple{Float64,Float64,Int};
-        column_names::Union{Nothing,Vector{String}}=nothing,
-        gradient_column_names::Union{Nothing,Vector{String}}=nothing,
-        divergence_column_names::Union{Nothing,Vector{String}}=nothing,
-        curl_column_names::Union{Nothing,Vector{String}}=nothing,
-        smoothed_kernel::Function = M5_spline,
-        h_mode::String = "closest",
-        Identical_particles::Bool = true
-    )
-Calculate the SPH interpolation on a grid that is described as a cartesian coordinate (x,y,z) for a disc.
-
-The density `rho` and its gradient vector `∇rho` will be calculated automatically. The `∇rho` values are returned in cartesian coordinates (∇rho_x, ∇rho_y, ∇rho_z).
-
-# Parameters
-- `data :: PhantomRevealerDataFrame`: The SPH data stored in `PhantomRevealerDataFrame`. 
-- `x_params :: Tuple{Float64,Float64,Int}`: The x parameters [xmin, xmax, xn].
-- `y_params :: Tuple{Float64,Float64,Int}`: The y parameters [ymin, ymax, yn].
-- `z_params :: Tuple{Float64,Float64,Int}`: The z parameters [zmin, zmax, zn].
-
-# Keyword Arguments
-- `column_names :: Union{Nothing, Vector{String}}=nothing`: The quantities to interpolate. If `nothing`, no additional quantities will be interpolated.
-- `gradient_column_names :: Union{Nothing, Vector{String}}=nothing`: The gradient value of quantities to interpolate. If `nothing`, no additional quantities will be interpolated.
-- `divergence_column_names :: Union{Nothing, Vector{String}}=nothing`: The divergence value of quantities to interpolate. For vector quantities (e.g., data columns named "vx", "vy", "vz"), you only need to provide the common prefix of the vector name, such as "v". If `nothing`, no additional quantities will be interpolated.
-- `curl_column_names :: Union{Nothing, Vector{String}}=nothing`: The curl value of quantities to interpolate. For vector quantities (e.g., data columns named "vx", "vy", "vz"), you only need to provide the common prefix of the vector name, such as "v". If `nothing`, no additional quantities will be interpolated.
-- `smoothed_kernel :: Function = M5_spline`: The kernel function for SPH interpolation.
-- `h_mode :: String = "closest"`: The mode for determining the smoothing radius. Allowed values are `"closest"` and `"mean"`.
-- `Identical_particles :: Bool = true`: Whether the particles are identical (default: `true`).
-
-# Returns
-- `Dict{String, gridbackend}`: A dictionary containing the interpolated results in the form of `gridbackend`.
-
-# Examples
-```julia
-data :: PhantomRevealerDataFrame = read_phantom("dumpfile_00000", "all")[1]
-x_params :: Tuple{Float64,Float64,Int} = (-10.0,10.0,100)
-y_params :: Tuple{Float64,Float64,Int} = (-10.0,10.0,100)
-z_params :: Tuple{Float64,Float64,Int} = (-10.0,10.0,100)
-smoothed_kernel :: Function = M6_spline
-column_names :: Vector = ["vx", "vy", "vz"]
-
-result :: Dict{String, gridbackend} = Cube_3D_Grid_analysis(
-    data, x_params, y_params, z_params;
-    column_names=column_names,
-    smoothed_kernel=smoothed_kernel
-)
-println(keys(result))  # Output: ["rho", "∇rhox", "∇rhoy", "∇rhoz", "vx", "vy", "vz"]
-```
-"""
-function Cube_3D_Grid_analysis(
-    data::PhantomRevealerDataFrame,
-    x_params::Tuple{Float64,Float64,Int},
-    y_params::Tuple{Float64,Float64,Int},
-    z_params::Tuple{Float64,Float64,Int};
-    column_names::Union{Nothing,Vector{String}}=nothing,
-    gradient_column_names::Union{Nothing,Vector{String}}=nothing,
-    divergence_column_names::Union{Nothing,Vector{String}}=nothing,
-    curl_column_names::Union{Nothing,Vector{String}}=nothing,
-    smoothed_kernel::Function = M5_spline,
-    h_mode::String = "closest",
-    Identical_particles::Bool = true
-)
-    @info "Start 3D disk grid analysis."
-    
-    # The column subfix in cartisian coordinate system
-    column_suffixes = ["x", "y", "z"]
-
-    # Checking data before interpolation
-    ###############################
-    # Checking the necessity of intepolation
-    # Regular intepolation
-    columnNotEmpty = true
-    if isnothing(column_names) || isempty(column_names)
-        columnNotEmpty = false
-    end
-
-    # Gradient intepolation
-    gradcolumnNotEmpty = true
-    if isnothing(gradient_column_names) || isempty(gradient_column_names)
-        gradcolumnNotEmpty = false
-    end
-
-    # Divergence intepolation
-    divercolumnNotEmpty = true
-    if isnothing(divergence_column_names) || isempty(divergence_column_names)
-        divercolumnNotEmpty = false
-    end
-
-    # Curl intepolation
-    curlcolumnNotEmpty = true
-    if isnothing(curl_column_names) || isempty(curl_column_names)
-        curlcolumnNotEmpty = false
-    end
-
-    ###############################
-    # Check missing columns. Also checking if the regular intepolation also intepolate the same column in the first deriviative intepolation to reduce the error of estimation.
-    if columnNotEmpty
-        for column_name in column_names
-            if !(hasproperty(data.dfdata, column_name))
-                error("IntepolateError: Missing column name $column_name !")
-            end
-        end
-    end
-
-    if gradcolumnNotEmpty
-        grad_value_exist :: Vector{Bool} = Vector{Bool}(undef,length(gradient_column_names))
-        for column_name in gradient_column_names
-            if !(hasproperty(data.dfdata, column_name))
-                error("IntepolateError: Missing column name $column_name !")
-            end
-        end
-        for (i,gradcolumn) in enumerate(gradient_column_names)
-            if gradcolumn in column_names
-                grad_value_exist[i] = true
-            else
-                grad_value_exist[i] = false
-            end
-        end
-    end
-
-    if divercolumnNotEmpty
-        diver_value_exist :: Vector{Bool} = Vector{Vector{Bool}}(undef,length(divergence_column_names))
-        for (i,rawdivercolumn) in enumerate(divergence_column_names)
-            for suffix in column_suffixes
-                divercolumn = rawdivercolumn * suffix
-                if !(hasproperty(data.dfdata, divercolumn))
-                    error("IntepolateError: Missing column name $divercolumn !")
-                end
-                if divercolumn in column_names
-                    diver_value_exist[i] = true
-                else
-                    diver_value_exist[i] = false
-                    break
-                end
-            end
-        end
-    end
-
-    if curlcolumnNotEmpty
-        curl_value_exist :: Vector{Bool} = Vector{Bool}(undef,length(curl_column_names))
-        for (i,rawcurlcolumn) in enumerate(curl_column_names)
-            for suffix in column_suffixes
-                curlcolumn = rawcurlcolumn * suffix
-                if !(hasproperty(data.dfdata, curlcolumn))
-                    error("IntepolateError: Missing column name $curlcolumn !")
-                end
-                if curlcolumn in column_names
-                    curl_value_exist[i] = true
-                else
-                    curl_value_exist[i] = false
-                    break
-                end
-            end
-        end
-    end
-
-    # Generate kd tree in 3D space
-    kdtree3d = Generate_KDtree(data, 3)
-    
-    # Generate Edge-on grid 
-    imin::Vector = [x_params[1], y_params[1], z_params[1]]
-    imax::Vector = [x_params[2], y_params[2], z_params[2]]
-    iaxen::Vector = [x_params[3], y_params[3], z_params[3]]
-    
-    empty_gridbackend::gridbackend = generate_empty_grid(imin, imax, iaxen)
-
-    # Generate the coordinate array for the grid interpolation
-    gridv::Array{Vector{Float64}} = generate_coordinate_grid(empty_gridbackend)
-
-    # Preparation of result dictionary
-    Result_dict = Dict{String,gridbackend}()
-    Result_dict["rho"] = deepcopy(empty_gridbackend)
-    if columnNotEmpty
-        for column_name in column_names
-            (column_name == "rho") && continue
-            Result_dict[column_name] = deepcopy(empty_gridbackend)
-        end
-    end
-    if gradcolumnNotEmpty
-        for column_name in gradient_column_names
-            Result_dict["∇$(column_name)x"] = deepcopy(empty_gridbackend)
-            Result_dict["∇$(column_name)y"] = deepcopy(empty_gridbackend)
-            Result_dict["∇$(column_name)z"] = deepcopy(empty_gridbackend)
-        end
-    end
-    if divercolumnNotEmpty
-        for column_name in divergence_column_names
-            Result_dict["∇⋅$(column_name)"] = deepcopy(empty_gridbackend)
-        end
-    end
-    if curlcolumnNotEmpty
-        for column_name in curl_column_names
-            Result_dict["∇×$(column_name)x"] = deepcopy(empty_gridbackend)
-            Result_dict["∇×$(column_name)y"] = deepcopy(empty_gridbackend)
-            Result_dict["∇×$(column_name)z"] = deepcopy(empty_gridbackend)
-        end
-    end
-
-    # Prepare a roughly truncate radius for KD-tree filtering.
-    roughly_truncated_radius::Float64 =
-        get_truncated_radius(data, -1.0f0, 0.5, smoothed_kernel)
-    # Iteration
-    @threads for i in eachindex(gridv)
-        target = gridv[i]
-        kdtf_data = KDtreeRadiusFilter(data, kdtree3d, target, roughly_truncated_radius, "cart") # New data that has been filtered.
-        Result_dict["rho"].grid[i] = density(kdtf_data, target, smoothed_kernel, h_mode, "cart", Identical_particles=Identical_particles)
-        if columnNotEmpty
-            quantity_interpolation_dict::Dict{String,Float64} = quantity_intepolate(kdtf_data, target, column_names, smoothed_kernel, h_mode, "cart", Identical_particles=Identical_particles)
-            if all(key -> haskey(Result_dict, key), keys(quantity_interpolation_dict))
-                for key in keys(quantity_interpolation_dict)
-                    Result_dict[key].grid[i] = quantity_interpolation_dict[key]
-                end
-            else
-                error("IntepolateError: Missing column name!")
-            end
-        end 
-        if gradcolumnNotEmpty
-            input_density = Result_dict["rho"].grid[i]
-            grad_quantity_interpolation_dict::Dict{String,Float64} = Dict{String,Float64}()
-            for n in eachindex(gradient_column_names)
-                column_name = gradient_column_names[n]
-                input_value = nothing
-                if grad_value_exist[n]
-                    input_value = Result_dict[column_name].grid[i]
-                end
-                buffer_array = gradient_quantity_intepolate(kdtf_data, target, column_names, smoothed_kernel, h_mode, "cart", Identical_particles=Identical_particles, density_value=input_density, quantity_value=input_value)
-                grad_quantity_interpolation_dict["∇$(column_name)x"],grad_quantity_interpolation_dict["∇$(column_name)y"],grad_quantity_interpolation_dict["∇$(column_name)z"] = buffer_array
-            end
-            if all(key -> haskey(Result_dict, key), keys(grad_quantity_interpolation_dict))
-                for key in keys(grad_quantity_interpolation_dict)
-                    Result_dict[key].grid[i] = grad_quantity_interpolation_dict[key]
-                end
-            else
-                error("IntepolateError: Missing column name!")
-            end
-        end
-        if divercolumnNotEmpty
-            input_density = Result_dict["rho"].grid[i]
-            diver_quantity_interpolation_dict::Dict{String,Float64} = Dict{String,Float64}()
-            for n in eachindex(divergence_column_names)
-                column_name = divergence_column_names[n]
-                input_value = nothing
-                if diver_value_exist[n]
-                    input_value = zeros(Float64,3)
-                    input_value[1] = Result_dict["$(column_name)x"].grid[i]
-                    input_value[2] = Result_dict["$(column_name)y"].grid[i]
-                    input_value[3] = Result_dict["$(column_name)z"].grid[i]
-                end
-                diver_quantity_interpolation_dict["∇⋅$(column_name)"] = divergence_quantity_intepolate(kdtf_data, target, column_name, smoothed_kernel, h_mode, "cart", Identical_particles=Identical_particles, density_value=input_density, quantity_value=input_value, quantity_coordinate_flag="cart")
-            end
-            if all(key -> haskey(Result_dict, key), keys(diver_quantity_interpolation_dict))
-                for key in keys(diver_quantity_interpolation_dict)
-                    Result_dict[key].grid[i] = diver_quantity_interpolation_dict[key]
-                end
-            else
-                error("IntepolateError: Missing column name!")
-            end
-        end  
-        if curlcolumnNotEmpty
-            input_density = Result_dict["rho"].grid[i]
-            curl_quantity_interpolation_dict::Dict{String,Float64} = Dict{String,Float64}()
-            for n in eachindex(curl_column_names)
-                column_name = curl_column_names[n]
-                input_value = nothing
-                if curl_value_exist[n]
-                    input_value = zeros(Float64,3)
-                    input_value[1] = Result_dict["$(column_name)x"].grid[i]
-                    input_value[2] = Result_dict["$(column_name)y"].grid[i]
-                    input_value[3] = Result_dict["$(column_name)z"].grid[i]
-                end
-                buffer_array = curl_quantity_intepolate(kdtf_data, target, column_name, smoothed_kernel, h_mode, "cart", Identical_particles=Identical_particles, density_value=input_density, quantity_value=input_value, quantity_coordinate_flag="cart")
-                curl_quantity_interpolation_dict["∇×$(column_name)x"],curl_quantity_interpolation_dict["∇×$(column_name)y"],curl_quantity_interpolation_dict["∇×$(column_name)z"] = buffer_array
-            end
-            if all(key -> haskey(Result_dict, key), keys(curl_quantity_interpolation_dict))
-                for key in keys(curl_quantity_interpolation_dict)
-                    Result_dict[key].grid[i] = curl_quantity_interpolation_dict[key]
-                end
-            else
-                error("IntepolateError: Missing column name!")
-            end
-        end  
-    end
-
-    @info "End 3D disk grid analysis."
-    return Result_dict
-end
-
-"""
-    gridbackend_Grid_analysis(
-        data::PhantomRevealerDataFrame,
-        grid::gridbackend;
-        column_names::Union{Nothing,Vector{String}}=nothing,
-        smoothed_kernel::Function = M5_spline,
-        h_mode::String = "closest",
-        coordinate_flag::String = "cart",
-        Identical_particles::Bool = true
-    )
-Calculate SPH interpolation on a given grid described as `gridbackend`.
-
-# Parameters
-- `data :: PhantomRevealerDataFrame`: The SPH data stored in `PhantomRevealerDataFrame`. 
-- `grid :: gridbackend`: The grid for interpolation.
-
-# Keyword Arguments
-- `column_names :: Union{Nothing,Vector{String}}=nothing`: The quantities to interpolate. If `nothing`, only density is calculated.
-- `smoothed_kernel :: Function = M5_spline`: The kernel function for SPH interpolation.
-- `h_mode :: String = "closest"`: The mode for determining the smoothing radius. Allowed values are `"closest"` and `"mean"`.
-- `coordinate_flag :: String = "cart"`: The coordinate system used for target points. Allowed values are `"cart"` and `"polar"`.
-- `Identical_particles :: Bool = true`: Whether the particles are identical (default: `true`).
-
-# Returns
-- `Dict{String, gridbackend}`: A dictionary containing the interpolated results in the form of `gridbackend`.
-"""
-function gridbackend_Grid_analysis(
-    data::PhantomRevealerDataFrame,
-    grid::gridbackend;
-    column_names::Union{Nothing,Vector{String}}=nothing,
-    smoothed_kernel::Function = M5_spline,
-    h_mode::String = "closest",
-    coordinate_flag:: String = "cart",
-    Identical_particles::Bool=true
-)   
-    function generate_functions(grid_dimension::Int)
-        if grid_dimension == 2
-            dens_name = "Sigma"
-            kdtree = Generate_KDtree(data, 2)
-            
-            wrap_dens = (data, point) -> begin
-                surface_density(data, point, smoothed_kernel, h_mode, coordinate_flag,Identical_particles=Identical_particles)
-            end
-            
-            wrap_quant = (data, point) -> begin
-                quantity_intepolate_2D(
-                    data,
-                    point,
-                    column_names,
-                    smoothed_kernel,
-                    h_mode,
-                    coordinate_flag,
-                    Identical_particles=Identical_particles
-                )
-            end
-
-            return wrap_dens, wrap_quant, dens_name, kdtree
-
-        elseif grid_dimension == 3
-            dens_name = "rho"
-            kdtree = Generate_KDtree(data, 3)
-            
-            wrap_dens = (data, point) -> begin
-                density(data, point, smoothed_kernel, h_mode, coordinate_flag,Identical_particles=Identical_particles)
-            end
-
-            wrap_quant = (data, point, deni) -> begin
-                quantity_intepolate(
-                    data,
-                    point,
-                    column_names,
-                    smoothed_kernel,
-                    h_mode,
-                    coordinate_flag,
-                    Identical_particles=Identical_particles
-                )
-            end
-
-            return wrap_dens, wrap_quant, dens_name, kdtree
-
-        else
-            error("DimensionMismatch: Unable to generate the KDTree.")
-        end
-    end
-
-    wrap_dens, wrap_quant, dens_name, kdtree = generate_functions(length(grid.dimension))
-    @info "Start grid analysis. "
-    # Generate the coordinate array for the grid interpolation
-    gridv::Array{Vector{Float64}} = generate_coordinate_grid(grid)
-
-    # Preparation of result dictionary
-    Result_dict = Dict{String,gridbackend}()
-    Result_dict[dens_name] = deepcopy(grid)
-    for column_name in column_names
-        (column_name == dens_name) && continue
-        Result_dict[column_name] = deepcopy(grid)
-    end
-
-    # Prepare a roughly truncate radius for KD-tree filtering.
-    roughly_truncated_radius::Float64 =
-        get_truncated_radius(data, -1.0f0, 0.5, smoothed_kernel)
-
-    # Iteration
-    @threads for i in eachindex(gridv)
-        target = gridv[i]
-        kdtf_data = KDtreeRadiusFilter(data, kdtree, target, roughly_truncated_radius, coordinate_flag) # New data that has been filtered.
-        Result_dict[dens_name].grid[i] = deni
-        quantity_interpolation_dict::Dict{String,Float64} = wrap_quant(kdtf_data, target)
-        if all(key -> haskey(Result_dict, key), keys(quantity_interpolation_dict))
-            for key in keys(quantity_interpolation_dict)
-                Result_dict[key].grid[i] = quantity_interpolation_dict[key]
-            end
-        else
-            error("IntepolateError: Missing column name!")
-        end
-    end
-    @info "End grid analysis."
-    return Result_dict
+    return Disc_2D_midplane_function_generator(rhoitp)
 end

@@ -3,7 +3,7 @@ using PhantomRevealer
 """
 Analysis the data in a face-on annulus grid.
     by Wei-Shan Su,
-    July 17, 2024
+    July 3, 2025
 """
 
 function Disk_Faceon_interpolation(filepath :: String)
@@ -16,16 +16,13 @@ function Disk_Faceon_interpolation(filepath :: String)
     sn :: Int64 = 331
     
     # parameters of azimuthal axis
-    ϕmin :: Float64 = 0.0
-    ϕmax :: Float64 = 2π
     ϕn :: Int64 = 351
   
     # Other parameters
-    column_names :: Vector{String} = ["e"]									# The quantities that would be interpolate except for surface density `Sigma`.
-    mid_column_names :: Vector{String} = ["rho","vs","vϕ","vz","vϕ-vϕ_k"]   # The quantities that would be interpolate in the midplane.
+    column_names :: Vector{Symbol} = ["e"]									# The quantities that would be interpolate except for surface density `Sigma`.
+    midplane_column_names :: Vector{Symbol} = ["rho"]                       # The quantities that would be interpolate in the midplane.
     Origin_sinks_id :: Int64 = 1											# The id of sink at the middle of disk for analysis.
-    smoothed_kernel :: Function = M6_spline
-    h_mode :: String = "closest"
+    smoothed_kernel :: Type{AbstractSPHKernel} = M6_spline
     DiskMass_OuterRadius :: Float64 = 175.0                                 # The outer radius of disk while estimating the mass of disk
 
     # Output setting
@@ -33,8 +30,7 @@ function Disk_Faceon_interpolation(filepath :: String)
     # -----------------------------------------------------------------------------
     # Packaging parameters
     sparams :: Tuple{Float64,Float64,Int} = (smin, smax, sn)
-    ϕparams :: Tuple{Float64,Float64,Int} = (ϕmin, ϕmax, ϕn)
-    columns_order :: Vector = ["Sigma", column_names..., (mid_column_names.*"m")...] # construct a ordered column names (Those quantities with taking mid-plane average will have a suffix "m")
+    columns_order :: Vector = ["Sigma", column_names..., (midplane_column_names.*"m")...] # construct a ordered column names (Those quantities with taking mid-plane average will have a suffix "m")
     
     # Load file
     prdf_list :: Vector{PhantomRevealerDataFrame} = read_phantom(filepath, "all")
@@ -61,22 +57,9 @@ function Disk_Faceon_interpolation(filepath :: String)
     params :: Dict{String, Any} = Analysis_params_recording(datag)
     params["GasDiskMass"] = get_disk_mass(datag, sinks_data, DiskMass_OuterRadius, Origin_sinks_id)
     params["DustDiskMass"] = get_disk_mass(datad, sinks_data, DiskMass_OuterRadius, Origin_sinks_id)
-    
-    # Calculate the midplane of gaseous disk
-    if isempty(mid_column_names)
-        midz_func = nothing
-        midz_gbe = nothing
-    else
-        midz_func = Disk_2D_midplane_function_generator(datag,(10.0,smax, 166))
-        # Transfer the midplane interpolation function into gridbackend.
-        imin = [smin,ϕmin]
-        imax = [smax,ϕmax]
-        in = [sn,ϕn]
-        midz_gbe = func2gbe(func=midz_func, imin, imax,in)
-    end
 
-    # Interpolation
-    grids_gas :: Dict{String, gridbackend} = Disk_2D_FaceOn_Grid_analysis(datag, sparams, ϕparams, column_names=column_names, mid_column_names=mid_column_names, midz_func=midz_func, smoothed_kernel=smoothed_kernel, h_mode=h_mode)
+    # Interpolation Disc_Grid_analysis(datag, sparams, ϕn, column_names=column_names, midplane_column_names=midplane_column_names, smoothed_kernel=smoothed_kernel)
+    grids_gas :: Dict{String, gridbackend} = Disc_Grid_analysis(datag, sparams, ϕn, column_names=column_names, midplane_column_names=mid_column_names, midz_func=midz_func, smoothed_kernel=smoothed_kernel, h_mode=h_mode)
     grids_dust :: Dict{String, gridbackend} = Disk_2D_FaceOn_Grid_analysis(datad, sparams, ϕparams, column_names=column_names, mid_column_names=mid_column_names, midz_func=midz_func, smoothed_kernel=smoothed_kernel, h_mode=h_mode)
     
     # Combine these dictionaries of grids with suffix
