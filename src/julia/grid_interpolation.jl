@@ -392,6 +392,12 @@ function Disc_Grid_analysis(
 
         # Interpolate midplane
         if !isempty(midplane_column_names)
+            if !isfinite(midz.grid[i])
+                for n in 1:Nmidcolumnitp
+                    midcolumnitp_Tuple[n].grid[i] = get_type(input_midplane_interpolation)(NaN)
+                end
+                continue
+            end
             mid_target = (target..., midz.grid[i])
             mid_neighbor_indices, midha = get_Neighbor_indices(kdtree3d, mid_target, multiplier, h_array)
             if hasrho
