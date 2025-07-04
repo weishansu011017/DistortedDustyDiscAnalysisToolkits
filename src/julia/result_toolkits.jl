@@ -654,3 +654,188 @@ function spirals_detection(Disk2Ddata :: Analysis_result, array_index :: Int64, 
     FFTW.set_num_threads(1)
     return spirals
 end
+
+
+"""
+    spirals_detection(Full_image :: A, s_array :: V, ϕ_array :: V, ϕend_spiral1 = 0.0;
+                      Fax::Union{FigureAxes,Nothing}=nothing,
+                      slim::Union{Nothing,Tuple{Float64,Float64}}=(50.0,100.0),
+                      Faxacc::Union{FigureAxes,Nothing}=nothing,
+                      width_pixel_range :: Tuple{Float64, Float64} = (8.0,12.0),
+                      width_resolution :: Int64         = 24
+                      boxfactor::Float64                = 8.0,
+                      a_range::Tuple{Float64,Float64}   = (30.0,300.0),
+                      k_range::Tuple{Float64,Float64}   = (-0.5,-0.06),
+                      num_a_bins::Int                   = 800,
+                      num_k_bins::Int                   = 200,
+                      Nmax::Int                         = 2,
+                      beam_ratio::Float64               = 0.2,
+                      score_gain_thr::Float64           = 0.003,
+                      λ_angle::Float64                  = 1.0,
+                      λ_overlap::Float64                = 1.0) where {A <: AbstractArray, V <: AbstractVector}
+
+Detects one-armed or multi-armed logarithmic spirals in a **face-on** disc snapshot,  
+using the pipeline *ridge detection → Hough transform → beam search clustering*.  
+
+The spiral detection follow the following process
+
+                       2D-density map
+                           │
+                           ▼
+                   [Ridge detection & automatic scale-selection]
+                           ⇒ Lindeberg 1996, 1998
+                           │  (scale-space γ-norm ridge + σ̂ selection)
+                           │
+                           ▼
+                   Detected ridge points  +  ridge strength  +  ridge width
+                           │
+                           ▼
+                   [Log-polar Hough transform for logarithmic spirals]
+                           ⇒ Duda & Hart 1972   (Hough framework)
+                           │
+                           ▼
+                   Accumulator in (ln a, k) space
+                           │
+                           ▼
+                   [Local peak selection - Non-Maximum Suppression]
+                           ⇒ Canny 1986   (NMS on gray-scale image)
+                           │
+                           ▼
+                   Potential spiral peaks  (aᵢ , kᵢ)
+                           │
+                           ▼
+                   [Coverage-penalty Beam Search]
+                           ⇒ Lowerre 1976 / Graves 2012  (beam-search strategy)
+                           ⇒ Su, et al (in prep.)         (gain & penalty objective)
+                           │
+                           ▼
+                   Final best-fit spiral arm set
+
+Optional plotting hooks allow the routine to update / reuse Makie figures in real-time.
+
+# Positional Arguments
+- `Full_image::A`               — 2D image of a physical quantity (e.g. Σ_d), shape = (s, ϕ).
+- `s_array::V`                  — Radial grid coordinates corresponding to the first dimension of `Full_image`.
+- `ϕ_array::V`                  — Azimuthal grid coordinates (in radians) corresponding to the second dimension of `Full_image`.
+- `ϕend_spiral1` = 0.0          — Reference azimuth (rad) used to order the detected spirals.
+
+# Keyword Arguments
+### Global
+| kw | default | meaning |
+|---|---|---|
+| `slim`       | `(50,100)`| Radial range (same unit as `Disk2Ddata.axes[1]`) to search for ridges. `nothing` = full range. |
+### Ridge detection
+| kw | default | meaning |
+|---|---|---|
+| `width_pixel_range` | `(8.0, 12.0)`  | The range of width of ridge IN PIXEL.|
+| `width_resolution`  | `24`  | The resolution of t-scaling for scale selection.. |
+| `boxfactor`         | `8.0`  | Spatial box factor passed to ridge detection. |
+
+### Hough transform
+| kw | default | meaning |
+|---|---|---|
+| `a_range`    | `(30,300)` | Search range for the logarithmic-spiral scale length *a* (same unit as *s*). |
+| `k_range`    | `(-0.5,-0.06)` | Search range for pitch parameter *k*. |
+| `num_a_bins` | `800`  | Radial bins in Hough space. |
+| `num_k_bins` | `200`  | Pitch-angle bins in Hough space. |
+
+### Beam-search clustering
+| kw | default | meaning |
+|---|---|---|
+| `Nmax`          | `2`     | Max number of spirals to return. |
+| `beam_ratio`    | `0.1`   | Beam width = `beam_ratio*length(peaks)` (hard-capped internally). |
+| `score_gain_thr`| `0.003` | Relative score gain below which the search stops early. |
+| `λ_angle`       | `1.0`   | Weight of angle-spread penalty.|
+| `λ_overlap`     | `1.0`   | Weight of inter-arm overlap penalty.|
+
+# Returns
+`Vector{NamedTuple}` — ordered list of detected spirals.  
+Each tuple contains  
+```julia
+(a   = best_a,      # scale length
+ k   = best_k,      # pitch parameter
+ ϕ_end = phi_end,   # azimuth at s_max
+ pointsset = Set{Tuple{Float64,Float64}}  # ridge pixels classified to this arm
+)
+```
+"""
+function spirals_detection(Full_image :: A, s_array :: V, ϕ_array :: V, ϕend_spiral1 = 0.0;
+    slim = (50.0,100.0), 
+    width_pixel_range :: Tuple{Float64, Float64} = (8.0,12.0), width_resolution :: Int64 = 24,                                                                                                                                                            # Range of spiral detection
+    boxfactor ::Float64 = 12.0, a_range::Tuple{Float64,Float64} = (30.0, 300.0), k_range::Tuple{Float64,Float64} = (-0.5, -0.06), num_a_bins::Int = 800, num_k_bins::Int = 200,                                                    # Parameters for Hough transform
+    Nmax:: Int64 = 2, beam_ratio :: Float64 = 0.2, score_gain_thr :: Float64 = 0.003, λ_angle :: Float64 = 1.0, λ_overlap :: Float64 = 1.0  # Parameters of Beam search
+) where {A <: AbstractArray, V <: AbstractVector}
+    if isnothing(slim)
+        srange = s_array[1]:s_array[end]
+    else
+        srange = value2closestvalueindex(s_array,slim[1]):value2closestvalueindex(s_array,slim[2])
+    end
+
+    s = s_array[srange]
+    ϕ = ϕ_array
+    z = Full_image
+    
+    # Assign mutithreading
+    FFTW.set_num_threads(nthreads())
+
+    # Process: Ridge detection -> Hough transform -> Beam search
+    ## Ridge detection
+    pointsset_binary_full, strength_array_full, best_t_full = ridge_detection_automatic_scale_selection(z,  padax1_mode=0.0 , padax2_mode=:circular,  width_pixel_range = width_pixel_range, width_resolution = width_resolution, boxfactor = boxfactor)
+    pointsset_binary = pointsset_binary_full[srange,:]          # points set binary 
+    strength_array = strength_array_full[srange,:]              # strength_array
+    best_t = best_t_full[srange,:]
+
+    if (sum(pointsset_binary) == 0)
+        spirals = NamedTuple[]
+        @info "End spirals detection. No points has detected in given region!"
+        return spirals
+    end
+
+    weighted_array = log10.(strength_array)
+    clamp!(weighted_array, 0.0, maximum(weighted_array))
+    for (i, value) in enumerate(weighted_array)
+        if value <= 0.0
+            pointsset_binary[i] = false
+        end
+    end
+
+    # Generate meshgrid
+    S, Φ = meshgrid(s, ϕ)
+
+
+    ## Hough transform
+    accumulator, a_array, k_array = Hough_transform_logarithmic_spiral(pointsset_binary, (s, ϕ), weighted_array, a_range=a_range, k_range=k_range, num_a_bins=num_a_bins, num_k_bins=num_k_bins, npattern = Nmax)
+    
+    if (iszero(accumulator))
+        spirals = NamedTuple[]
+        @info "End spirals detection. No peaks has detected in given region!"
+        return spirals
+    end
+    log_accumulator :: Matrix{Float64} = @. log10(accumulator + 1e-9)  
+
+    ## Beam search 
+    peaks :: Vector{PeakCandidate} = pickup_accumelator_peaks(log_accumulator, s[end], a_array, k_array; r = 2, threshold = 0.0) 
+        
+    best_combination :: SpiralState = Beam_search_logarithmic_spiral(peaks, a_array, k_array, S, Φ, weighted_array, best_t; 
+                                                                    Nmax = Nmax,
+                                                                    beam_ratio = beam_ratio,
+                                                                    score_gain_thr = score_gain_thr,
+                                                                    λ_angle = λ_angle,
+                                                                    λ_overlap = λ_overlap)
+
+    reordered_best_combination = reorder_spirals(best_combination, ϕend_spiral1)
+    spirals = NamedTuple[]
+    for peak in reordered_best_combination.peaks
+        apk = a_array[peak.a_idx]
+        kpk = k_array[peak.k_idx]
+        subpointsset_binary = get_subpointsset(apk, kpk, pointsset_binary, S, Φ, best_t)
+        subpointsset = bitarray2pointsset(subpointsset_binary, (s, ϕ))
+
+        spiral = (; :a => apk, :k => kpk, :pointsset => subpointsset, :ϕ_end => peak.ϕ_end)
+        push!(spirals, spiral)
+    end
+
+    # Turn Back FFTW threads for safty
+    FFTW.set_num_threads(1)
+    return spirals
+end

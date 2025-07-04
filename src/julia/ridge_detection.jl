@@ -422,3 +422,26 @@ function bitarray2pointsset(bitarray::AbstractArray{Bool}, axes::Union{Nothing, 
     end
     return pointsset
 end
+
+function pointsset2bitarray(pointsset::Vector{Tuple{T,T}}, axes::Union{Nothing, Tuple{AbstractVector, AbstractVector}}=nothing) where T
+    if isnothing(axes)
+        max_i = maximum(first.(pointsset))
+        max_j = maximum(last.(pointsset))
+        bitarray = falses(max_i, max_j)
+        for (i, j) in pointsset
+            bitarray[i, j] = true
+        end
+    else
+        axis_i, axis_j = axes
+        N, M = length(axis_i), length(axis_j)
+        bitarray = falses(N, M)
+        index_i = Dict(x => i for (i, x) in enumerate(axis_i))
+        index_j = Dict(y => j for (j, y) in enumerate(axis_j))
+        for (xi, yj) in pointsset
+            i = index_i[xi]
+            j = index_j[yj]
+            bitarray[i, j] = true
+        end
+    end
+    return bitarray
+end

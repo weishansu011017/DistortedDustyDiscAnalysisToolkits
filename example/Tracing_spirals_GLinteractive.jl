@@ -162,7 +162,6 @@ function spirals_tracer(file :: String; Faxg :: FigureAxes, Faxd :: FigureAxes, 
             if angular_distance(result.ϕ1s_end[2], spirald[1].ϕ_end) >= π/2
                 result.βd_array[index, 2] = k2pitch(spirald[1].k)
                 result.βd_array[index, 1] = NaN
-                result.ϕ1s_end[2] = spirald[2].ϕ_end
             else
                 result.βd_array[index, 2] = NaN
                 result.ϕ1s_end[2] = spirald[1].ϕ_end
