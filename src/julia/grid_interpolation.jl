@@ -352,8 +352,8 @@ function Disc_Grid_analysis(
     multiplier = KernelFunctionValid(K, eltype(h_array))
 
     # Generate workspace
-    workspace2d = zeros(get_type(input_interpolation), Ncolumnitp)
-    workspace3d = zeros(get_type(input_midplane_interpolation), Nmidcolumnitp)
+    workspace2d = [zeros(get_type(input_interpolation), Ncolumnitp) for _ in 1:nthreads()]
+    workspace3d = [zeros(get_type(input_midplane_interpolation), Nmidcolumnitp)  for _ in 1:nthreads()]
 
     # Prepare midplane
     midz = nothing
@@ -381,6 +381,9 @@ function Disc_Grid_analysis(
         target = _cylin2cart(target_cylin)
         neighbor_indices, ha = get_Neighbor_indices(kdtree2d, target, multiplier, h_array)
 
+        work2D = workspace2d[threadid()]
+        work3D = workspace3d[threadid()]
+
         # Interpolate 2D
         if hasSigma
             Sigmaitp.grid[i] = LOS_density(input_interpolation, target, ha, neighbor_indices, itpGather)
@@ -388,7 +391,7 @@ function Disc_Grid_analysis(
 
         # Get subarray for interpolation
         buf = ntuple(n -> @view(columnitp_Tuple[n].grid[i]), Ncolumnitp)
-        LOS_quantities_interpolate!(buf, workspace2d, input_interpolation, target, ha, neighbor_indices, itpGather)
+        LOS_quantities_interpolate!(buf, work2D, input_interpolation, target, ha, neighbor_indices, itpGather)
 
         # Interpolate midplane
         if !isempty(midplane_column_names)
@@ -407,7 +410,7 @@ function Disc_Grid_analysis(
             midbuf = ntuple(n -> @view(midcolumnitp_Tuple[n].grid[i]), Nmidcolumnitp)
 
             # quantities intepolate
-            quantities_interpolate!(midbuf, workspace3d, input_midplane_interpolation, mid_target, midha, mid_neighbor_indices, itpGather)
+            quantities_interpolate!(midbuf, work3D, input_midplane_interpolation, mid_target, midha, mid_neighbor_indices, itpGather)
         end
     end
 
