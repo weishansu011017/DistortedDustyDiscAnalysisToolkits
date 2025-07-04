@@ -625,7 +625,6 @@ function transfer_cgs!(data::Analysis_result, year::Bool = true)
                 data.data_dict[key] /= udist
             end
             column_unit[key] = _to_latex(column_name)
-            println(column_name, "  →  ", column_unit[key])
         end
         data.params["column_units"] = deepcopy(column_unit)
     end
