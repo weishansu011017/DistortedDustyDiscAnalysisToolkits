@@ -340,10 +340,6 @@ Allowed an vector entrence for Κx and Κz to estimate the growth rate.
 | `vy`   | Dimensionless gas velocity along azimuthal (y) axis IN SOUND SPEED (vy = vy_true / c_s). |
 | `ωx`   | Dimensionless dust velocity along radial (x) axis IN SOUND SPEED (ωx = ωx_true / c_s).   |
 | `ωy`   | Dimensionless dust velocity along azimuthal (y) axis IN SOUND SPEED (ωy = ωy_true / c_s).|
-
-
-# Return 
-- `Array`: Array of dimentionless growth rate (s/Ω)(s = Re(σ)) with size = (length(Κxs), length(Κzs))
 """
 function growthrateSI!(ΚxΚzSpace :: AbstractMatrix{Float64}, Κxs :: AbstractVector{Float64}, Κzs :: AbstractVector{Float64};
     St :: Float64,
@@ -352,7 +348,7 @@ function growthrateSI!(ΚxΚzSpace :: AbstractMatrix{Float64}, Κxs :: AbstractV
     vx :: Float64,
     vy :: Float64,
     ωx :: Float64,
-    ωy :: Float64) :: Array{Float64}
+    ωy :: Float64)
     ε = ρd/ρg
     invSt = 1 / St
     εinvSt = ε * invSt
