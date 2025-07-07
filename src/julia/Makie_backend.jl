@@ -665,9 +665,7 @@ Sets and adjusts the box of legend for a specified axis in the figure. This func
 - `axis_index::Tuple{Int64, Int64}`: The (row, column) position of the target axis in `Fax.axes`.
 """
 function set_legend!(Fax::FigureAxes, axis_index::Tuple{Int64,Int64})
-    fig = Fax.fig
     ax = Fax.axes[axis_index...]
-    layout = fig.layout
     plots = filter(p -> _support_legend(p), ax.scene.plots)
     labels = Vector{AbstractString}(undef,length(plots))
     for (i,plot) in enumerate(plots)
@@ -675,7 +673,7 @@ function set_legend!(Fax::FigureAxes, axis_index::Tuple{Int64,Int64})
     end
 
     current_axesrow_figindex, current_axescol_figindex  = _get_axis_position(Fax,axis_index)
-    _, right_axescol_figindex = _get_axis_position(Fax,size(ax))
+    _, right_axescol_figindex = _get_axis_position(Fax,size(Fax.axes))
     Legend(Fax.fig[current_axesrow_figindex, right_axescol_figindex+1],plots,labels)
 end
 
