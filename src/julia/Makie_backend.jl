@@ -674,9 +674,9 @@ function set_legend!(Fax::FigureAxes, axis_index::Tuple{Int64,Int64})
         labels[i] = plot.label[]
     end
 
-    nrows, ncols = size(layout)
     current_axesrow_figindex, current_axescol_figindex  = _get_axis_position(Fax,axis_index)
-    Legend(Fax.fig[current_axesrow_figindex, ncols+1],plots,labels)
+    _, right_axescol_figindex = _get_axis_position(Fax,size(ax))
+    Legend(Fax.fig[current_axesrow_figindex, right_axescol_figindex+1],plots,labels)
 end
 
 """
@@ -959,9 +959,8 @@ function _customSymlog10Ticks(linthresh::AbstractFloat, vmin::AbstractFloat, vma
         end
     end
 
-    push!(major_ticks, 0.0)  # 確保 0 是 major tick
+    push!(major_ticks, 0.0)  
 
-    # 計算正數對數區間的 tick，從最大指數往下數
     if vmax > stopping_threadshold
         for i in ceil(Int, log10(vmax)):-1:ceil(Int, log10(stopping_threadshold))
             push!(major_ticks, 10.0^i)
@@ -973,7 +972,7 @@ end
 
 function _customSymlog10_formatter(values)
     return map(v -> begin
-        if abs(v) != 0.0  # log 區域
+        if abs(v) != 0.0 
             latexstring((v>=0) ? "" : "-","10^{", string(round(Int, log10(abs(v)))), "}")
         else 
             string(0)
