@@ -42,8 +42,8 @@ function get_PhantomRevealer_path()
 end
 
 function __init__()
-    n = nthreads() 
-    init_growth_buffers!()                          
+    n = nthreads()         
+    init_QR8buffer_bufferl!()             
     KDSearching_scratch[] = [sizehint!(Int[], 1024) for _ = 1:n]
 end
 
