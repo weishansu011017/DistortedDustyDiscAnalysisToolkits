@@ -664,17 +664,28 @@ Sets and adjusts the box of legend for a specified axis in the figure. This func
 - `Fax::FigureAxes`: The figure container with axes.
 - `axis_index::Tuple{Int64, Int64}`: The (row, column) position of the target axis in `Fax.axes`.
 """
-function set_legend!(Fax::FigureAxes, axis_index::Tuple{Int64,Int64})
-    ax = Fax.axes[axis_index...]
-    plots = filter(p -> _support_legend(p), ax.scene.plots)
+function set_legend!(Fax::FigureAxes, axis_index::Tuple{Int,Int})
+    ax      = Fax.axes[axis_index...]
+    plots   = filter(_support_legend, ax.scene.plots)
     labels = Vector{AbstractString}(undef,length(plots))
     for (i,plot) in enumerate(plots)
         labels[i] = plot.label[]
     end
 
-    current_axesrow_figindex, current_axescol_figindex  = _get_axis_position(Fax,axis_index)
-    _, right_axescol_figindex = _get_axis_position(Fax,size(Fax.axes))
-    Legend(Fax.fig[current_axesrow_figindex, right_axescol_figindex+1],plots,labels)
+    fig   = Fax.fig
+    nrows, ncols = size(fig.layout)
+    r, c  = _get_axis_position(Fax, axis_index)
+
+    c_try = c + 1
+    while c_try ≤ ncols && _existcontents(fig.layout, r, c_try)
+        c_try += 1
+    end
+    if c_try > ncols          
+        Makie.appendcols!(fig.layout, 1) 
+        c_try = ncols + 1
+    end
+
+    Legend(fig[r, c_try], plots, labels)
 end
 
 """

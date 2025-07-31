@@ -106,6 +106,10 @@ end
     return prdf
 end
 
+# Extend `names` function for PhantomRevealerDataFrame
+@inline function Base.names(prdf :: PhantomRevealerDataFrame)
+    return names(prdf.dfdata)
+end
 
 # Constant
 const KDSearching_scratch = Ref{Vector{Vector{Int}}}()

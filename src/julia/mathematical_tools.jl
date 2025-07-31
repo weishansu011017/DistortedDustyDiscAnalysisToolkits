@@ -395,3 +395,44 @@ It is derived from the pitch angle via: `k = tan(pitch)` where pitch is in radia
 @inline function pitch2k(pitchdeg :: Real) :: Float64
     return atan(deg2rad(pitchdeg))
 end
+
+"""
+    marco _def_nanfunc(funcname)
+
+Define a new `nan*` variant of the statistical function that ignores `NaN` values.
+
+This macro generates two method overloads:
+- `nanfunc(A::AbstractArray{T})`: returns the scalar result after removing all `NaN`s.
+- `nanfunc(A::AbstractArray{T}, dims::Integer)`: performs reduction along the specified dimension, skipping `NaN`s and returning `T(NaN)` if the slice is entirely `NaN`.
+
+# Parameters
+- `funcname::Symbol`: The base function name (e.g., `:mean`, `:maximum`) to wrap.
+
+# Generated
+- A new function named `nanfuncname` will be defined in the current scope.
+"""
+macro _def_nanfunc(funcname)
+    fname = Symbol(:nan, funcname)          
+    quote
+        @inline function $(fname)(A::AbstractArray{T}) where {T<:Number}
+            vals = filter(!isnan, A)
+            return isempty(vals) ? T(NaN) : $(funcname)(vals)
+        end
+
+        @inline function $(fname)(A::AbstractArray{T}, dims::Integer) where {T<:Number}
+            if ndims(A) == 1
+                return [nanmean(A)]
+            else
+                result = map(x -> isempty(x) ? T(NaN) : mean(x), eachslice(A, dims))
+                return dropdims(result, dims)
+            end
+        end
+    end |> esc        
+end
+
+
+@_def_nanfunc mean
+@_def_nanfunc median
+@_def_nanfunc std
+@_def_nanfunc maximum
+@_def_nanfunc minimum
