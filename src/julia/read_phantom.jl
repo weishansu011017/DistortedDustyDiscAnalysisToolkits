@@ -278,7 +278,7 @@ function read_phantom(
            !(isempty(df_sinks))
             params = merge(header_vars, Dict("mass" => header_vars["massoftype"]))
             params["h_mean"] = mean(df[!,"h"])
-            params_group["itype"] = NaN
+            params["itype"] = NaN
             df = PhantomRevealerDataFrame(df, params)
             df_sinks = PhantomRevealerDataFrame(df_sinks, header_vars)
             return [df, df_sinks]
@@ -286,7 +286,7 @@ function read_phantom(
         combined_df = vcat(df, df_sinks, cols = :union)
         params = merge(header_vars, Dict("mass" => header_vars["massoftype"]))
         params["h_mean"] = mean(combined_df[!,"h"])
-        params_group["itype"] = NaN
+        params["itype"] = NaN
         df = PhantomRevealerDataFrame(combined_df, params)
         return df
     end
