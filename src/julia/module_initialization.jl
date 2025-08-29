@@ -23,7 +23,6 @@ const MODULE_LIST = [
     :LoggingExtras,
     :LsqFit,
     :Makie,
-    :MakieCore,
     :NearestNeighbors,
     :Pkg,
     :Printf,

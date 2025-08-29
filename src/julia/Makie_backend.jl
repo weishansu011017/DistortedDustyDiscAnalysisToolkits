@@ -617,7 +617,7 @@ function set_colorbar!(Fax::FigureAxes, axis_index::Tuple{Int64,Int64};
     
     if hm_scale == "log10"
         matrix = targeted_heatmap[3][]
-        if String(Symbol(targeted_heatmap.colorrange[])) == "MakieCore.Automatic()"
+        if String(Symbol(targeted_heatmap.colorrange[])) == "Makie.Automatic()"
             vmin = minimum(filter(!iszero, matrix)) 
             vmax = maximum(matrix)
         else
@@ -632,7 +632,7 @@ function set_colorbar!(Fax::FigureAxes, axis_index::Tuple{Int64,Int64};
                 minorticksvisible=true)
         return
     elseif hm_scale == "ReversibleScale(Symlog10)"
-        if String(Symbol(targeted_heatmap.colorrange[])) == "MakieCore.Automatic()"
+        if String(Symbol(targeted_heatmap.colorrange[])) == "Makie.Automatic()"
             matrix = targeted_heatmap[3][]
             vmin = minimum(matrix)
             vmax = maximum(matrix)
@@ -748,7 +748,7 @@ end
         alpha = 1.0,
         calculated_colors = nothing,
         colormap = :viridis,
-        colorrange = MakieCore.Automatic(),
+        colorrange = Makie.Automatic(),
         colorscale = identity,
         fxaa = true,
         interpolate = false,
