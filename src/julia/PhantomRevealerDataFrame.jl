@@ -74,6 +74,28 @@ end
     return PhantomRevealerDataFrame(prdf.dfdata[:, col_inds],prdf.params)
 end
 
+
+# Single row, all columns -> PRDF (1-row)
+@inline function Base.getindex(prdf::PhantomRevealerDataFrame, row::Integer, ::Colon)
+    return PhantomRevealerDataFrame(prdf.dfdata[row:row, :], prdf.params)
+end
+
+# Single row, multiple columns -> PRDF (1-row)
+@inline function Base.getindex(prdf::PhantomRevealerDataFrame, row::Integer,
+                               cols::Union{Vector{Symbol},Vector{String},Vector{Int}})
+    return PhantomRevealerDataFrame(prdf.dfdata[row:row, cols], prdf.params)
+end
+
+# Multiple rows, all columns -> PRDF
+@inline function Base.getindex(prdf::PhantomRevealerDataFrame, rows::AbstractVector, ::Colon)
+    return PhantomRevealerDataFrame(prdf.dfdata[rows, :], prdf.params)
+end
+
+# All rows, all columns -> PRDF 
+@inline function Base.getindex(prdf::PhantomRevealerDataFrame, ::Colon, ::Colon)
+    return PhantomRevealerDataFrame(prdf.dfdata[:, :], prdf.params)
+end
+
 # Single row and single columns assignment
 @inline function Base.setindex!(prdf::PhantomRevealerDataFrame, value, row_ind::Integer, col_ind::Union{String, Symbol})
     prdf.dfdata[row_ind, col_ind] = value
@@ -630,80 +652,214 @@ function get_snorm(data::PhantomRevealerDataFrame)
     return get_snorm_ref(data, [0.0, 0.0, 0.0])
 end
 
+function _apply_coordinate_shift!(data :: PhantomRevealerDataFrame, new_origin :: NTuple{6, TF}) where {TF <: AbstractFloat}
+    xo, yo, zo, vxo, vyo, vzo = new_origin
+    x  = data.dfdata.x
+    y  = data.dfdata.y
+    z  = data.dfdata.z
+    vx = data.dfdata.vx
+    vy = data.dfdata.vy
+    vz = data.dfdata.vz
+    @inbounds @simd for i in eachindex(x)
+        xi = x[i]; yi = y[i]; zi = z[i]
+        vxi = vx[i]; vyi = vy[i]; vzi = vz[i]
+
+        x[i] = xi - xo
+        y[i] = yi - yo
+        z[i] = zi - zo
+        vx[i] = vxi - vxo
+        vy[i] = vyi - vyo
+        vz[i] = vzi - vzo
+    end
+end
 
 """
-    COM2star!(data_list, sinks_data:: PhantomRevealerDataFrame,sink_particle_id::Int)
+    COM2star!(data_list :: V,  sink_particle_id :: Int) where {D <: PhantomRevealerDataFrame, V <: AbstractVector{D}}
 Transfer the coordinate to another coordinate with locating star at the origin.
+Assuming the sink data is stored as the final `PhantomRevealerDataFrame` in the Vector
 
 # Parameters
-- `data_list`: The array/single file which contains all of the data that would be transfered
-- `sinks_data :: PhantomRevealerDataFrame`: The data which contains the sink star.
+- `data_list :: V`: The array which contains all of the data that would be transfered
 - `sink_particle_id :: Int`: The id of star that would be located at the origin.
 
 # Example
 ```julia
 # Transfer to the primary star-based coodinate(id=1)
 prdf_list = read_phantom(dumpfile_00000)
-sinks_data = prdf_list[end]         # The last data which is read from `read_phantom()` would always be the sinks data. 
-COM2star!(prdf_list, sinks_data, 1)
+COM2star!(prdf_list, 1)
 ```
 """
-function COM2star!(data_list, sinks_data::PhantomRevealerDataFrame, sink_particle_id::Int)
-    if (isa(data_list, Array))
-        nothing
-    elseif (isa(data_list, PhantomRevealerDataFrame))
-        data_list = [data_list]
-    else
-        error("LoadError: Invaild Input in COM2star!")
+function COM2star!(data_list :: V, sink_particle_id :: Int) where {D <: PhantomRevealerDataFrame, V <: AbstractVector{D}}
+    sinks_data = data_list[end]
+    new_origin = (sinks_data.dfdata.x[sink_particle_id], 
+                  sinks_data.dfdata.y[sink_particle_id],
+                  sinks_data.dfdata.z[sink_particle_id],
+                  sinks_data.dfdata.vx[sink_particle_id],
+                  sinks_data.dfdata.vy[sink_particle_id],
+                  sinks_data.dfdata.vz[sink_particle_id])
+
+    @inbounds for data in data_list
+        _apply_coordinate_shift!(data, new_origin)
     end
-    general_coordinateQ1 = get_general_coordinate(sinks_data, sink_particle_id)
-    variable = ["x", "y", "z", "vx", "vy", "vz"]
-    for data in data_list
-        for (i, var) in enumerate(variable)
-            data.dfdata[:, var] .-= general_coordinateQ1[i]
-        end
-        data.params["COM_coordinate"] .-= general_coordinateQ1
-        data.params["Origin_sink_id"] = sink_particle_id
-        data.params["Origin_sink_mass"] = sinks_data.dfdata[sink_particle_id, "m"]
-    end
+    sinks_data.params["COM_coordinate"] .-= new_origin
+    sinks_data.params["Origin_sink_id"][] = sink_particle_id
+    sinks_data.params["Origin_sink_mass"][] = sinks_data.dfdata.m[sink_particle_id]
+    return nothing
 end
 
 """
-    star2COM!(data_list::Array)
+    star2COM!(data_list :: V) where {D <: PhantomRevealerDataFrame, V <: AbstractVector{D}}
 Transfer the coordinate to COM coordinate.
 
 # Parameters
-- `data_list :: Array`: The array which contains all of the data that would be transfered
+- `data_list :: V`: The array which contains all of the data that would be transfered
 
 # Example
 ```julia
 # Transfer to the primary star-based coodinate(id=1), and then transfer back.
 prdf_list = read_phantom(dumpfile_00000)
-sinks_data = prdf_list[end]         # The last data which is read from `read_phantom()` would always be the sinks data. 
-println(prdf_list[1].params["Origin_sink_id"])  # print: -1
-COM2star!(prdf_list, sinks_data, 1)
-println(prdf_list[1].params["Origin_sink_id"])  # print: 1
+println(prdf_list[1].params["Origin_sink_id"][])  # print: -1
+COM2star!(prdf_list, 1)
+println(prdf_list[1].params["Origin_sink_id"][])  # print: 1
 star2COM!(prdf_list)
-println(prdf_list[1].params["Origin_sink_id"])  # print: -1
+println(prdf_list[1].params["Origin_sink_id"][])  # print: -1
 ```
 """
-function star2COM!(data_list::Array)
-    if (isa(data_list, Array))
-        nothing
-    elseif (isa(data_list, PhantomRevealerDataFrame))
-        data_list = [data_list]
-    else
-        error("LoadError: Invaild Input in COM2star!")
+
+function star2COM!(data_list :: V) where {D <: PhantomRevealerDataFrame, V <: AbstractVector{D}}
+    COM_position = data_list[1].params["COM_coordinate"]
+    new_origin = ntuple(i -> COM_position[i], 6)
+
+    @inbounds for data in data_list
+        _apply_coordinate_shift!(data, new_origin)
     end
-    variable = ["x", "y", "z", "vx", "vy", "vz"]
-    for data in data_list
-        COM_coordinate = data.params["COM_coordinate"]
-        for (i, var) in enumerate(variable)
-            data.dfdata[:, var] .-= COM_coordinate[i]
-        end
-        data.params["COM_coordinate"] .-= COM_coordinate
-        data.params["Origin_sink_id"] = -1
-        data.params["Origin_sink_mass"] = NaN
+    data_list[1].params["COM_coordinate"] .-= new_origin
+    data_list[1].params["Origin_sink_id"][] = -1
+    data_list[1].params["Origin_sink_mass"][] = NaN64
+    return nothing
+end
+
+
+@inline function _rotational_matrix(lx :: TF, ly :: TF, lz :: TF) :: NTuple{9, TF} where {TF <: AbstractFloat}
+    # Normalize target axis
+    lnorm = sqrt(lx^2 + ly^2 + lz^2)
+    lx /= lnorm
+    ly /= lnorm
+    lz /= lnorm
+
+    # Constructing rotating elements
+    ρ = sqrt(lx^2 + lz^2)
+    if ρ ≤ eps(TF)
+        cosϕy = one(TF) ;  sinϕy = zero(TF)
+        cosϕx = zero(TF);  sinϕx = sign(ly)
+        cosψ  = one(TF) ;  sinψ = zero(TF)
+    else
+        invρ  = 1/ρ
+        cosϕy = lz*invρ
+        sinϕy = -lx*invρ   
+        cosϕx = ρ
+        sinϕx = ly
+        ψ = atan(lx, -ly*lz)
+        cosψ, sinψ = cos(ψ), sin(ψ)
+    end
+
+    # Rotational matrix R
+    r11 = cosψ * cosϕy + sinψ * sinϕx * sinϕy
+    r12 = sinψ * cosϕx
+    r13 = cosψ * sinϕy - sinψ * sinϕx * cosϕy
+
+    r21 = -sinψ * cosϕy + cosψ * sinϕx * sinϕy
+    r22 =  cosψ * cosϕx
+    r23 = -sinψ * sinϕy - cosψ * sinϕx * cosϕy
+
+    r31 = -cosϕx * sinϕy
+    r32 =  sinϕx
+    r33 =  cosϕx * cosϕy
+    return (r11,r12,r13,r21,r22,r23,r31,r32,r33)
+end 
+
+function _apply_zaxis_orientation!(data :: PhantomRevealerDataFrame, R :: NTuple{9, TF}) where {TF <: AbstractFloat}
+    # Inplace rotation
+    x  = data.dfdata.x
+    y  = data.dfdata.y
+    z  = data.dfdata.z
+    vx = data.dfdata.vx
+    vy = data.dfdata.vy
+    vz = data.dfdata.vz
+    r11,r12,r13,r21,r22,r23,r31,r32,r33 = R
+    @inbounds @simd for i in eachindex(x)
+        xi,yi,zi = x[i],y[i],z[i]
+        vxi,vyi,vzi = vx[i],vy[i],vz[i]
+        x[i]  = muladd(r13,zi, muladd(r12,yi, r11*xi))
+        y[i]  = muladd(r23,zi, muladd(r22,yi, r21*xi))
+        z[i]  = muladd(r33,zi, muladd(r32,yi, r31*xi))
+        vx[i] = muladd(r13,vzi, muladd(r12,vyi, r11*vxi))
+        vy[i] = muladd(r23,vzi, muladd(r22,vyi, r21*vxi))
+        vz[i] = muladd(r33,vzi, muladd(r32,vyi, r31*vxi))
+    end
+end
+
+"""
+    set_zaxis_orientation!(data::PhantomRevealerDataFrame, target_zaxis::NTuple{3,TF}; inverse::Bool=false) where {TF<:AbstractFloat}
+
+Rotate all positions (x,y,z) and velocities (vx,vy,vz) in-place so that the z-axis aligns with the given `target_zaxis`. The rotation is orthogonal (det=1), preserving lengths and inner products. By construction, the new x-axis lies in the original xy-plane:
+    x' = normalize(ẑ × l̂),   y' = z' × x',   z' = l̂
+
+where ẑ = (0,0,1) and l̂ = normalized target_zaxis.
+
+        1      0      0
+Rx = [  0   cos(ϕx) -sin(ϕx)]
+        0   sin(ϕx)  cos(ϕx) 
+
+    cos(ϕy)  0     sin(ϕy)
+Ry = [  0      1      0     ]
+    -sin(ϕy)  0     cos(ϕy)
+
+# Parameters
+- `data::PhantomRevealerDataFrame`: SPH data container with fields `x,y,z,vx,vy,vz`.
+- `target_zaxis::NTuple{3,TF}`: Vector specifying the new z-axis (not required to be normalized).
+
+# Keyword Arguments
+- `inverse::Bool=false`: If `false`, apply the forward rotation (v' = R * v).
+                         If `true`, apply the inverse rotation (v' = R' * v).
+
+"""
+function set_zaxis_orientation!(data :: PhantomRevealerDataFrame, target_zaxis :: NTuple{3, TF}; inverse :: Bool = false) where {TF<: AbstractFloat}
+    Rdefault = _rotational_matrix(target_zaxis...)
+    if inverse
+        R = (Rdefault[1], Rdefault[4], Rdefault[7], Rdefault[2], Rdefault[5], Rdefault[8], Rdefault[3], Rdefault[6], Rdefault[9])
+    else
+        R = Rdefault
+    end    
+    _apply_zaxis_orientation!(data, R)
+end
+
+"""
+    set_zaxis_orientation!(data_list :: V, target_zaxis :: NTuple{3, TF}; inverse :: Bool = false) where {TF<: AbstractFloat, D <: PhantomRevealerDataFrame, V <: AbstractVector{D}}
+
+Rotate all positions (x,y,z) and velocities (vx,vy,vz) in-place so that the z-axis aligns with the given `target_zaxis`. The rotation is orthogonal (det=1), preserving lengths and inner products. By construction, the new x-axis lies in the original xy-plane:
+    x' = normalize(ẑ × l̂),   y' = z' × x',   z' = l̂
+
+where ẑ = (0,0,1) and l̂ = normalized target_zaxis.
+
+# Parameters
+- `data_list :: V`: The array which contains all of the data that would be transfered
+- `target_zaxis::NTuple{3,TF}`: Vector specifying the new z-axis (not required to be normalized).
+
+# Keyword Arguments
+- `inverse::Bool=false`: If `false`, apply the forward rotation (v' = R * v).
+                         If `true`, apply the inverse rotation (v' = R' * v).
+
+"""
+function set_zaxis_orientation!(data_list :: V, target_zaxis :: NTuple{3, TF}; inverse :: Bool = false) where {TF<: AbstractFloat, D <: PhantomRevealerDataFrame, V <: AbstractVector{D}}
+    Rdefault = _rotational_matrix(target_zaxis...)
+    if inverse
+        R = (Rdefault[1], Rdefault[4], Rdefault[7], Rdefault[2], Rdefault[5], Rdefault[8], Rdefault[3], Rdefault[6], Rdefault[9])
+    else
+        R = Rdefault
+    end
+    @inbounds for data in data_list
+        _apply_zaxis_orientation!(data, R)
     end
 end
 
@@ -830,7 +986,7 @@ function add_Kepelarian_azimuthal_velocity!(data::PhantomRevealerDataFrame)
         add_cylindrical!(data)
     end
     G = get_unit_G(data)
-    M = data.params["Origin_sink_mass"]
+    M = data.params["Origin_sink_mass"][]
     data.dfdata[!, "vϕk"] = sqrt.((G * M) ./ data.dfdata[!, "s"])
     data.dfdata[!, "vrelϕ"] = data.dfdata[!, "vϕ"] - data.dfdata[!, "vϕk"]
 end
@@ -847,7 +1003,7 @@ function add_Kepelarian_angular_velocity!(data::PhantomRevealerDataFrame)
     ys = data[!,"y"]
     zs = data[!,"z"]
     G = get_unit_G(data)
-    M = data.params["Origin_sink_mass"]
+    M = data.params["Origin_sink_mass"][]
     μ = G * M
     Ωk = zeros(Float64, get_npart(data))
     @inbounds @simd for i in eachindex(Ωk)
@@ -961,91 +1117,6 @@ function add_tilt!(data::PhantomRevealerDataFrame, rmin::Float64, rmax::Float64)
         asin.(rlproject[nonzero_rnorm] ./ data.dfdata[nonzero_rnorm, "rnorm"])
 end
 
-"""
-    rotate_to_disk_L!(data_list::Array, rmin::Float64, rmax::Float64, target_laxis::Union{Nothing, Vector{Float64}} = nothing)
-Rotate the whole data to make z become angular_momentum_vector of disk.
-Will take the angular momentum information from the first file. 
-
-if no (data_list[1].params['ldisk']) => Make it
-
-R = RxRy => rotate y axis and then x axis
-
-        1      0      0
-Rx = [  0   cos(ϕx) -sin(ϕx)]
-        0   sin(ϕx)  cos(ϕx) 
-
-    cos(ϕy)  0     sin(ϕy)
-Ry = [  0      1      0     ]
-    -sin(ϕy)  0     cos(ϕy)
-
-l = (lx,ly,lz), lxz = N(lx,0,lz), N = 1/√lx^2 + lz^2
-θy = Nlz, θx = N(lx^2 + lz^2) = 1/N
-
-# Parameters
-- `data_list :: Array`: The array which contains all of the data that would be transfered
-- `rmin :: Float64`: The inner radius of disk.
-- `rmax :: Float64`: The outer radius of disk.
-- `target_laxis :: Union{Nothing, Vector{Float64}} = nothing`: The target 
-"""
-function rotate_to_disk_L!(
-    data_list::Array,
-    rmin::Float64,
-    rmax::Float64,
-    target_laxis::Union{Nothing,Vector{Float64}} = nothing
-)
-    for data in data_list
-        if (data.params["Origin_sink_id"] == -1)
-            COM2star!(data, data_list[end], 1)
-        end
-    end
-    if isnothing(target_laxis)
-        if !(haskey(data_list[1].params, "ldisk"))
-            add_disk_normalized_angular_momentum!(data_list[1], rmin, rmax)
-            laxis = data_list[1].params["ldisk"]
-        end
-    else
-        laxis = target_laxis
-    end
-    if laxis[3] < 0
-        laxis = -laxis
-    end
-    lx, ly, lz = laxis
-    N = 1 / sqrt(lx^2 + lz^2)
-    cosϕy = N * lz
-    sinϕy = sin(acos(cosϕy))
-    cosϕx = 1 / N
-    sinϕx = sin(acos(cosϕx))
-    sinsinxy = sinϕx * sinϕy
-    cossinxy = cosϕx * sinϕy
-    sincosxy = sinϕx * cosϕy
-    coscosxy = cosϕx * cosϕy
-    for data in data_list
-        dfdata = data.dfdata
-        copydfdata = deepcopy(dfdata)
-        dfdata[!, "x"] =
-            cosϕy * copydfdata[!, "x"] + 0 * copydfdata[!, "y"] + sinϕy * copydfdata[!, "z"]
-        dfdata[!, "y"] =
-            sinsinxy * copydfdata[!, "x"] + cosϕx * copydfdata[!, "y"] -
-            sincosxy * copydfdata[!, "z"]
-        dfdata[!, "z"] =
-            -cossinxy * copydfdata[!, "x"] +
-            sinϕx * copydfdata[!, "y"] +
-            coscosxy * copydfdata[!, "z"]
-        dfdata[!, "vx"] =
-            cosϕy * copydfdata[!, "vx"] +
-            0 * copydfdata[!, "vy"] +
-            sinϕy * copydfdata[!, "vz"]
-        dfdata[!, "vy"] =
-            sinsinxy * copydfdata[!, "vx"] + cosϕx * copydfdata[!, "vy"] -
-            sincosxy * copydfdata[!, "vz"]
-        dfdata[!, "vz"] =
-            -cossinxy * copydfdata[!, "vx"] +
-            sinϕx * copydfdata[!, "vy"] +
-            coscosxy * copydfdata[!, "vz"]
-        add_disk_normalized_angular_momentum!(data, rmin, rmax)
-    end
-    return laxis
-end
 
 """
     add_eccentricity!(data::PhantomRevealerDataFrame)
@@ -1061,7 +1132,7 @@ function add_eccentricity!(data::PhantomRevealerDataFrame)
         )
     end
     G = get_unit_G(data)
-    M1 = data.params["Origin_sink_mass"]
+    M1 = data.params["Origin_sink_mass"][]
     μ = G * M1
     dfdata = data.dfdata
     if !(hasproperty(dfdata, "rnorm")) || !(hasproperty(dfdata, "vrnorm"))

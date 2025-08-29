@@ -87,7 +87,7 @@ function Slicing_disk(file::String)
     # Read file
     prdf_list :: Vector{PhantomRevealerDataFrame} = read_phantom(file,"all")
     sinks_data :: PhantomRevealerDataFrame = prdf_list[end]
-    COM2star!(prdf_list, sinks_data ,Origin_sinks_id)
+    COM2star!(prdf_list ,Origin_sinks_id)
     datag :: PhantomRevealerDataFrame = prdf_list[1]
     datad :: PhantomRevealerDataFrame = prdf_list[2]
     

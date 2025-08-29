@@ -34,7 +34,7 @@ function Disk_Faceon_interpolation(filepath :: String)
     
     # Load file
     prdf_list :: Vector{PhantomRevealerDataFrame} = read_phantom(filepath, "all")
-    COM2star!(prdf_list, prdf_list[end], Origin_sinks_id)
+    COM2star!(prdf_list, Origin_sinks_id)
     datag :: PhantomRevealerDataFrame = prdf_list[1]
     datad :: PhantomRevealerDataFrame = prdf_list[2]
     sinks_data :: PhantomRevealerDataFrame = prdf_list[3]

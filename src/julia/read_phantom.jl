@@ -242,9 +242,9 @@ function read_phantom(
 
         header_vars = _read_global_header(fp, def_int_dtype, def_real_dtype)
         header_vars["file_identifier"] = file_identifier
-        header_vars["COM_coordinate"] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] #General Coordinate of origin
-        header_vars["Origin_sink_id"] = -1
-        header_vars["Origin_sink_mass"] = NaN
+        header_vars["COM_coordinate"] = Float64[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]      # General Coordinate of origin
+        header_vars["Origin_sink_id"] = Ref{Int64}(-1)
+        header_vars["Origin_sink_mass"] = Ref{Float64}(NaN64)
 
         df, df_sinks = _read_array_blocks(fp, def_int_dtype, def_real_dtype)
 
@@ -255,7 +255,7 @@ function read_phantom(
         if (separate_types == "all") &&
            (hasproperty(df, :itype)) &&
            (length(unique(df.itype)) > 1)
-            df_list = []
+            df_list = PhantomRevealerDataFrame[]
             for group in groupby(df, :itype)
                 itype::Int = Int(group[!, "itype"][1])
                 mass_key = itype == 1 ? "massoftype" : "massoftype_$(itype)"
@@ -264,7 +264,6 @@ function read_phantom(
                     [col for col in names(group) if !any(ismissing, group[!, col])],
                 )
                 params_group = merge(header_vars, Dict("mass" => header_vars[mass_key]))
-                params_group["h_mean"] = mean(group_clean[!,"h"])
                 params_group["itype"] = itype
                 push!(df_list, PhantomRevealerDataFrame(group_clean, params_group))
             end
@@ -277,7 +276,7 @@ function read_phantom(
         if ((separate_types == "sinks") || (separate_types == "all")) &&
            !(isempty(df_sinks))
             params = merge(header_vars, Dict("mass" => header_vars["massoftype"]))
-            params["h_mean"] = mean(df[!,"h"])
+
             params["itype"] = NaN
             df = PhantomRevealerDataFrame(df, params)
             df_sinks = PhantomRevealerDataFrame(df_sinks, header_vars)
@@ -285,7 +284,6 @@ function read_phantom(
         end
         combined_df = vcat(df, df_sinks, cols = :union)
         params = merge(header_vars, Dict("mass" => header_vars["massoftype"]))
-        params["h_mean"] = mean(combined_df[!,"h"])
         params["itype"] = NaN
         df = PhantomRevealerDataFrame(combined_df, params)
         return df
