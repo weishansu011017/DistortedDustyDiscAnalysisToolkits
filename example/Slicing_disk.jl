@@ -96,10 +96,6 @@ function Slicing_disk(file::String)
 
     # Get params
     params = Analysis_params_recording(datag)
-    diskg_mass = get_disk_mass(datag, sinks_data, DiskMass_OuterRadius , Origin_sinks_id)
-    diskd_mass = get_disk_mass(datad, sinks_data, DiskMass_OuterRadius , Origin_sinks_id)
-    params["MassGaseousDisk"] = diskg_mass
-    params["MassDustyDisk"] = diskd_mass
 
     # Add the cylindrical parameters
     add_cylindrical!(datag)

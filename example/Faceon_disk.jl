@@ -55,8 +55,6 @@ function Disk_Faceon_interpolation(filepath :: String)
     # Make the `params` field
     time :: Float64 = get_time(datag)
     params :: Dict{String, Any} = Analysis_params_recording(datag)
-    params["GasDiskMass"] = get_disk_mass(datag, sinks_data, DiskMass_OuterRadius, Origin_sinks_id)
-    params["DustDiskMass"] = get_disk_mass(datad, sinks_data, DiskMass_OuterRadius, Origin_sinks_id)
 
     # Interpolation Disc_Grid_analysis(datag, sparams, ϕn, column_names=column_names, midplane_column_names=midplane_column_names, smoothed_kernel=smoothed_kernel)
     grids_gas :: Dict{String, gridbackend} = Disc_Grid_analysis(datag, sparams, ϕn, column_names=column_names, midplane_column_names=mid_column_names, midz_func=midz_func, smoothed_kernel=smoothed_kernel, h_mode=h_mode)

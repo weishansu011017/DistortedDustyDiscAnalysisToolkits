@@ -1152,41 +1152,6 @@ function add_eccentricity!(data::PhantomRevealerDataFrame)
 end
 
 """
-    get_disk_mass(data::PhantomRevealerDataFrame, sink_data::PhantomRevealerDataFrame, disk_radius::Float64=120.0, sink_particle_id::Int64=1)
-Get the mass of disk around the sink particle with given ID.
-
-# Parameters
-- `data :: PhantomRevealerDataFrame`: The SPH data that is stored in `PhantomRevealerDataFrame` 
-- `sink_data :: PhantomRevealerDataFrame`: The data which contains the sink star.
-- `disk_radius :: Float64 = 120.0`: The radius of disk.
-- `sink_particle_id :: Int64 = 1`: The ID of sink particles in `sink_data`
-
-# Return 
-- `Float64`: The mass of disk around specific sink particle with given ID.
-"""
-function get_disk_mass(
-    data::PhantomRevealerDataFrame,
-    sink_data::PhantomRevealerDataFrame,
-    disk_radius::Float64 = 120.0,
-    sink_particle_id::Int64 = 1
-)
-    data_cp = deepcopy(data)
-    particle_mass = data_cp.params["mass"]
-    if data_cp.params["Origin_sink_id"] != sink_particle_id
-        COM2star!(data_cp, sink_particle_id)
-    end
-    kdtree = Generate_KDtree(data_cp, get_dim(data_cp))
-    kdtf_data = KDtreeRadiusFilter(
-        data_cp,
-        kdtree,
-        zeros(Float64, get_dim(data_cp)),
-        disk_radius,
-        "cart",
-    )
-    return particle_mass * Float64(nrow(kdtf_data.dfdata))
-end
-
-"""
     Analysis_params_recording(data::PhantomRevealerDataFrame)
 Generate the dictionary for recording the basic properties of dumpfile.
 
