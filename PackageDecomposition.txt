@@ -1,0 +1,61 @@
+[deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+Clustering = "aaaa29a8-35af-508c-8bc3-b662a17a0fe5"
+ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
+Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
+FilesystemDatastructures = "89f0c457-83d8-4998-bfff-8b4a338c9833"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
+HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
+ImageFiltering = "6a3955dd-da59-5b1f-98d4-e7296123deb5"
+ImageMorphology = "787d08f9-d448-5407-9aad-5290dd7ab264"
+Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
+LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
+LoggingExtras = "e6f89c97-d47a-5376-807f-9c37f3926c36"
+LsqFit = "2fda8390-95c7-5789-9bda-21331edee243"
+Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
+NearestNeighbors = "b8a86587-4115-5ab1-83bc-aa920d37bbce"
+Optim = "429524aa-4258-5aef-a3af-852621145aeb"
+Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+QuadGK = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
+Requires = "ae029012-a4dd-5104-9daa-d747884805df"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
+
+
+7 extension
+
+[Core]
+Definition of Abstract Type. Math tool. Physical tool(EOS...). Logging and other debugging tools. KernelInterpolationCore
+
+
+[IO]
+
+
+[StreamingInstability]
+
+
+[SpiralDetection]
+
+
+[KernelInterpolationCPU]
+
+
+
+[MakiePlotTools]
+
+
+[GLMakieTool]
+
+
+
