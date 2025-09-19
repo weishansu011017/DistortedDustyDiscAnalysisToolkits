@@ -4,18 +4,6 @@ Growth rate estimation by using Chen & Lin(2020)(doi=10.3847/1538-4357/ab76ca)
     Augest 5, 2024
 """
 
-struct SIgrowthrate_requirements
-    Κxs :: Vector{Float64}
-    Κzs :: Vector{Float64}
-    St :: Float64
-    ρg :: Float64
-    ρd::Float64
-    vx::Float64
-    vy::Float64
-    ωx::Float64
-    ωy::Float64
-end
-
 struct _QR8buffer{T <: Number, V <: AbstractVector{T}, M <: AbstractMatrix{T}}
     A :: M
     reflector :: V
@@ -37,54 +25,12 @@ function init_QR8buffer_bufferl!()
     end
 end
 
-@inline function _QR8similar!(B :: M, A :: M) where {T <: Number, M <: AbstractMatrix{T}}
-    S = SMatrix{8,8,T,64}(A)
-    F = qr(S)
-    mul!(B, F.R, F.Q)
-    return nothing
-end
 
-@inline function QR_eigenvals8(A :: M) where {T <: Number, M<:AbstractMatrix{T}}
-    # Get buffers
-    tid = threadid()
-    buf = _QR8buffer_pool[tid]
-    Q = buf.Q
-    B = buf.B
-    reflector = buf.reflector
-
-    copyto!(Q, A)
-    _QR8similar!(B, Q)
-    n = 0
-    leig = B[8, 8]
-    diff = 1.0
-    @inbounds while (diff > 1e-32) && (n < 100)
-        shift = B[8,8]
-        copyto!(Q, B)
-        @inbounds @simd for i in 1:8
-            Q[i,i] -= shift
-        end
-        _QR8similar!(B, Q)
-        @inbounds @simd for i in 1:8
-            B[i,i] += shift
-        end
-        n += 1
-        diff = abs(leig - B[8,8])
-        leig = B[8,8]
-    end
-    # Use reflector to contain the eigenvalues
-   @inbounds @simd for i in 1:8
-        reflector[i] = B[i, i]
-   end
-   return reflector
-end
-
-@inline function _realλ_max_slow(M)
+@inline function _realλ_max(M)
     buf  = _QR8buffer_pool[Threads.threadid()]
 
     buf.reflector .= LinearAlgebra.LAPACK.geev!('N','N',M)[1]
-    # buf.reflector .= QR_eigenvals8(M)
 
-    ## 3.  掃一次取最大實部
     λmax = -Inf
     @inbounds @simd for k = 1:8
         r = real(buf.reflector[k])
@@ -149,7 +95,7 @@ end
     if any(x -> isnan(x) || isinf(x), M)
         return NaN
     else
-        return _realλ_max_slow(M)
+        return _realλ_max(M)
     end
     
     # return maximum(real.(eigvals(M)))

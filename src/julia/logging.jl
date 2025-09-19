@@ -117,17 +117,14 @@ function First_logging()
 end
 
 """
-    initial_logging(info::Dict{String,Any})
+    initial_logging()
 
 Log initial analysis information.
 
-# Parameters
-- `info :: Dict{String,Any}`: A dictionary containing analysis information.
 """
-function initial_logging(info::Dict{String,Any})
-    log_message = join(["$key: $value" for (key, value) in info], "\n")
+function initial_logging()
     @info "----------------Information of analysis----------------\n" log_message
-    @info "\nStart analysis..."
+    @info "\nStart analysis."
 end
 
 """
@@ -140,18 +137,18 @@ function last_logging()
 end
 
 """
-    file_identifier(Analysis_type::String)
+    file_identifier(Operation_type::String)
 
 Generate a file identifier string.
 
 # Parameters
-- `Analysis_type::String`: Custom analysis name.
+- `Operation_type::String`: Custom operation name.
 
 # Returns
 - `String`: The file identifier string.
 """
-function file_identifier(Analysis_type::String)
+function file_identifier(Operation_type::String)
     current_time = Dates.format(now(), "dd/mm/yyyy HH:MM:SS.s")
-    str = "FT:PhantomRevealer:$(get_PhantomRevealer_version()) ($(Analysis_type)): $(current_time)"
+    str = "FT:PhantomRevealer:$(get_PhantomRevealer_version()) ($(Operation_type)): $(current_time)"
     return str
 end

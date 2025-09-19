@@ -3,6 +3,9 @@ module PhantomRevealer
 # With the order of level
 _module_location = @__DIR__
 
+
+using .Threads 
+using Logging
 using Statistics
 using LinearAlgebra
 using StaticArrays
@@ -10,6 +13,8 @@ using StaticArrays
 # Core
 include("$_module_location/table/los_tables.jl")
 include("$_module_location/julia/kernel_function.jl")
+include("$_module_location/julia/growth_rate.jl")
+include("$_module_location/julia/eos_properties.jl")
 
 # Initialize function
 """
@@ -21,6 +26,10 @@ Get the folder of currently loaded PhantomRevealer
 """
 function get_PhantomRevealer_path()
     return dirname(dirname(pathof(PhantomRevealer)))
+end
+
+function __init__()      
+    init_QR8buffer_bufferl!()             
 end
 
 
