@@ -1,7 +1,7 @@
 """
     The calculation of properties for different equation of state in Phantom
             by Wei-Shan Su,
-            August 12, 2024
+            September 19, 2025
 
 """
 
