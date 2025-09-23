@@ -102,14 +102,14 @@ end
 end
 
 """
-    function growthrateSI(Κx :: Float64, Κz :: Float64;
-                          St :: Float64,
-                          ρg :: Float64,
-                          ρd :: Float64, 
-                          vx :: Float64,
-                          vy :: Float64,
-                          ωx :: Float64,
-                          ωy :: Float64) :: Float64
+    growthrateSI(Κx :: Float64, Κz :: Float64;
+                 St :: Float64,
+                 ρg :: Float64,
+                 ρd :: Float64, 
+                 vx :: Float64,
+                 vy :: Float64,
+                 ωx :: Float64,
+                 ωy :: Float64) :: Float64
 
 Estimate the dimensionless dust growth rate (s/Ω) under the framework of Streaming Instability (Yooding & Goodman 2005).
 Using the method described in Chen & Lin (2020, ApJ, 892, 114), doi:10.3847/1538-4357/ab76ca.
@@ -148,14 +148,14 @@ function growthrateSI(Κx :: Float64, Κz :: Float64;
 end
 
 """
-    function growthrateSI(Κxs :: AbstractVector{Float64}, Κzs :: AbstractVector{Float64};
-                          St :: Float64,
-                          ρg :: Float64,
-                          ρd :: Float64, 
-                          vx :: Float64,
-                          vy :: Float64,
-                          ωx :: Float64,
-                          ωy :: Float64) :: Array{Float64}
+    growthrateSI(Κxs :: AbstractVector{Float64}, Κzs :: AbstractVector{Float64};
+                  St :: Float64,
+                  ρg :: Float64,
+                  ρd :: Float64, 
+                  vx :: Float64,
+                  vy :: Float64,
+                  ωx :: Float64,
+                  ωy :: Float64) :: Array{Float64}
 
 Estimate the dimensionless dust growth rate (s/Ω) under the framework of Streaming Instability (Yooding & Goodman 2005).
 Using the method described in Chen & Lin (2020, ApJ, 892, 114), doi:10.3847/1538-4357/ab76ca.
@@ -201,14 +201,14 @@ function growthrateSI(Κxs :: AbstractVector{Float64}, Κzs :: AbstractVector{Fl
 end
 
 """
-    function growthrateSI!(ΚxΚzSpace :: AbstractMatrix{Float64}, Κxs :: AbstractVector{Float64}, Κzs :: AbstractVector{Float64};
-                          St :: Float64,
-                          ρg :: Float64,
-                          ρd :: Float64, 
-                          vx :: Float64,
-                          vy :: Float64,
-                          ωx :: Float64,
-                          ωy :: Float64) :: Array{Float64}
+    growthrateSI!(ΚxΚzSpace :: AbstractMatrix{Float64}, Κxs :: AbstractVector{Float64}, Κzs :: AbstractVector{Float64};
+                         St :: Float64,
+                         ρg :: Float64,
+                         ρd :: Float64, 
+                         vx :: Float64,
+                         vy :: Float64,
+                         ωx :: Float64,
+                         ωy :: Float64) :: Array{Float64}
 
 In-place version of `growthrateSI`. Estimate the dimensionless dust growth rate (s/Ω) under the framework of Streaming Instability (Yooding & Goodman 2005).
 Using the method described in Chen & Lin (2020, ApJ, 892, 114), doi:10.3847/1538-4357/ab76ca.
