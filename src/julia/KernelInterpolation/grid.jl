@@ -257,7 +257,7 @@ Flatten a `StructuredGrid` into a one-dimensional `GeneralGrid`.
 
 - The data array `grid.grid` is reshaped with `vec`, producing a flat `Vector{TF}`.
 - The coordinate grid (from `coordinate_grid(grid)`) is flattened to 
-  `Vector{NTuple{D,TF}}`, where `D` is the dimension of Grid, and `TF` is the type of float
+  `Vector{NTuple{D,TF}}`, where `D` is the dimension of Grid, and `TF` is the type of float.
 - The returned `GeneralGrid` pairs the flattened values with their corresponding
   coordinates.
 
@@ -267,6 +267,11 @@ Flatten a `StructuredGrid` into a one-dimensional `GeneralGrid`.
 # Returns
 - `GeneralGrid{D, TF, Vector{TF}, Vector{NTuple{D, TF}}}` : A grid containing
   flat values and their coordinates.
+
+# Notes
+- The flattened `grid.grid` returned by `vec` shares the same underlying memory
+  as the original `grid.grid`. No data copy occurs, so modifying one will also
+  affect the other.
 """
 function flatten(grid::StructuredGrid)
     coor = coordinate_grid(grid)

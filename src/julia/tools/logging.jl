@@ -80,7 +80,7 @@ Get the version of the current project from the `Project.toml` file.
 """
 function get_PhantomRevealer_version()
     current_dir = @__DIR__
-    project_toml_path = joinpath(current_dir, "../../", "Project.toml")
+    project_toml_path = joinpath(current_dir, "../../../", "Project.toml")
     project_toml = Pkg.TOML.parsefile(project_toml_path)
     return project_toml["version"]
 end

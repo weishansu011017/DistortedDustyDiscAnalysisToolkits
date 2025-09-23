@@ -2,14 +2,18 @@ module PhantomRevealer
 # Include the Julia Module
 
 using .Threads 
+using Pkg
 using Logging
 using Statistics
 using LinearAlgebra
 using StaticArrays
+using DataFrames
+# using Interpolations
 ##################### Core #####################
 ## Tools
 include(joinpath(@__DIR__, "julia", "tools", "eos_properties.jl"))
 include(joinpath(@__DIR__, "julia", "tools", "logging.jl"))
+include(joinpath(@__DIR__, "julia", "tools", "coordinate_transformations.jl"))
 
 ## KernelInterpolation
 include(joinpath(@__DIR__, "julia", "KernelInterpolation", "table", "los_tables.jl"))
