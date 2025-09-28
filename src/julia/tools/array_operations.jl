@@ -50,3 +50,100 @@ dimension from the result.
 function reduce_mean(array :: AbstractArray, dim :: Int=1)
     return dropdims(mean(array; dims=dim), dims=dim)
 end
+
+"""
+    marco _def_nanfunc(funcname)
+
+Define a new `nan*` variant of the statistical function that ignores `NaN` values.
+
+This macro generates two method overloads:
+- `nanfunc(A::AbstractArray{T})`: returns the scalar result after removing all `NaN`s.
+- `nanfunc(A::AbstractArray{T}, dims::Integer)`: performs reduction along the specified dimension, skipping `NaN`s and returning `T(NaN)` if the slice is entirely `NaN`.
+
+# Parameters
+- `funcname::Symbol`: The base function name (e.g., `:mean`, `:maximum`) to wrap.
+
+# Generated
+- A new function named `nanfuncname` will be defined in the current scope.
+"""
+macro _def_nanfunc(funcname)
+    fname = Symbol(:nan, funcname)          
+    quote
+        @inline function $(fname)(A::AbstractArray{T}) where {T<:Number}
+            vals = filter(!isnan, A)
+            return isempty(vals) ? T(NaN) : $(funcname)(vals)
+        end
+
+        @inline function $(fname)(A::AbstractArray{T}, dims::Integer) where {T<:Number}
+            if ndims(A) == 1
+                return [nanmean(A)]
+            else
+                result = map(x -> isempty(x) ? T(NaN) : mean(x), eachslice(A, dims))
+                return dropdims(result, dims)
+            end
+        end
+    end |> esc        
+end
+
+
+@_def_nanfunc mean
+@_def_nanfunc median
+@_def_nanfunc std
+@_def_nanfunc maximum
+@_def_nanfunc minimum
+
+
+"""
+    Euclidean_distance(x :: V, y :: V, z :: V, ref :: NTuple{3, TF}) where {TF <: AbstractFloat, V <: AbstractVector}
+
+Compute the Euclidean distance in 3D space between vectors `(x, y, z)` and a fixed reference point.
+
+# Parameters
+- `x :: V` : Vector of x-coordinates.
+- `y :: V` : Vector of y-coordinates.
+- `z :: V` : Vector of z-coordinates.
+- `ref :: NTuple{3, TF}` : Reference point `(x_ref, y_ref, z_ref)`.
+
+# Returns
+- `Vector{TF}` : Distances from each point `(x[i], y[i], z[i])` to the reference point.
+"""
+@inline function Euclidean_distance(x :: V, y :: V, z :: V, ref :: NTuple{3, TF}) where {TF <: AbstractFloat, V <: AbstractVector}
+    xt, yt, zt = ref
+    r = similar(x, TF)
+    @inbounds @simd for i in eachindex(x, y, z, r)
+        xi = TF(x[i])
+        yi = TF(y[i])
+        zi = TF(z[i])
+        dx = xi - xt
+        dy = yi - yt
+        dz = zi - zt
+        r[i] = sqrt(dx * dx + dy * dy + dz * dz)
+    end
+    return r
+end
+
+"""
+    Euclidean_distance(x :: V, y :: V, ref :: NTuple{2, TF}) where {TF <: AbstractFloat, V <: AbstractVector}
+
+Compute the Euclidean distance in 2D space between vectors `(x, y)` and a fixed reference point.
+
+# Parameters
+- `x :: V` : Vector of x-coordinates.
+- `y :: V` : Vector of y-coordinates.
+- `ref :: NTuple{2, TF}` : Reference point `(x_ref, y_ref)`.
+
+# Returns
+- `Vector{TF}` : Distances from each point `(x[i], y[i])` to the reference point.
+"""
+@inline function Euclidean_distance(x :: V, y :: V, ref :: NTuple{2, TF}) where {TF <: AbstractFloat, V <: AbstractVector}
+    xt, yt = ref
+    s = similar(x, TF)
+    @inbounds @simd for i in eachindex(x, y, s)
+        xi = TF(x[i])
+        yi = TF(y[i])
+        dx = xi - xt
+        dy = yi - yt
+        s[i] = sqrt(dx * dx + dy * dy)
+    end
+    return s
+end

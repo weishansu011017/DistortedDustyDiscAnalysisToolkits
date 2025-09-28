@@ -46,3 +46,5 @@ subjobJ64.sh
 script/*.m
 *2.jl
 Manifest.toml
+
+*.mem

@@ -14,6 +14,15 @@ using DataFrames
 include(joinpath(@__DIR__, "julia", "tools", "eos_properties.jl"))
 include(joinpath(@__DIR__, "julia", "tools", "logging.jl"))
 include(joinpath(@__DIR__, "julia", "tools", "coordinate_transformations.jl"))
+include(joinpath(@__DIR__, "julia", "tools", "array_operations.jl"))
+
+## IO & data structure
+### PhantomRevealerDataFrame & basic adding quantities function
+include(joinpath(@__DIR__, "julia", "IO", "struct", "PhantomRevealerDataFrame.jl"))
+include(joinpath(@__DIR__, "julia", "IO", "struct", "add_quantities_prdf.jl"))
+
+### Read & Write Phantom Binary dumpfiles
+include(joinpath(@__DIR__, "julia", "IO", "phantomIO", "read_phantom.jl"))
 
 ## KernelInterpolation
 include(joinpath(@__DIR__, "julia", "KernelInterpolation", "table", "los_tables.jl"))
@@ -22,6 +31,7 @@ include(joinpath(@__DIR__, "julia", "KernelInterpolation", "grid.jl"))
 
 ## StreamingInstability
 include(joinpath(@__DIR__, "julia", "StreamingInstability", "growth_rate.jl"))
+
 
 
 function _init_Core()      

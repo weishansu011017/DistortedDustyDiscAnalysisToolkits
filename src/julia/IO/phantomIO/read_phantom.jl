@@ -1,17 +1,25 @@
-function _read_fortran_block(fp, bytesize)
-    """ Helper function to read Fortran data, which is also buffered before and after by 4 bytes."""
-    start_tag = read(fp, 4)
-    data = read(fp, bytesize)
-    end_tag = read(fp, 4)
+"""
+Reading the Phantom native binary dumpfile
+    by Wei-Shan Su
+    September 28, 2025
+"""
 
-    if (start_tag != end_tag)
-        error("Fortran tags mismatch.")
-    end
-    return data
+
+@inline function _dtypes(def_int_dtype::Type, def_real_dtype::Type)
+    return (def_int_dtype,   # default integer
+            Int8,            # integer*1
+            Int16,           # integer*2
+            Int32,           # integer*4
+            Int64,           # integer*8
+            def_real_dtype,  # default real
+            Float32,         # real*4
+            Float64)         # real*8
 end
+
 
 function _read_capture_pattern(fp)
     """ Phantom dump validation plus default real and int sizes."""
+    seekstart(fp)
     # 4 byte Fortran tag
     start_tag = read(fp, 4)
 
@@ -72,8 +80,20 @@ function _read_capture_pattern(fp)
     return def_int_dtype, def_real_dtype
 end
 
+function _read_fortran_block(fp, bytesize)
+    """ Helper function to read Fortran data, which is also buffered before and after by 4 bytes.  Move forward bytesize + 8 of numbers"""
+    start_tag = read(fp, 4)
+    data = read(fp, bytesize)
+    end_tag = read(fp, 4)
+
+    if (start_tag != end_tag)
+        error("Fortran tags mismatch.")
+    end
+    return data
+end
+
 function _read_file_identifier(fp)
-    """ Read the 100 character file identifier. Contains code version and date information. """
+    """ Read the 100 character file identifier. Contains code version and date information. Move forward 100 + 8 of numbers"""
     data = _read_fortran_block(fp, 100)
     return strip(String(data))
 end
@@ -100,9 +120,8 @@ function _read_global_header_block(fp, dtype)
     if nvars > 0
         # each tag is 16 characters in length
         keys_data = _read_fortran_block(fp, 16 * nvars)
-        keys = [strip(String(keys_data[i:i+15])) for i = 1:16:length(keys_data)]
-
         data_block = _read_fortran_block(fp, sizeof(dtype) * nvars)
+        keys = [strip(String(keys_data[i:i+15])) for i = 1:16:length(keys_data)]
         data = reinterpret(dtype, data_block)
     end
     return keys, data
@@ -110,29 +129,29 @@ end
 
 function _read_global_header(fp, def_int_dtype, def_real_dtype)
     """ Read global variables. """
-    dtypes = [def_int_dtype, Int8, Int16, Int32, Int64, def_real_dtype, Float32, Float64]
-    keys = String[]
-    data = []
-    for dtype in dtypes
-        new_keys, new_data = _read_global_header_block(fp, dtype)
-        append!(keys, new_keys)
-        append!(data, new_data)
+    dtypes = _dtypes(def_int_dtype, def_real_dtype)
+    dtype_keys = [String[] for _ in 1:8]
+    dtype_data = Vector{Vector}(undef, 8)                 
+    for (i, dtype) in enumerate(dtypes)
+        new_keys, dtype_data[i] = _read_global_header_block(fp, dtype)    
+        dtype_keys[i] = _rename_duplicates(new_keys)        
     end
-    keys = _rename_duplicates(keys)
-    global_vars = Dict{String,Any}()
-    for (i, key) in enumerate(keys)
-        global_vars[key] = data[i]
+    global_vars = Dict{Symbol,Any}()
+    for (i, keys) in enumerate(dtype_keys)
+        data = dtype_data[i]
+        for (j, key) in enumerate(keys)
+            skey = Symbol(key)
+            global_vars[skey] = data[j]
+        end
     end
-
     return global_vars
 end
 
 function _read_array_block(fp, df, n, nums, def_int_dtype, def_real_dtype)
-
-    dtypes = [def_int_dtype, Int8, Int16, Int32, Int64, def_real_dtype, Float32, Float64]
+    dtypes = _dtypes(def_int_dtype, def_real_dtype)
     for i in eachindex(nums)
         dtype = dtypes[i]
-        for j = 1:nums[i]
+        for _ in 1:nums[i]
             tag = strip(String(_read_fortran_block(fp, 16)))
             raw_data = _read_fortran_block(fp, sizeof(dtype) * n)
             data = reinterpret(dtype, raw_data)
@@ -148,19 +167,17 @@ function _read_array_blocks(fp, def_int_dtype, def_real_dtype)
     raw_data = _read_fortran_block(fp, 4)
     nblocks = reinterpret(Int32, raw_data)[1]
 
-    n = []
-    nums = []
-    for i = 1:nblocks
+    n = zeros(Int64, nblocks)
+    nums = Vector{NTuple{8,Int32}}(undef, nblocks)
+    @inbounds for i in eachindex(n)
         start_tag = read(fp, 4)
 
         raw_data = read(fp, 8)
-        value = reinterpret(Int64, raw_data)[1]
-        push!(n, value)
+        n[i] = reinterpret(Int64, raw_data)[1]
 
         raw_data = read(fp, 32)
         values = reinterpret(Int32, raw_data)
-        selected_values = values[1:8]
-        push!(nums, selected_values)
+        nums[i] = NTuple{8, Int32}(values[1:8])
 
         end_tag = read(fp, 4)
         if (start_tag != end_tag)
@@ -169,7 +186,7 @@ function _read_array_blocks(fp, def_int_dtype, def_real_dtype)
     end
     df = DataFrame()
     df_sinks = DataFrame()
-    for i = 1:nblocks
+    for i in 1:nblocks
         # This assumes the second block is only for sink particles.
         # I believe this is a valid assumption as I think this is what splash assumes.
         # For now we will just append sinks to the end of the data frame.
@@ -189,8 +206,28 @@ function _read_array_blocks(fp, def_int_dtype, def_real_dtype)
     return df, df_sinks
 end
 
+function _gathering_data(filename::String)
+    open(filename, "r") do fp
+        def_int_dtype, def_real_dtype = _read_capture_pattern(fp)
+        file_identifier = _read_file_identifier(fp)
+
+        header_vars = _read_global_header(fp, def_int_dtype, def_real_dtype)
+        header_vars[:default_Int] = def_int_dtype
+        header_vars[:default_Real] = def_real_dtype
+        header_vars[:file_identifier] = file_identifier
+        header_vars[:COM_coordinate] = Float64[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]      # General Coordinate of origin
+        header_vars[:Origin_sink_id] = Ref{Int64}(-1)
+        header_vars[:Origin_sink_mass] = Ref{Float64}(NaN64)
+
+        df, df_sinks = _read_array_blocks(fp, def_int_dtype, def_real_dtype)
+        return df, df_sinks, header_vars
+    end
+end
+
+
+
 """
-    function read_phantom(filename::String, separate_types::String = "sinks", ignore_inactive::Bool = true) :: Union{PhantomRevealerDataFrame,Vector}
+    function read_phantom(filename::String, separate_types::Symbol = :sinks, ignore_inactive::Bool = true) :: Union{PhantomRevealerDataFrame,Vector}
 
 Note: This implementation is inspired by the function of the same name in the 'saracen' python package.
 Check out the documentation of `saracen <https://sarracen.readthedocs.io/en/latest/index.html>`_
@@ -205,24 +242,26 @@ data frame in the field `params`.
 
 # Parameters
 - `filename::String`: Name of the file to be loaded.
-- `separate_types::String = "sinks"`: Whether to separate different particle types into several dataframes. ``None`` returns all particle types in one
+- `separate_types::Symbol = :sinks`: Whether to separate different particle types into several dataframes. ``None`` returns all particle types in one
         data frame. '`sinks`' separates sink particles into a second dataframe, and '`all`' returns all particle types in
         different dataframes.
 - `ignore_inactive::Bool = true`: If true, particles with negative smoothing length will not be read on import. These are
         typically particles that have been accreted onto a sink particle or are otherwise inactive.
 
 # Returns
-- `PhantomRevealerDataFrame` or `Vector`: PhantomRevealerDataFrame or Array of PhantomRevealerDataFrames
+- `Vector{PhantomRevealerDataFrame}`: Array of PhantomRevealerDataFrames
 
 # Examples
 ## Example 1: By default, SPH particles are grouped into one data frame and sink particles into a second data frame.
 ```julia
-prdf, prdf_sinks = read_phantom("dumpfile_00000")
+prdfs = read_phantom("dumpfile_00000")
+prdf, prdf_sinks = prdfs
 ```
 ## Example 2: A dump file containing multiple particle types, say gas + dust + sinks, can separated into their own data frames
-    by specifying `separate_types="all"`.
+    by specifying `separate_types=:all`.
 ```julia
-prdf_gas, prdf_dust, prdf_sinks = read_phantom("multiple_types_00000", separate_types="all")
+prdfs = read_phantom("multiple_types_00000", separate_types=:all)
+prdf_gas, prdf_dust, prdf_sinks = prdfs 
 ```
 
 # Notes
@@ -232,60 +271,51 @@ You should also check out the function of the same name in `sarracen documentati
     for further investigation.
 """
 function read_phantom(
-    filename::String,
-    separate_types::String = "sinks",
+    filename::String;
+    separate_types::Symbol = :sinks,
     ignore_inactive::Bool = true,
-) :: Union{PhantomRevealerDataFrame,Vector}
-    open(filename, "r") do fp
-        def_int_dtype, def_real_dtype = _read_capture_pattern(fp)
-        file_identifier = _read_file_identifier(fp)
+) :: Vector{PhantomRevealerDataFrame}
+    # Read data
+    df, df_sinks, header_vars = _gathering_data(filename)
 
-        header_vars = _read_global_header(fp, def_int_dtype, def_real_dtype)
-        header_vars["file_identifier"] = file_identifier
-        header_vars["COM_coordinate"] = Float64[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]      # General Coordinate of origin
-        header_vars["Origin_sink_id"] = Ref{Int64}(-1)
-        header_vars["Origin_sink_mass"] = Ref{Float64}(NaN64)
-
-        df, df_sinks = _read_array_blocks(fp, def_int_dtype, def_real_dtype)
-
-        if ignore_inactive
-            df = df[df[!, :"h"].>0, :]
-        end
-
-        if (separate_types == "all") &&
-           (hasproperty(df, :itype)) &&
-           (length(unique(df.itype)) > 1)
-            df_list = PhantomRevealerDataFrame[]
-            for group in groupby(df, :itype)
-                itype::Int = Int(group[!, "itype"][1])
-                mass_key = itype == 1 ? "massoftype" : "massoftype_$(itype)"
-                group_clean = select(
-                    group,
-                    [col for col in names(group) if !any(ismissing, group[!, col])],
-                )
-                params_group = merge(header_vars, Dict("mass" => header_vars[mass_key]))
-                params_group["itype"] = itype
-                push!(df_list, PhantomRevealerDataFrame(group_clean, params_group))
-            end
-            if !(isempty(df_sinks))
-                push!(df_list, PhantomRevealerDataFrame(df_sinks, header_vars))
-            end
-            return df_list
-        end
-
-        if ((separate_types == "sinks") || (separate_types == "all")) &&
-           !(isempty(df_sinks))
-            params = merge(header_vars, Dict("mass" => header_vars["massoftype"]))
-
-            params["itype"] = NaN
-            df = PhantomRevealerDataFrame(df, params)
-            df_sinks = PhantomRevealerDataFrame(df_sinks, header_vars)
-            return [df, df_sinks]
-        end
-        combined_df = vcat(df, df_sinks, cols = :union)
-        params = merge(header_vars, Dict("mass" => header_vars["massoftype"]))
-        params["itype"] = NaN
-        df = PhantomRevealerDataFrame(combined_df, params)
-        return df
+    # Ignore h < 0 if true
+    if ignore_inactive
+        df = df[df[!, :h] .> 0, :]
     end
+
+    # Separate by itype and num(itype) > 1
+    if (separate_types == :all) && (hasproperty(df, :itype)) && (length(unique(df.itype)) > 1)
+        df_list = PhantomRevealerDataFrame[]
+        for group in groupby(df, :itype)
+            itype::Int = Int(group[!, :itype][1])
+            mass_key = itype == 1 ? :massoftype : Symbol("massoftype_$(itype)")
+            group_clean = select(
+                group,
+                [col for col in names(group) if !any(ismissing, group[!, col])],
+            )
+            params_group = merge(header_vars, Dict(:mass => header_vars[mass_key]))
+            params_group[:itype] = itype
+            push!(df_list, PhantomRevealerDataFrame(group_clean, params_group))
+        end
+        if !(isempty(df_sinks))
+            push!(df_list, PhantomRevealerDataFrame(df_sinks, header_vars))
+        end
+        return df_list
+    end
+
+    # num(itype) == 1 
+    if ((separate_types == :sinks) || (separate_types == :all)) && !(isempty(df_sinks))
+        params = merge(header_vars, Dict(:mass => nothing))
+
+        params[:itype] = NaN
+        df = PhantomRevealerDataFrame(df, params)
+        df_sinks = PhantomRevealerDataFrame(df_sinks, header_vars)
+        return PhantomRevealerDataFrame[df, df_sinks]
+    end
+    # else
+    combined_df = vcat(df, df_sinks, cols = :union)
+    params = merge(header_vars, Dict(:mass => nothing))
+    params[:itype] = nothing
+    df = PhantomRevealerDataFrame(combined_df, params)
+    return PhantomRevealerDataFrame[df]
 end
