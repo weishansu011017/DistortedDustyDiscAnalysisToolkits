@@ -23,6 +23,7 @@ function init_QR8buffer_bufferl!()
             MMatrix{8, 8, ComplexF64, 64}(undef),      
         )
     end
+    return nothing
 end
 
 
@@ -246,5 +247,6 @@ function growthrateSI!(ΚxΚzSpace :: AbstractMatrix{Float64}, Κxs :: AbstractV
     @inbounds for j in eachindex(Κzs), i in eachindex(Κxs)
         ΚxΚzSpace[i,j] = _growthrateSI_core(Κxs[i], Κzs[j], invSt, εinvSt, vx, vy, ωx, ωy)
     end
+    return nothing
 end
 

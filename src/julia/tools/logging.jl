@@ -114,6 +114,7 @@ Log the initial message including the version of the project.
 function First_logging()
     version = get_PhantomRevealer_version()
     @info "Start Logging...\nPhantomRevealer analysis Module\n  Version: $version\n    Made by Wei-Shan Su, 2024\n"
+    return nothing
 end
 
 """
@@ -125,6 +126,7 @@ Log initial analysis information.
 function initial_logging()
     @info "----------------Information of analysis----------------\n" log_message
     @info "\nStart analysis."
+    return nothing
 end
 
 """
@@ -134,6 +136,7 @@ Log the final message indicating the end of analysis.
 """
 function last_logging()
     @info "End analysis."
+    return nothing
 end
 
 """

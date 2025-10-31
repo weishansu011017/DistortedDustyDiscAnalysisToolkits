@@ -1,0 +1,39 @@
+"""
+KernelInterpolation
+
+Provides core routines for kernel-based interpolation of SPH data.
+This module includes:
+- Kernel functions (spline, Wendland, and related forms)
+- Line-of-sight (LOS) integration tables
+- Grid-based interpolation and sampling utilities
+
+All numerical implementations are organized under the `table/`,
+`kernel_function/`, and `grid/` submodules.
+"""
+module KernelInterpolation
+using .Threads 
+using StaticArrays
+
+
+# KernelInterpolation
+include(joinpath(@__DIR__, "table", "los_tables.jl"))
+## Kernels
+include(joinpath(@__DIR__, "kernel_function.jl"))
+include(joinpath(@__DIR__, "kernels", "M4_spline.jl"))
+include(joinpath(@__DIR__, "kernels", "M5_spline.jl"))
+include(joinpath(@__DIR__, "kernels", "M6_spline.jl"))
+include(joinpath(@__DIR__, "kernels", "C2_Wendland.jl"))
+include(joinpath(@__DIR__, "kernels", "C4_Wendland.jl"))
+include(joinpath(@__DIR__, "kernels", "C6_Wendland.jl"))
+include(joinpath(@__DIR__, "losintegrated_kernel_function.jl"))
+
+## Grids
+include(joinpath(@__DIR__, "grid.jl"))
+
+# Export function, marco, const...
+for name in filter(s -> !startswith(string(s), "#"), names(@__MODULE__, all = true))
+    if !startswith(String(name), "_") && (name != :eval) && (name != :include)
+        @eval export $name
+    end
+end
+end

@@ -48,3 +48,6 @@ script/*.m
 Manifest.toml
 
 *.mem
+
+.local/*
+build/*
