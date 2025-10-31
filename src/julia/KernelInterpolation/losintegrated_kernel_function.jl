@@ -1,3 +1,14 @@
+"""
+Line‐of‐Sight (LOS) integrated SPH kernel functions.  
+    by Wei-Shan Su,  
+    October 31, 2025  
+
+This module provides the **projected (LOS-integrated)** versions of the standard SPH
+smoothing kernels.  It allows efficient evaluation of surface densities or
+column–integrated quantities by replacing the 3-D kernel  W(r,h)  with its
+line-of-sight integral.
+"""
+
 # Line-of-Sight Integrated Kernel function
 @inline function _lin_lut(q, Q::SVector{N,T}, I::SVector{N,T}) where {N,T}
     dq   = Q[2] - Q[1]            
@@ -18,9 +29,6 @@ for (K, Qsym, Isym, Inormsym) in (
 @eval @inline lookup_LOS(::Type{$K}, q::T) where {T<:AbstractFloat} =
     _lin_lut(T(q), $Qsym, $Inormsym,)
 end
-
-
-
 
 """
     LOSint_Smoothed_kernel_function_dimensionless(

@@ -1,40 +1,57 @@
 """
-The Kernel function for SPH interpolation calculation.
+Kernel functions and smoothed forms for Smoothed Particle Hydrodynamics (SPH).
     by Wei-Shan Su,
-    June 21, 2024
+    October 31, 2025
 
-The Kernel function is given as following (Price2018)
+This module provides a unified and extensible framework for SPH kernel functions,
+including both the dimensionless analytic forms and their smoothed (dimensional) 
+representations, as well as gradient evaluations.
 
-    W(r-r_a,h) = (Cnorm/h^d)f(q)
+# Overview
 
-where q = |r-r_a|/h, d is the dimention of Kernel function, h is the smoothed radius(dimensional-depended),
-and f(q) is the non-normalized Kernel function which would be refered as "Kernel function(Non-normalized)".
+For a given SPH kernel type `K <: AbstractSPHKernel`, the smoothing kernel is defined as:
 
-# Structure:
-    ## Kernel function(Non-normalized)
-        M4 B-spline
-        differentiated M4 B-spline
+    W(r, h) = h^{-D} · C_norm(D) · f(q),
+    q = |r| / h,
 
-        M5 B-spline
-        differentiated M5 B-spline
+where  
+- `h` is the smoothing length,  
+- `D` is the spatial dimension (1, 2, or 3),  
+- `f(q)` is the **dimensionless kernel function**, and  
+- `C_norm(D)` is the normalization constant ensuring ∫W = 1.
 
-        M6 B-spline
-        differentiated M6 B-spline
+The kernel family and normalization constants follow *Price (2018, JCoPh, 378, 257)*.
 
-        Wendland C2
-        differentiated Wendland C2
 
-        Wendland C4
-        differentiated Wendland C4
+# Extending the Kernel Set
 
-        Wendland C6
-        differentiated Wendland C6
+To implement a new kernel type, define the following components:
 
-    ## Calculating influence by Smoothed Function
-        Smoothed_kernel_function (2 Method): Calculating W(r-r_a, h).
-        Smoothed_gradient_kernel_function (2 Method): Calculating ∇W(r-r_a, h).
-        Smoothed_dh_kernel_function (2 Method): Calculating
-        
+1. **Type definition**
+   ```julia
+   struct MyKernel <: AbstractSPHKernel end
+   struct _dMyKernel <: AbstractSPHKernel end
+   parenttype(::Type{_dMyKernel}) = 
+   ```
+2. **Kernel shape and derivative**
+   ```julia
+   (::MyKernel)(q::T) where {T<:AbstractFloat} = ...
+   (::_dMyKernel)(q::T) where {T<:AbstractFloat} = ...
+   ```
+
+3. **Support radius and normalization**
+   ```julia
+   KernelFunctionValid(::Type{MyKernel}, ::Type{T}) where {T<:AbstractFloat} = ...
+   KernelFunctionnorm(::Type{MyKernel}, ::Val{D}, ::Type{T}) where {T<:AbstractFloat} = ...
+   ```
+
+4. *(Optional)* **Typical neighbor count**
+   ```julia
+   KernelFunctionNneigh(::Type{MyKernel}) = ...
+   ```
+Once defined, all smoothed and gradient functions such as
+`Smoothed_kernel_function` and `Smoothed_gradient_kernel_function`
+will automatically work with the new kernel type.
 """
 
 """
