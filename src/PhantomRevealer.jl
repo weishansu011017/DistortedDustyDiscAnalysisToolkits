@@ -33,6 +33,9 @@ include(joinpath(@__DIR__, "julia", "KernelInterpolation", "KernelInterpolation.
 # include(joinpath(@__DIR__, "julia", "KernelInterpolation", "kernel_function.jl"))
 # include(joinpath(@__DIR__, "julia", "KernelInterpolation", "grid.jl"))
 
+### Constructors of the `InterpolationInput` from `PhantomRevealerDataFrame`
+include(joinpath(@__DIR__, "julia", "KernelInterpolation", "single_point_interpolation", "constructor.jl"))
+
 ## StreamingInstability
 include(joinpath(@__DIR__, "julia", "StreamingInstability", "StreamingInstability.jl"))
 @reexport using .StreamingInstability

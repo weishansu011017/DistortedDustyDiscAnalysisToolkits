@@ -18,14 +18,19 @@ using StaticArrays
 # KernelInterpolation
 include(joinpath(@__DIR__, "table", "los_tables.jl"))
 ## Kernels
-include(joinpath(@__DIR__, "kernel_function.jl"))
-include(joinpath(@__DIR__, "kernels", "M4_spline.jl"))
-include(joinpath(@__DIR__, "kernels", "M5_spline.jl"))
-include(joinpath(@__DIR__, "kernels", "M6_spline.jl"))
-include(joinpath(@__DIR__, "kernels", "C2_Wendland.jl"))
-include(joinpath(@__DIR__, "kernels", "C4_Wendland.jl"))
-include(joinpath(@__DIR__, "kernels", "C6_Wendland.jl"))
-include(joinpath(@__DIR__, "losintegrated_kernel_function.jl"))
+include(joinpath(@__DIR__, "kernel_function", "kernel.jl"))
+include(joinpath(@__DIR__, "kernel_function", "kernels", "M4_spline.jl"))
+include(joinpath(@__DIR__, "kernel_function", "kernels", "M5_spline.jl"))
+include(joinpath(@__DIR__, "kernel_function", "kernels", "M6_spline.jl"))
+include(joinpath(@__DIR__, "kernel_function", "kernels", "C2_Wendland.jl"))
+include(joinpath(@__DIR__, "kernel_function", "kernels", "C4_Wendland.jl"))
+include(joinpath(@__DIR__, "kernel_function", "kernels", "C6_Wendland.jl"))
+include(joinpath(@__DIR__, "kernel_function", "losintegrated_kernel.jl"))
+
+## Single point interpolation
+include(joinpath(@__DIR__, "single_point_interpolation", "InterpolationInput.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "single_point_interpolation_kernels.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "single_point_interpolation.jl"))
 
 ## Grids
 include(joinpath(@__DIR__, "grid.jl"))

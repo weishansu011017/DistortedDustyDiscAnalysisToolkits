@@ -341,7 +341,7 @@ function add_rho!(data::PhantomRevealerDataFrame)
     d = get_dim(data)
     TF = typeof(particle_mass)
     h = TF.(data.dfdata.h)
-    ρ = _density(h, m, hfact, Val(d))
+    ρ = _density(h, particle_mass, hfact, Val(d))
     data.dfdata.rho = ρ
     return nothing
 end
