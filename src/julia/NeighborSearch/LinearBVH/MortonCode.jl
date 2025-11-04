@@ -62,7 +62,17 @@ function _quantize_coords(x::V, y::V, z::V, b::Int; CodeType :: Type{TI} = UInt6
     return ix, iy, iz
 end
 
-@inline function _expand_bits_64(x::UInt64)
+@inline function _expand_bits(x::UInt32)
+    # Copy from https://stackoverflow.com/questions/1024754/how-to-compute-a-3d-morton-number-interleave-the-bits-of-3-ints
+    x = (x | (x << 16)) & 0x30000ff   
+    x = (x | (x << 8)) & 0x300f00f
+    x = (x | (x << 4)) & 0x30c30c3
+    x = (x | (x << 2)) & 0x9249249
+    return x
+end
+
+@inline function _expand_bits(x::UInt64)
+    # Copy from https://stackoverflow.com/questions/1024754/how-to-compute-a-3d-morton-number-interleave-the-bits-of-3-ints
     x = (x | (x << 32)) & 0x1f00000000ffff
     x = (x | (x << 16)) & 0x1f0000ff0000ff
     x = (x | (x << 8))  & 0x100f00f00f00f00f
