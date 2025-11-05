@@ -4,7 +4,10 @@ NeighborSearch
 ?????
 """
 module NeighborSearch
+using .Threads
 using Statistics
+
+include(joinpath(@__DIR__, "BinaryRadixTree", "MortonCode.jl"))
 
 
 # Export function, marco, const...

@@ -1,3 +1,8 @@
+"""
+Morton code encoding/decoding utilities for particle spatial indexing  
+    by Wei-Shan Su,  
+    November 6, 2025
+"""
 
 struct MortonEncoding{D, TF <: AbstractFloat, TI <: Unsigned, V <: AbstractVector{TI}}
     order :: V          # Order of corresponding particles
@@ -97,32 +102,46 @@ end
     return (x, y, z)
 end
 
+@inline function _encode_morton_code3D!(code :: V, order :: V, ix :: V, iy :: V, iz :: V, i :: Int) where {T <: Unsigned, V <: AbstractVector{T}}
+    ixi = ix[i]; iyi = iy[i]; izi = iz[i]
+    codei = _encode_morton_code3D(ixi, iyi, izi)
+
+    code[i] = codei
+    order[i] = i
+    return nothing
+end
+
+@inline function _encode_morton_code3D!(code :: V, order :: V, ix :: V, iy :: V, iz :: V) where {T <: Unsigned, V <: AbstractVector{T}}
+    
+    return nothing
+end
+
 function _encode_morton_code3D(ix :: V, iy :: V, iz :: V) where {T <: Unsigned, V <: AbstractVector{T}}
     code  = similar(ix)
     order = similar(ix)
-    @inbounds @simd for i in eachindex(ix, iy, iz)
-        ixi = ix[i]; iyi = iy[i]; izi = iz[i]
-        codei = _encode_morton_code3D(ixi, iyi, izi)
-
-        code[i] = codei
-        order[i] = i
+    @inbounds for i in eachindex(ix, iy, iz)
+        _encode_morton_code3D!(code, order, ix, iy, iz, i)
     end
     return code, order
+end
+
+@inline function _decode_morton_code3D!(ix :: V, iy :: V, iz :: V, code :: V, i :: Int) where {T <: Unsigned, V <: AbstractVector{T}}
+    codei = code[i]
+    ixi, iyi, izi = _decode_morton_code3D(codei)
+    @inbounds begin
+        ix[i] = ixi
+        iy[i] = iyi
+        iz[i] = izi
+    end
+    return nothing
 end
 
 function _decode_morton_code3D(code :: V) where {T <: Unsigned, V <: AbstractVector{T}}
     ix = similar(code)
     iy = similar(code)
     iz = similar(code)
-    @inbounds @simd for i in eachindex(ix, iy, iz)
-        codei = code[i]
-        ixi, iyi, izi = _decode_morton_code3D(codei)
-
-        @inbounds begin
-            ix[i] = ixi
-            iy[i] = iyi
-            iz[i] = izi
-        end
+    @inbounds for i in eachindex(ix, iy, iz)
+        _decode_morton_code3D!(ix, iy, iz, code, i)
     end
     return ix, iy, iz
 end
@@ -135,35 +154,46 @@ end
     return (_compact_bits2D(code >> 1), _compact_bits2D(code))
 end
 
+@inline function _encode_morton_code2D!(code :: V, order :: V, ix :: V, iy :: V, i :: Int) where {T <: Unsigned, V <: AbstractVector{T}}
+    ixi = ix[i]; iyi = iy[i]
+    codei = _encode_morton_code2D(ixi, iyi)
+
+    code[i] = codei
+    order[i] = i
+    return nothing
+end
+
 function _encode_morton_code2D(ix :: V, iy :: V) where {T <: Unsigned, V <: AbstractVector{T}}
     code  = similar(ix)
     order = similar(ix)
-    @inbounds @simd for i in eachindex(ix, iy)
-        ixi = ix[i]; iyi = iy[i]
-        codei = _encode_morton_code2D(ixi, iyi)
-
-        code[i] = codei
-        order[i] = i
+    @inbounds for i in eachindex(ix, iy)
+        _encode_morton_code2D!(code, order, ix, iy, i)
     end
     return code, order
+end
+
+@inline function _decode_morton_code2D!(ix :: V, iy :: V, code :: V, i) where {T <: Unsigned, V <: AbstractVector{T}}
+    codei = code[i]
+    ixi, iyi = _decode_morton_code2D(codei)
+
+    @inbounds begin
+        ix[i] = ixi
+        iy[i] = iyi
+    end
+    return nothing
 end
 
 function _decode_morton_code2D(code :: V) where {T <: Unsigned, V <: AbstractVector{T}}
     ix = similar(code)
     iy = similar(code)
-    @inbounds @simd for i in eachindex(ix, iy)
-        codei = code[i]
-        ixi, iyi = _decode_morton_code2D(codei)
-
-        @inbounds begin
-            ix[i] = ixi
-            iy[i] = iyi
-        end
+    @inbounds for i in eachindex(code)
+        _decode_morton_code2D!(ix, iy, code, i)
     end
+    
     return ix, iy
 end
 
-# AABB and distance for two points
+# δ-operator for two points
 @inline function _longest_common_prefix_length(a :: T, b :: T) where {T <: Unsigned}
     return leading_zeros(a ⊻ b)
 end
@@ -210,15 +240,21 @@ end
     return exp2(TF(b)) - one(TF)
 end
 
+@inline function _normalize_vector!(normalized_v :: V, v :: V, vmin :: T, invΔv :: T, i :: Int) where {T <: AbstractFloat, V <: AbstractVector{T}}
+    vi = v[i]
+    normalized_vi = (vi - vmin) * invΔv
+    normalized_v[i] = normalized_vi
+    return nothing
+end
+
 function _normalize_vector(v :: V) where {T <: AbstractFloat, V <: AbstractVector{T}}
     vmin = minimum(v); vmax = maximum(v)
     Δv = vmax - vmin
     invΔv = inv(Δv)
+
     normalized_v = similar(v)
-    @inbounds @simd for i in eachindex(normalized_v)
-        vi = v[i]
-        normalized_vi = (vi - vmin) * invΔv
-        normalized_v[i] = normalized_vi
+    @inbounds for i in eachindex(v)
+        _normalize_vector!(normalized_v, v, vmin, invΔv, i)
     end
     return normalized_v
 end
@@ -234,7 +270,7 @@ function _quantize_coords(x::V, y::V, z::V; CodeType :: Type{TI} = UInt64) where
     ix = similar(x, CodeType)
     iy = similar(y, CodeType)
     iz = similar(z, CodeType)
-    @inbounds @simd for i in eachindex(ix, iy, iz)
+    @inbounds for i in eachindex(ix, iy, iz)
         fxi = fx[i]; fyi = fy[i]; fzi = fz[i]
 
         ixi = CodeType(floor(scale * fxi))
@@ -259,7 +295,7 @@ function _quantize_coords(x::V, y::V; CodeType :: Type{TI} = UInt64) where {TI <
     scale = _axis_scale(Val(2), CodeType, T)
     ix = similar(x, CodeType)
     iy = similar(y, CodeType)
-    @inbounds @simd for i in eachindex(ix, iy)
+    @inbounds for i in eachindex(ix, iy)
         fxi = fx[i]; fyi = fy[i]
 
         ixi = CodeType(floor(scale * fxi))
@@ -319,18 +355,7 @@ function encoding_particles(x :: V, y :: V; CodeType :: Type{TI} = UInt64) where
     return MortonEncoding{2, T, TI, typeof(order)}(order, codes, ΔL, amin)
 end
 
-"""
-    decoding_particles(Encoding::MortonEncoding{3, T, TI})
-
-Decode Morton codes back into 3D physical coordinates.
-
-# Parameters
-- `Encoding :: MortonEncoding{3, T, TI}`: Morton-encoded particle data.
-
-# Returns
-- `(x, y, z) :: NTuple{3, Vector{T}}`: Reconstructed particle positions.
-"""
-function decoding_particles(Encoding :: MortonEncoding{3, T, TI}) where {T <: AbstractFloat, TI <: Unsigned}
+function _decoding_particles(Encoding :: MortonEncoding{3, T, TI}) where {T <: AbstractFloat, TI <: Unsigned}
     ΔLx, ΔLy, ΔLz = Encoding.ΔL
     xmin, ymin, zmin = Encoding.amin
     codes = Encoding.codes
@@ -341,7 +366,7 @@ function decoding_particles(Encoding :: MortonEncoding{3, T, TI}) where {T <: Ab
     x = similar(ix, T)
     y = similar(iy, T)
     z = similar(iz, T)
-    @inbounds @simd for i in eachindex(x, y, z)
+    @inbounds for i in eachindex(x, y, z)
         ixi = ix[i]; iyi = iy[i]; izi = iz[i]
         fxi = ixi * scale
         fyi = iyi * scale
@@ -370,7 +395,7 @@ function _decoding_particles(Encoding :: MortonEncoding{2, T, TI}) where {T <: A
 
     x = similar(ix, T)
     y = similar(iy, T)
-    @inbounds @simd for i in eachindex(x, y)
+    @inbounds for i in eachindex(x, y)
         ixi = ix[i]; iyi = iy[i]
         fxi = ixi * scale
         fyi = iyi * scale
