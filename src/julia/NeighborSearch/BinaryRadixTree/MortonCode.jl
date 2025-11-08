@@ -111,11 +111,6 @@ end
     return nothing
 end
 
-@inline function _encode_morton_code3D!(code :: V, order :: V, ix :: V, iy :: V, iz :: V) where {T <: Unsigned, V <: AbstractVector{T}}
-    
-    return nothing
-end
-
 function _encode_morton_code3D(ix :: V, iy :: V, iz :: V) where {T <: Unsigned, V <: AbstractVector{T}}
     code  = similar(ix)
     order = similar(ix)
@@ -172,7 +167,7 @@ function _encode_morton_code2D(ix :: V, iy :: V) where {T <: Unsigned, V <: Abst
     return code, order
 end
 
-@inline function _decode_morton_code2D!(ix :: V, iy :: V, code :: V, i) where {T <: Unsigned, V <: AbstractVector{T}}
+@inline function _decode_morton_code2D!(ix :: V, iy :: V, code :: V, i :: Int) where {T <: Unsigned, V <: AbstractVector{T}}
     codei = code[i]
     ixi, iyi = _decode_morton_code2D(codei)
 
@@ -310,7 +305,26 @@ function _quantize_coords(x::V, y::V; CodeType :: Type{TI} = UInt64) where {TI <
 end
 
 """
-    encoding_particles(x::V, y::V, z::V; CodeType::Type{TI}=UInt64)
+    sort_by_morton!(enc::MortonEncoding)
+
+Sort particles by Morton code in-place.
+
+# Parameters
+- `enc :: MortonEncoding`: The encoding struct to be sorted.
+
+# Returns
+- `p :: Vector{Int}`: The permutation indices used for sorting.
+"""
+@inline function sort_by_morton!(enc::MortonEncoding)
+    p = sortperm(enc.codes; alg=QuickSort)
+    enc.codes .= enc.codes[p]
+    enc.order .= enc.order[p]
+    return p
+end
+
+
+"""
+    MortonEncoding(x::V, y::V, z::V; CodeType::Type{TI}=UInt64)
 
 Encode a set of 3D particle coordinates into Morton codes.
 
@@ -321,19 +335,20 @@ Encode a set of 3D particle coordinates into Morton codes.
 # Returns
 - `MortonEncoding{3, T, TI, typeof(order)}`: Struct containing Morton codes, particle order, and bounding-box info.
 """
-function encoding_particles(x :: V, y :: V, z :: V; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, V<:AbstractVector{T}}
+function MortonEncoding(x :: V, y :: V, z :: V; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, V<:AbstractVector{T}}
     amin = (minimum(x), minimum(y), minimum(z))
     xmin, ymin, zmin = amin
     ΔL = ((maximum(x) - xmin), (maximum(y) - ymin), (maximum(z) - zmin))
 
     ix, iy, iz = _quantize_coords(x, y, z, CodeType=CodeType)
     codes, order  = _encode_morton_code3D(ix, iy, iz)
-
-    return MortonEncoding{3, T, TI, typeof(order)}(order, codes, ΔL, amin)
+    enc = MortonEncoding{3, T, TI, typeof(order)}(order, codes, ΔL, amin)
+    sort_by_morton!(enc)
+    return enc
 end
 
 """
-    encoding_particles(x::V, y::V; CodeType::Type{TI}=UInt64)
+    MortonEncoding(x::V, y::V; CodeType::Type{TI}=UInt64)
 
 Encode a set of 2D particle coordinates into Morton codes.
 
@@ -344,15 +359,17 @@ Encode a set of 2D particle coordinates into Morton codes.
 # Returns
 - `MortonEncoding{2, T, TI, typeof(order)}`: Struct containing Morton codes, particle order, and bounding-box info.
 """
-function encoding_particles(x :: V, y :: V; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, V<:AbstractVector{T}}
+function MortonEncoding(x :: V, y :: V; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, V<:AbstractVector{T}}
     amin = (minimum(x), minimum(y))
     xmin, ymin = amin
     ΔL = ((maximum(x) - xmin), (maximum(y) - ymin))
 
     ix, iy = _quantize_coords(x, y, CodeType=CodeType)
     codes, order  = _encode_morton_code2D(ix, iy)
+    enc = MortonEncoding{2, T, TI, typeof(order)}(order, codes, ΔL, amin)
+    sort_by_morton!(enc)
 
-    return MortonEncoding{2, T, TI, typeof(order)}(order, codes, ΔL, amin)
+    return enc
 end
 
 function _decoding_particles(Encoding :: MortonEncoding{3, T, TI}) where {T <: AbstractFloat, TI <: Unsigned}
@@ -409,23 +426,5 @@ function _decoding_particles(Encoding :: MortonEncoding{2, T, TI}) where {T <: A
         end
     end
     return x, y
-end
-
-"""
-    sort_by_morton!(enc::MortonEncoding)
-
-Sort particles by Morton code in-place.
-
-# Parameters
-- `enc :: MortonEncoding`: The encoding struct to be sorted.
-
-# Returns
-- `p :: Vector{Int}`: The permutation indices used for sorting.
-"""
-@inline function sort_by_morton!(enc::MortonEncoding)
-    p = sortperm(enc.codes; alg=QuickSort)
-    enc.codes .= enc.codes[p]
-    enc.order .= enc.order[p]
-    return p
 end
 

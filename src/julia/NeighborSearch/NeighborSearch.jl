@@ -7,8 +7,11 @@ module NeighborSearch
 using .Threads
 using Statistics
 
+# Binary radix tree
 include(joinpath(@__DIR__, "BinaryRadixTree", "MortonCode.jl"))
+include(joinpath(@__DIR__, "BinaryRadixTree", "BinaryRadixTree.jl"))
 
+# Linear bounding vloume hierarchies (LBVH)
 
 # Export function, marco, const...
 for name in filter(s -> !startswith(string(s), "#"), names(@__MODULE__, all = true))
