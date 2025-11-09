@@ -6,15 +6,15 @@
 end
 
 ## Density
-@inline function _density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbor_indices :: VNI, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, VNI <: AbstractVector{<:Integer}}
+@inline function _density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Return 0.0 if no particle in the data
-    Npart :: Int64 = length(neighbor_indices)
+    neighbor_indices = neighbors.pool
+    Npart :: Int64 = neighbors.count
     if Npart == 0
-        return 0.0
+        return zero(T)
     end
 
     # Prepare for interpolation
-    # Known quantities
     xs = input.x
     ys = input.y
     zs = input.z
@@ -25,15 +25,16 @@ end
     # Initialize counter
     rho :: T = zero(T)
 
-    @inbounds for i in neighbor_indices
+    @inbounds for k in 1:Npart
+        i = neighbor_indices[k]
         rb :: NTuple{3, T} = (xs[i], ys[i], zs[i])
         W :: T = zero(T)
         if itp_strategy == itpGather
-          W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
+            W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
         elseif itp_strategy == itpScatter
-          W = Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
+            W = Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
         elseif itp_strategy == itpSymmetric
-          W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
+            W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
         end
         rho += ms[i] * W
     end
@@ -41,11 +42,12 @@ end
 end
 
 ## Number density
-@inline function _number_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T,neighbor_indices :: VNI, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, VNI <: AbstractVector{<:Integer}}
+@inline function _number_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Return 0.0 if no particle in the data
-    Npart :: Int64 = length(neighbor_indices)
+    neighbor_indices = neighbors.pool
+    Npart :: Int64 = neighbors.count
     if Npart == 0
-        return 0.0
+    return zero(T)
     end
 
     # Prepare for interpolation
@@ -59,15 +61,16 @@ end
     # Initialize counter
     n :: T = zero(T)
 
-    @inbounds for i in neighbor_indices
+    @inbounds for k in 1:Npart
+        i = neighbor_indices[k]
         rb :: NTuple{3, T} = (xs[i], ys[i], zs[i])
         W :: T = zero(T)
         if itp_strategy == itpGather
-          W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
+            W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
         elseif itp_strategy == itpScatter
-          W = Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
+            W = Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
         elseif itp_strategy == itpSymmetric
-          W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
+            W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
         end
         n += W
     end
@@ -75,11 +78,16 @@ end
 end
 
 ## Single quantity intepolation
-@inline function _quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbor_indices :: VNI, column_idx :: Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, VNI <: AbstractVector{<:Integer}}
+@inline function _quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, column_idx :: Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Return 0.0 if no particle in the data
-    Npart :: Int64 = length(neighbor_indices)
+    neighbor_indices = neighbors.pool
+    Npart :: Int64 = neighbors.count
     if Npart == 0
-        return 0.0
+        return zero(T)
+    end
+
+    if column_idx == 0
+        return _density_kernel(input, reference_point, ha, neighbors, itp_strategy)
     end
     # Prepare for interpolation
     # Known quantities
@@ -96,18 +104,19 @@ end
     A :: T = zero(T)
     mWlρ :: T = zero(T)
 
-    @inbounds for i in neighbor_indices
+    @inbounds for k in 1:Npart
+        i = neighbor_indices[k]
         mb = ms[i]
         ρb = ρs[i]
         Ab = As[i]
         rb :: NTuple{3, T} = (xs[i], ys[i], zs[i])
         W :: T = zero(T)
         if itp_strategy == itpGather
-          W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
+            W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
         elseif itp_strategy == itpScatter
-          W = Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
+            W = Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
         elseif itp_strategy == itpSymmetric
-          W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
+            W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
         end
 
         mbWlρb = mb * W/ρb
@@ -120,63 +129,86 @@ end
 end
 
 ## Muti-columns intepolation
-@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbor_indices :: VNI, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, VNI <: AbstractVector{<:Integer}, O<:AbstractVector{T}} 
-    # Return 0.0 if no particle in the data
-    Npart :: Int64 = length(neighbor_indices)
-    if Npart == 0
+@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}}
+    val_len = Val(length(input.quant))
+    columns = ntuple(identity, val_len)
+    return _quantities_interpolate_kernel!(output, input, reference_point, ha, neighbors, columns, itp_strategy)
+end
+
+@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, itp_strategy :: InterpolationStrategy) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
+    neighbor_indices = neighbors.pool
+    Npart :: Int64 = neighbors.count
+    ncols = length(columns)
+
+    @assert length(output) == ncols "Length of `output` must match the requested columns."
+
+    if Npart == 0 || ncols == 0
         fill!(output, T(NaN))
         return
     end
 
-    # Prepare for interpolation
-    # Known quantities
     xs = input.x
     ys = input.y
     zs = input.z
     ms = input.m
     hs = input.h
     ρs = input.ρ
-    vals = input.quant    
+    vals = input.quant
+    density_flags = ntuple(j -> columns[j] == 0, ncols)
+    has_nondensity = any(!flag for flag in density_flags)
     Ktyp = input.smoothed_kernel
-    
-    # Whether we need to check the length of output and vals? (AbstractVector{T}) <-> (NamedTuple{FN, NTuple{NCOLUMN, V}})
-    @assert length(output) == length(vals)
 
-    # Initialize counter
     mWlρ :: T = zero(T)
-    fill!(output, 0.0)
+    fill!(output, zero(T))
 
-    @inbounds for i in neighbor_indices
+    @inbounds for k in 1:Npart
+        i = neighbor_indices[k]
         mb = ms[i]
         ρb = ρs[i]
         rb :: NTuple{3, T} = (xs[i], ys[i], zs[i])
         W :: T = zero(T)
         if itp_strategy == itpGather
-          W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
+            W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
         elseif itp_strategy == itpScatter
-          W = Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
+            W = Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
         elseif itp_strategy == itpSymmetric
-          W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
+            W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
         end
 
-        # Counting
-        mbWlρb = mb * W/ρb
-        mWlρ += mbWlρb           # Prepare for Shepard Normalization
-        
-        @inbounds for j in eachindex(output)
-            output[j] += mbWlρb * vals[j][i]
-        end             
+        mbW = mb * W
+        mbWlρb = mbW/ρb
+        if has_nondensity
+            mWlρ += mbWlρb
+        end
+
+        @inbounds for j in 1:ncols
+            if density_flags[j]
+                output[j] += mbW
+            else
+                col_idx = columns[j]
+                output[j] += mbWlρb * vals[col_idx][i]
+            end
+        end
     end
-    # Shepard Normalization
-    @inbounds for j in eachindex(output)
-        output[j] /= mWlρ
+
+    if has_nondensity
+        @inbounds for j in 1:ncols
+            density_flags[j] && continue
+            output[j] /= mWlρ
+        end
     end
+    return
+end
+
+@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
+    return _quantities_interpolate_kernel!(output, input, reference_point, ha, neighbors, columns, itpSymmetric)
 end
 
 ## LOS density interpolation (Column / Surface density)
-@inline function _LOS_density_kernel(input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, neighbor_indices :: VNI, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, VNI <: AbstractVector{<:Integer}}
+@inline function _LOS_density_kernel(input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Return 0.0 if no particle in the data
-    Npart :: Int64 = length(neighbor_indices)
+    neighbor_indices = neighbors.pool
+    Npart :: Int64 = neighbors.count
     if Npart == 0
         return zero(T)
     end
@@ -192,16 +224,17 @@ end
     # Initialize counter
     Sigma :: T = zero(T)
 
-    @inbounds for i in neighbor_indices
+    @inbounds for k in 1:Npart
+        i = neighbor_indices[k]
         mb = ms[i]
         rb :: NTuple{2, T} = (xs[i], ys[i])
         W :: T = zero(T)
         if itp_strategy == itpGather
-          W = LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
+            W = LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
         elseif itp_strategy == itpScatter
-          W = LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
+            W = LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
         elseif itp_strategy == itpSymmetric
-          W = T(0.5) * (LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
+            W = T(0.5) * (LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
         end
 
         # Counting
@@ -211,56 +244,78 @@ end
 end
 
 ## LOS quantities interpolation
-@inline function _LOS_quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, neighbor_indices :: VNI, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, VNI <: AbstractVector{<:Integer}, O<:AbstractVector{T}}  
-    # Return 0.0 if no particle in the data
-    Npart :: Int64 = length(neighbor_indices)
-    if Npart == 0
+@inline function _LOS_quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}}
+    val_len = Val(length(input.quant))
+    columns = ntuple(identity, val_len)
+    return _LOS_quantities_interpolate_kernel!(output, input, reference_point, ha, neighbors, columns, itp_strategy)
+end
+
+@inline function _LOS_quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, itp_strategy :: InterpolationStrategy) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
+    neighbor_indices = neighbors.pool
+    Npart :: Int64 = neighbors.count
+    ncols = length(columns)
+
+    @assert length(output) == ncols "Length of `output` must match the requested columns."
+
+    if Npart == 0 || ncols == 0
         fill!(output, T(NaN))
         return
     end
 
-    # Prepare for interpolation
-    # Known quantities
     xs = input.x
     ys = input.y
     ms = input.m
     hs = input.h
     ρs = input.ρ
-    vals = input.quant    
+    vals = input.quant
+    density_flags = ntuple(j -> columns[j] == 0, ncols)
+    has_nondensity = any(!flag for flag in density_flags)
     Ktyp = input.smoothed_kernel
-    
-    # Whether we need to check the length of output and vals? (AbstractVector{T}) <-> (NamedTuple{FN, NTuple{NCOLUMN, V}})
-    @assert length(output) == length(vals)
 
-    # Initialize counter
     mWlρ :: T = zero(T)
-    fill!(output, 0.0)
+    fill!(output, zero(T))
 
-    @inbounds for i in neighbor_indices
+    @inbounds for k in 1:Npart
+        i = neighbor_indices[k]
         mb = ms[i]
         ρb = ρs[i]
         rb :: NTuple{2, T} = (xs[i], ys[i])
         W :: T = zero(T)
         if itp_strategy == itpGather
-          W = LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
+            W = LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
         elseif itp_strategy == itpScatter
-          W = LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
+            W = LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
         elseif itp_strategy == itpSymmetric
-          W = T(0.5) * (LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
+            W = T(0.5) * (LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
         end
 
-        # Counting
-        mbWlρb = mb * W/ρb
-        mWlρ += mbWlρb           # Prepare for Shepard Normalization
-        
-        @inbounds for j in eachindex(output)
-            output[j] += mbWlρb * vals[j][i]
-        end             
+        mbW = mb * W
+        mbWlρb = mbW/ρb
+        if has_nondensity
+            mWlρ += mbWlρb
+        end
+
+        @inbounds for j in 1:ncols
+            if density_flags[j]
+                output[j] += mbW
+            else
+                col_idx = columns[j]
+                output[j] += mbWlρb * vals[col_idx][i]
+            end
+        end
     end
-    # Shepard Normalization
-    @inbounds for j in eachindex(output)
-        output[j] /= mWlρ
+
+    if has_nondensity
+        @inbounds for j in 1:ncols
+            density_flags[j] && continue
+            output[j] /= mWlρ
+        end
     end
+    return
+end
+
+@inline function _LOS_quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
+    return _LOS_quantities_interpolate_kernel!(output, input, reference_point, ha, neighbors, columns, itpSymmetric)
 end
 
 """
@@ -269,9 +324,10 @@ end
       = (1/ρ(r))((∑_b m_b*ρ_b*∇W(r-r_b)) - ∑_b m_b*∇W(r-r_b)
 """
 # Single column gradient density intepolation
-@inline function _gradient_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbor_indices :: VNI, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, VNI <: AbstractVector{<:Integer}}
-  # Return (NaN) if no particle in the data
-    Npart :: Int64 = length(neighbor_indices)
+@inline function _gradient_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    # Return (NaN) if no particle in the data
+    neighbor_indices = neighbors.pool
+    Npart :: Int64 = neighbors.count
     if Npart == 0
         return (T(NaN), T(NaN), T(NaN))
     end
@@ -296,55 +352,56 @@ end
 
     ρ :: T = zero(T)
 
-    @inbounds for i in neighbor_indices
-      mb = ms[i]
-      ρb = ρs[i]
-      rb :: NTuple{3, T} = (xs[i], ys[i], zs[i])
-      W :: T = zero(T)
+    @inbounds for k in 1:Npart
+        i = neighbor_indices[k]
+        mb = ms[i]
+        ρb = ρs[i]
+        rb :: NTuple{3, T} = (xs[i], ys[i], zs[i])
+        W :: T = zero(T)
         if itp_strategy == itpGather
-          W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
+            W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
         elseif itp_strategy == itpScatter
-          W = Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
+            W = Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
         elseif itp_strategy == itpSymmetric
-          W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
+            W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
         end
-      ∂xW :: T = zero(T)
-      ∂yW :: T = zero(T)
-      ∂zW :: T = zero(T)
-      if itp_strategy == itpGather
-        ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
-        ∂xW = ∇W[1]
-        ∂yW = ∇W[2]
-        ∂zW = ∇W[3]
-      elseif itp_strategy == itpScatter
-        ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, hs[i])
-        ∂xW = ∇W[1]
-        ∂yW = ∇W[2]
-        ∂zW = ∇W[3]
-      elseif itp_strategy == itpSymmetric
-        ∇Wa = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
-        ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, hs[i])
-        ∂xW = T(0.5) * (∇Wa[1] + ∇Wb[1])
-        ∂yW = T(0.5) * (∇Wa[2] + ∇Wb[2])
-        ∂zW = T(0.5) * (∇Wa[3] + ∇Wb[3])
-      end
+        ∂xW :: T = zero(T)
+        ∂yW :: T = zero(T)
+        ∂zW :: T = zero(T)
+        if itp_strategy == itpGather
+            ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
+            ∂xW = ∇W[1]
+            ∂yW = ∇W[2]
+            ∂zW = ∇W[3]
+        elseif itp_strategy == itpScatter
+            ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, hs[i])
+            ∂xW = ∇W[1]
+            ∂yW = ∇W[2]
+            ∂zW = ∇W[3]
+        elseif itp_strategy == itpSymmetric
+            ∇Wa = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
+            ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, hs[i])
+            ∂xW = T(0.5) * (∇Wa[1] + ∇Wb[1])
+            ∂yW = T(0.5) * (∇Wa[2] + ∇Wb[2])
+            ∂zW = T(0.5) * (∇Wa[3] + ∇Wb[3])
+        end
 
-      # Counting
-      ## Normal
-      mbW = mb * W
-      ρ += mbW                                # ρ(r)
+        # Counting
+        ## Normal
+        mbW = mb * W
+        ρ += mbW                                # ρ(r)
 
-      # Gradient
-      mb∂xW = mb * ∂xW
-      mb∂yW = mb * ∂yW
-      mb∂zW = mb * ∂zW
+        # Gradient
+        mb∂xW = mb * ∂xW
+        mb∂yW = mb * ∂yW
+        mb∂zW = mb * ∂zW
 
-      ∇ρxf += mb∂xW * ρb
-      ∇ρyf += mb∂yW * ρb
-      ∇ρzf += mb∂zW * ρb
-      ∇ρxb += mb∂xW
-      ∇ρyb += mb∂yW
-      ∇ρzb += mb∂zW
+        ∇ρxf += mb∂xW * ρb
+        ∇ρyf += mb∂yW * ρb
+        ∇ρzf += mb∂zW * ρb
+        ∇ρxb += mb∂xW
+        ∇ρyb += mb∂yW
+        ∇ρzb += mb∂zW
     end
     if iszero(ρ)
         return (T(NaN), T(NaN), T(NaN))
@@ -368,9 +425,10 @@ end
       = ∇Af - ∇Ab
 """
 # Single column gradient value intepolation
-@inline function _gradient_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbor_indices :: VNI, column_idx :: Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, VNI <: AbstractVector{<:Integer}}
+@inline function _gradient_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, column_idx :: Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Return (NaN) if no particle in the data
-    Npart :: Int64 = length(neighbor_indices)
+    neighbor_indices = neighbors.pool
+    Npart :: Int64 = neighbors.count
     if Npart == 0
         return (T(NaN), T(NaN), T(NaN))
     end
@@ -399,38 +457,39 @@ end
     A :: T = zero(T)
     ρ :: T = zero(T)
 
-    @inbounds for i in neighbor_indices
+    @inbounds for k in 1:Npart
+        i = neighbor_indices[k]
         mb = ms[i]
         ρb = ρs[i]
         Ab = As[i]
         rb :: NTuple{3, T} = (xs[i], ys[i], zs[i])
         W :: T = zero(T)
         if itp_strategy == itpGather
-          W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
+            W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
         elseif itp_strategy == itpScatter
-          W = Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
+            W = Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
         elseif itp_strategy == itpSymmetric
-          W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
+            W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
         end
         ∂xW :: T = zero(T)
         ∂yW :: T = zero(T)
         ∂zW :: T = zero(T)
         if itp_strategy == itpGather
-          ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
-          ∂xW = ∇W[1]
-          ∂yW = ∇W[2]
-          ∂zW = ∇W[3]
+            ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
+            ∂xW = ∇W[1]
+            ∂yW = ∇W[2]
+            ∂zW = ∇W[3]
         elseif itp_strategy == itpScatter
-          ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, hs[i])
-          ∂xW = ∇W[1]
-          ∂yW = ∇W[2]
-          ∂zW = ∇W[3]
+            ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, hs[i])
+            ∂xW = ∇W[1]
+            ∂yW = ∇W[2]
+            ∂zW = ∇W[3]
         elseif itp_strategy == itpSymmetric
-          ∇Wa = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
-          ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, hs[i])
-          ∂xW = T(0.5) * (∇Wa[1] + ∇Wb[1])
-          ∂yW = T(0.5) * (∇Wa[2] + ∇Wb[2])
-          ∂zW = T(0.5) * (∇Wa[3] + ∇Wb[3])
+            ∇Wa = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
+            ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, hs[i])
+            ∂xW = T(0.5) * (∇Wa[1] + ∇Wb[1])
+            ∂yW = T(0.5) * (∇Wa[2] + ∇Wb[2])
+            ∂zW = T(0.5) * (∇Wa[3] + ∇Wb[3])
         end
 
         # Counting
@@ -477,9 +536,10 @@ end
            = ∇⋅A(r)
 """
 # Single column divergence value intepolation
-@inline function _divergence_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbor_indices :: VNI, Ax_column_idx :: Int64, Ay_column_idx :: Int64, Az_column_idx :: Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, VNI <: AbstractVector{<:Integer}}
+@inline function _divergence_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, Ax_column_idx :: Int64, Ay_column_idx :: Int64, Az_column_idx :: Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Return 0.0 if no particle in the data
-    Npart :: Int64 = length(neighbor_indices)
+    neighbor_indices = neighbors.pool
+    Npart :: Int64 = neighbors.count
     if Npart == 0
         return T(NaN)
     end
@@ -508,7 +568,8 @@ end
     Ay :: T = zero(T)
     Az :: T = zero(T)
     ρ :: T = zero(T)
-    @inbounds for i in neighbor_indices
+    @inbounds for k in 1:Npart
+        i = neighbor_indices[k]
         mb = ms[i]
         ρb = ρs[i]
         Axb = Axs[i]
@@ -517,32 +578,32 @@ end
         rb :: NTuple{3, T} = (xs[i], ys[i], zs[i])
         W :: T = zero(T)
         if itp_strategy == itpGather
-          W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
+            W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
         elseif itp_strategy == itpScatter
-          W = Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
+            W = Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
         elseif itp_strategy == itpSymmetric
-          W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
+            W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
         end
 
         ∂xW :: T = zero(T)
         ∂yW :: T = zero(T)
         ∂zW :: T = zero(T)
         if itp_strategy == itpGather
-          ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
-          ∂xW = ∇W[1]
-          ∂yW = ∇W[2]
-          ∂zW = ∇W[3]
+            ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
+            ∂xW = ∇W[1]
+            ∂yW = ∇W[2]
+            ∂zW = ∇W[3]
         elseif itp_strategy == itpScatter
-          ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, hs[i])
-          ∂xW = ∇W[1]
-          ∂yW = ∇W[2]
-          ∂zW = ∇W[3]
+            ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, hs[i])
+            ∂xW = ∇W[1]
+            ∂yW = ∇W[2]
+            ∂zW = ∇W[3]
         elseif itp_strategy == itpSymmetric
-          ∇Wa = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
-          ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, hs[i])
-          ∂xW = T(0.5) * (∇Wa[1] + ∇Wb[1])
-          ∂yW = T(0.5) * (∇Wa[2] + ∇Wb[2])
-          ∂zW = T(0.5) * (∇Wa[3] + ∇Wb[3])
+            ∇Wa = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
+            ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, hs[i])
+            ∂xW = T(0.5) * (∇Wa[1] + ∇Wb[1])
+            ∂yW = T(0.5) * (∇Wa[2] + ∇Wb[2])
+            ∂zW = T(0.5) * (∇Wa[3] + ∇Wb[3])
         end
 
         # Counting
@@ -588,9 +649,10 @@ end
        = -(1/ρ(r))*(∇×Af - ∇×Ab)
 """
 # Single column curl value intepolation
-@inline function _curl_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T,neighbor_indices :: VNI, Ax_column_idx :: Int64, Ay_column_idx :: Int64, Az_column_idx :: Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, VNI <: AbstractVector{<:Integer}}
+@inline function _curl_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, Ax_column_idx :: Int64, Ay_column_idx :: Int64, Az_column_idx :: Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Return 0.0 if no particle in the data
-    Npart :: Int64 = length(neighbor_indices)
+    neighbor_indices = neighbors.pool
+    Npart :: Int64 = neighbors.count
     if Npart == 0
         return (T(NaN), T(NaN), T(NaN))
     end
@@ -626,7 +688,8 @@ end
     Ay :: T = zero(T)
     Az :: T = zero(T)
     ρ :: T = zero(T)
-    @inbounds for i in neighbor_indices
+    @inbounds for k in 1:Npart
+        i = neighbor_indices[k]
         mb = ms[i]
         ρb = ρs[i]
         Axb = Axs[i]
@@ -636,32 +699,32 @@ end
 
         W :: T = zero(T)
         if itp_strategy == itpGather
-          W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
+            W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
         elseif itp_strategy == itpScatter
-          W = Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
+            W = Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
         elseif itp_strategy == itpSymmetric
-          W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
+            W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
         end
         
         ∂xW :: T = zero(T)
         ∂yW :: T = zero(T)
         ∂zW :: T = zero(T)
         if itp_strategy == itpGather
-          ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
-          ∂xW = ∇W[1]
-          ∂yW = ∇W[2]
-          ∂zW = ∇W[3]
+            ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
+            ∂xW = ∇W[1]
+            ∂yW = ∇W[2]
+            ∂zW = ∇W[3]
         elseif itp_strategy == itpScatter
-          ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, hs[i])
-          ∂xW = ∇W[1]
-          ∂yW = ∇W[2]
-          ∂zW = ∇W[3]
+            ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, hs[i])
+            ∂xW = ∇W[1]
+            ∂yW = ∇W[2]
+            ∂zW = ∇W[3]
         elseif itp_strategy == itpSymmetric
-          ∇Wa = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
-          ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, hs[i])
-          ∂xW = T(0.5) * (∇Wa[1] + ∇Wb[1])
-          ∂yW = T(0.5) * (∇Wa[2] + ∇Wb[2])
-          ∂zW = T(0.5) * (∇Wa[3] + ∇Wb[3])
+            ∇Wa = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
+            ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, hs[i])
+            ∂xW = T(0.5) * (∇Wa[1] + ∇Wb[1])
+            ∂yW = T(0.5) * (∇Wa[2] + ∇Wb[2])
+            ∂zW = T(0.5) * (∇Wa[3] + ∇Wb[3])
         end
 
         # Counting
