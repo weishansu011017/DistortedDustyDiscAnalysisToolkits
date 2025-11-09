@@ -4,11 +4,10 @@ Morton code encoding/decoding utilities for particle spatial indexing
     November 6, 2025
 """
 
-struct MortonEncoding{D, TF <: AbstractFloat, TI <: Unsigned, V <: AbstractVector{TI}}
-    order :: V          # Order of corresponding particles
-    codes :: V          # Morton code
-    ΔL       :: NTuple{D, TF}
-    amin     :: NTuple{D, TF}
+struct MortonEncoding{D, TF <: AbstractFloat, TI <: Unsigned, VF <: AbstractVector{TF}, VI <: AbstractVector{TI}}
+    order    :: VI             # Order of corresponding particles
+    codes    :: VI             # Morton code
+    coord    :: NTuple{D, VF} # Original data points
 end
 
 # Encoding & decoding morton code 
@@ -193,6 +192,15 @@ end
     return leading_zeros(a ⊻ b)
 end
 
+@inline function _longest_common_prefix_length(codes :: V, i :: Int, j :: Int) where {T <: Unsigned, V <: AbstractVector{T}}
+    a = codes[i]; b = codes[j]
+    if a == b
+        return _longest_common_prefix_length(UInt64(i), UInt64(j))
+    else
+        return _longest_common_prefix_length(a, b)
+    end
+end
+
 @inline function _longest_common_prefix(a :: T, b :: T) where {T <: Unsigned}
     LCPL = _longest_common_prefix_length(a, b)
     β = sizeof(T) * 8 
@@ -245,6 +253,9 @@ end
 function _normalize_vector(v :: V) where {T <: AbstractFloat, V <: AbstractVector{T}}
     vmin = minimum(v); vmax = maximum(v)
     Δv = vmax - vmin
+    if Δv == 0
+        return fill!(similar(v), 0.5) 
+    end
     invΔv = inv(Δv)
 
     normalized_v = similar(v)
@@ -319,6 +330,14 @@ Sort particles by Morton code in-place.
     p = sortperm(enc.codes; alg=QuickSort)
     enc.codes .= enc.codes[p]
     enc.order .= enc.order[p]
+    for dir in enc.coord
+        dir .= dir[p]
+    end
+    @inbounds for i in 2:length(enc.codes)
+        if enc.codes[i] <= enc.codes[i - 1]
+            enc.codes[i] = enc.codes[i - 1] + one(eltype(enc.codes))
+        end
+    end
     return p
 end
 
@@ -333,16 +352,13 @@ Encode a set of 3D particle coordinates into Morton codes.
 - `CodeType :: Type{TI}`: Unsigned integer type used for Morton encoding (`UInt32` or `UInt64`).
 
 # Returns
-- `MortonEncoding{3, T, TI, typeof(order)}`: Struct containing Morton codes, particle order, and bounding-box info.
+- `MortonEncoding{3, T, TI, V, typeof(order)}`: Struct containing Morton codes, particle order, and coordinates, ordered by Morton codes
 """
 function MortonEncoding(x :: V, y :: V, z :: V; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, V<:AbstractVector{T}}
-    amin = (minimum(x), minimum(y), minimum(z))
-    xmin, ymin, zmin = amin
-    ΔL = ((maximum(x) - xmin), (maximum(y) - ymin), (maximum(z) - zmin))
-
-    ix, iy, iz = _quantize_coords(x, y, z, CodeType=CodeType)
+    xcopy = copy(x); ycopy = copy(y); zcopy = copy(z);
+    ix, iy, iz = _quantize_coords(xcopy, ycopy, zcopy, CodeType=CodeType)
     codes, order  = _encode_morton_code3D(ix, iy, iz)
-    enc = MortonEncoding{3, T, TI, typeof(order)}(order, codes, ΔL, amin)
+    enc = MortonEncoding{3, T, TI, V, typeof(order)}(order, codes, (xcopy, ycopy, zcopy))
     sort_by_morton!(enc)
     return enc
 end
@@ -357,74 +373,14 @@ Encode a set of 2D particle coordinates into Morton codes.
 - `CodeType :: Type{TI}`: Unsigned integer type used for Morton encoding (`UInt32` or `UInt64`).
 
 # Returns
-- `MortonEncoding{2, T, TI, typeof(order)}`: Struct containing Morton codes, particle order, and bounding-box info.
+- `MortonEncoding{2, T, TI, V, typeof(order)}`: Struct containing Morton codes, particle order, and coordinates, ordered by Morton codes
 """
 function MortonEncoding(x :: V, y :: V; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, V<:AbstractVector{T}}
-    amin = (minimum(x), minimum(y))
-    xmin, ymin = amin
-    ΔL = ((maximum(x) - xmin), (maximum(y) - ymin))
-
-    ix, iy = _quantize_coords(x, y, CodeType=CodeType)
+    xcopy = copy(x); ycopy = copy(y)
+    ix, iy = _quantize_coords(xcopy, ycopy, CodeType=CodeType)
     codes, order  = _encode_morton_code2D(ix, iy)
-    enc = MortonEncoding{2, T, TI, typeof(order)}(order, codes, ΔL, amin)
+    enc = MortonEncoding{2, T, TI, V, typeof(order)}(order, codes, (xcopy, ycopy))
     sort_by_morton!(enc)
-
     return enc
-end
-
-function _decoding_particles(Encoding :: MortonEncoding{3, T, TI}) where {T <: AbstractFloat, TI <: Unsigned}
-    ΔLx, ΔLy, ΔLz = Encoding.ΔL
-    xmin, ymin, zmin = Encoding.amin
-    codes = Encoding.codes
-
-    scale = inv(_axis_scale(Val(3),TI, T))
-    ix, iy, iz = _decode_morton_code3D(codes)
-
-    x = similar(ix, T)
-    y = similar(iy, T)
-    z = similar(iz, T)
-    @inbounds for i in eachindex(x, y, z)
-        ixi = ix[i]; iyi = iy[i]; izi = iz[i]
-        fxi = ixi * scale
-        fyi = iyi * scale
-        fzi = izi * scale
-
-        xi = (fxi * ΔLx) + xmin
-        yi = (fyi * ΔLy) + ymin
-        zi = (fzi * ΔLz) + zmin
-
-        @inbounds begin
-            x[i] = xi
-            y[i] = yi
-            z[i] = zi
-        end
-    end
-    return x, y, z
-end
-
-function _decoding_particles(Encoding :: MortonEncoding{2, T, TI}) where {T <: AbstractFloat, TI <: Unsigned}
-    ΔLx, ΔLy = Encoding.ΔL
-    xmin, ymin = Encoding.amin
-    codes = Encoding.codes
-
-    scale = inv(_axis_scale(Val(2),TI, T))
-    ix, iy = _decode_morton_code2D(codes)
-
-    x = similar(ix, T)
-    y = similar(iy, T)
-    @inbounds for i in eachindex(x, y)
-        ixi = ix[i]; iyi = iy[i]
-        fxi = ixi * scale
-        fyi = iyi * scale
-
-        xi = (fxi * ΔLx) + xmin
-        yi = (fyi * ΔLy) + ymin
-
-        @inbounds begin
-            x[i] = xi
-            y[i] = yi
-        end
-    end
-    return x, y
 end
 
