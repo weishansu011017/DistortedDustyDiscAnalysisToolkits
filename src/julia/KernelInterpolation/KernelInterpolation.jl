@@ -14,6 +14,7 @@ module KernelInterpolation
 using .Threads 
 using StaticArrays
 
+using PhantomRevealer.NeighborSearch
 
 # KernelInterpolation
 include(joinpath(@__DIR__, "table", "los_tables.jl"))
@@ -28,12 +29,15 @@ include(joinpath(@__DIR__, "kernel_function", "kernels", "C6_Wendland.jl"))
 include(joinpath(@__DIR__, "kernel_function", "losintegrated_kernel.jl"))
 
 ## Single point interpolation
+include(joinpath(@__DIR__, "single_point_interpolation", "InterpolationCatalog.jl"))
 include(joinpath(@__DIR__, "single_point_interpolation", "InterpolationInput.jl"))
 include(joinpath(@__DIR__, "single_point_interpolation", "single_point_interpolation_kernels.jl"))
 include(joinpath(@__DIR__, "single_point_interpolation", "single_point_interpolation.jl"))
 
 ## Grids
 include(joinpath(@__DIR__, "grid.jl"))
+
+## Grid interpolation
 
 # Export function, marco, const...
 for name in filter(s -> !startswith(string(s), "#"), names(@__MODULE__, all = true))

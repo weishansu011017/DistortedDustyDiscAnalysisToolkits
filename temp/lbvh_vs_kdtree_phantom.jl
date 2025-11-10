@@ -72,7 +72,8 @@ end
 
 function run_lbvh!(pool, stack, lbvh, points, radii, counts)
     for i in eachindex(radii)
-        counts[i] = LBVH_query!(pool, stack, lbvh, points[i], radii[i])
+        result = LBVH_query!(pool, stack, lbvh, points[i], radii[i])
+        counts[i] = result.count
     end
     return nothing
 end
@@ -89,8 +90,8 @@ function validate_radius!(pool, stack, lbvh, order, tree, coords, points, radii,
         return
     end
     @views for i in idxs
-        count = LBVH_query!(pool, stack, lbvh, points[i], radii[i])
-        lbvh_idx = sort!(Int.(order[pool[1:count]]))
+        result = LBVH_query!(pool, stack, lbvh, points[i], radii[i])
+        lbvh_idx = sort!(Int.(order[valid_indices(result)]))
         kd_idx = sort!(inrange(tree, coords[:, i], radii[i]))
         @test lbvh_idx == kd_idx
     end

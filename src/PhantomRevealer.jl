@@ -19,12 +19,9 @@ include(joinpath(@__DIR__, "julia", "Tools", "Tools.jl"))
 include(joinpath(@__DIR__, "julia", "IO", "IO.jl"))
 @reexport using .IO
 
-# ### PhantomRevealerDataFrame & basic adding quantities function
-# include(joinpath(@__DIR__, "julia", "IO", "struct", "PhantomRevealerDataFrame.jl"))
-# include(joinpath(@__DIR__, "julia", "IO", "struct", "add_quantities_prdf.jl"))
-
-### Read & Write Phantom Binary dumpfiles
-# include(joinpath(@__DIR__, "julia", "IO", "phantomIO", "read_phantom.jl"))
+## NeighborSearch 
+include(joinpath(@__DIR__, "julia", "NeighborSearch", "NeighborSearch.jl"))
+@reexport using .NeighborSearch
 
 ## KernelInterpolation
 include(joinpath(@__DIR__, "julia", "KernelInterpolation", "KernelInterpolation.jl"))
@@ -33,13 +30,10 @@ include(joinpath(@__DIR__, "julia", "KernelInterpolation", "KernelInterpolation.
 # include(joinpath(@__DIR__, "julia", "KernelInterpolation", "kernel_function.jl"))
 # include(joinpath(@__DIR__, "julia", "KernelInterpolation", "grid.jl"))
 
-## NeighborSearch 
-include(joinpath(@__DIR__, "julia", "NeighborSearch", "NeighborSearch.jl"))
-@reexport using .NeighborSearch
 
 ### Constructors of the `InterpolationInput` from `PhantomRevealerDataFrame`
 include(joinpath(@__DIR__, "julia", "KernelInterpolation", "single_point_interpolation", "constructor.jl"))
-@reexport using .KernelInterpolation
+
 
 ## StreamingInstability
 include(joinpath(@__DIR__, "julia", "StreamingInstability", "StreamingInstability.jl"))

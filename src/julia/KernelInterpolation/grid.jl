@@ -308,6 +308,61 @@ function reduce_mean(grid::StructuredGrid{D,TF,V,A}, dim::Int=1) where {D,TF<:Ab
 end
 
 ## Constructing
+### Arbitrary input
+"""
+        GeneralGrid(x::V, y::V, z::V) where {T<:AbstractFloat, V<:AbstractVector{T}}
+
+Construct a 3D `GeneralGrid` from particle coordinates. The input vectors are
+copied into an array of position tuples and paired with a zero-initialised value
+buffer, yielding a dense, order-preserving grid container that can be filled by
+subsequent interpolation routines.
+
+# Parameters
+- `x, y, z::AbstractVector{T}`: Particle positions along each Cartesian axis.
+
+# Returns
+- `GeneralGrid{3, T, Vector{T}, Vector{NTuple{3, T}}}`: Grid with zeroed values
+    and `(x, y, z)` coordinate tuples.
+"""
+function GeneralGrid(x :: V, y :: V, z :: V) where {T <: AbstractFloat, V <: AbstractVector{T}}
+    N = length(x)
+    (length(y) == N) || throw(ArgumentError("y length mismatch"))
+    (length(z) == N) || throw(ArgumentError("z length mismatch"))
+
+    coords = Vector{NTuple{3, T}}(undef, N)
+    @inbounds @simd for i in eachindex(x, y, z)
+        coords[i] = (x[i], y[i], z[i])
+    end
+    vals = zeros(T, N)
+    return GeneralGrid{3, T, Vector{T}, Vector{NTuple{3, T}}}(vals, coords)
+end
+
+"""
+    GeneralGrid(x::V, y::V) where {T<:AbstractFloat, V<:AbstractVector{T}}
+
+Construct a 2D `GeneralGrid` from planar coordinates. The returned grid stores
+zeroed values and the `(x, y)` coordinate tuples, ready for interpolation or
+resampling passes.
+
+# Parameters
+- `x, y::AbstractVector{T}`: Particle positions along each axis.
+
+# Returns
+- `GeneralGrid{2, T, Vector{T}, Vector{NTuple{2, T}}}`: Grid with zeroed values
+  and `(x, y)` coordinate tuples.
+"""
+function GeneralGrid(x :: V, y :: V) where {T <: AbstractFloat, V <: AbstractVector{T}}
+    N = length(x)
+    (length(y) == N) || throw(ArgumentError("y length mismatch"))
+
+    coords = Vector{NTuple{2, T}}(undef, N)
+    @inbounds @simd for i in eachindex(x, y)
+        coords[i] = (x[i], y[i])
+    end
+    vals = zeros(T, N)
+    return GeneralGrid{2, T, Vector{T}, Vector{NTuple{2, T}}}(vals, coords)
+end
+
 ### Cartesian
 """
     StructuredGrid(::Type{Cartesian}, params::Vararg{AxisParam{TF}}) where {TF<:AbstractFloat}

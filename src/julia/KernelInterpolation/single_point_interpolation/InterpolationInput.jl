@@ -117,3 +117,37 @@ This is the type used for all scalar fields and positions in the interpolation s
 @inline function get_type(::InterpolationInput{T}) where {T<:AbstractFloat}
     return T
 end
+
+@inline function _apply_permutation!(data::AbstractVector, perm::AbstractVector)
+    len_perm = length(perm)
+    if len_perm == 0
+        return data
+    end
+    @boundscheck len_perm <= length(data) || throw(ArgumentError("permutation longer than data"))
+    tmp = similar(data, len_perm)
+    @inbounds for i in 1:len_perm
+        tmp[i] = data[Int(perm[i])]
+    end
+    copyto!(data, tmp)
+    return data
+end
+
+function LinearBVH!(inp::InterpolationInput; CodeType :: Type{TI} = UInt64) where {TI<:Unsigned}
+    enc = MortonEncoding(inp.x, inp.y, inp.z, CodeType=CodeType)
+    order = enc.order
+
+    _apply_permutation!(inp.x, order)
+    _apply_permutation!(inp.y, order)
+    _apply_permutation!(inp.z, order)
+    _apply_permutation!(inp.m, order)
+    _apply_permutation!(inp.h, order)
+    _apply_permutation!(inp.ρ, order)
+    for column in inp.quant
+        _apply_permutation!(column, order)
+    end
+
+    brt = BinaryRadixTree(enc)
+    LBVH = LinearBVH(enc, brt)
+    return LBVH
+end
+

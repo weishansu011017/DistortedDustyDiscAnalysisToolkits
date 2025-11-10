@@ -83,13 +83,14 @@ end
 
         for (point, radius) in cases
             expected = expected_neighbor_indices(lbvh, point, radius)
-            count = LBVH_query!(pool, stack, lbvh, point, radius)
-            got = sort(pool[1:count])
+
+            result1 = LBVH_query!(pool, stack, lbvh, point, radius)
+            got = sort(result1.pool[1:result1.count])
             @test got == expected
 
-            pool2, count2 = LBVH_query(lbvh, point, radius)
-            @test count2 == count
-            @test sort(pool2[1:count2]) == expected
+            result2 = LBVH_query(lbvh, point, radius)
+            @test result2.count == result1.count
+            @test sort(result2.pool[1:result2.count]) == expected
         end
     end
 end
@@ -104,7 +105,7 @@ end
     pool = zeros(Int, n)
     stack = Vector{Int}(undef, max(1, 2 * length(brt.left_child) + 8))
     qpt = (0.5, 0.5)
-    count = LBVH_query!(pool, stack, lbvh, qpt, 0.0)
-    @test count == n
-    @test sort(pool[1:count]) == collect(1:n)
+    result = LBVH_query!(pool, stack, lbvh, qpt, 0.0)
+    @test result.count == n
+    @test sort(result.pool[1:result.count]) == collect(1:n)
 end
