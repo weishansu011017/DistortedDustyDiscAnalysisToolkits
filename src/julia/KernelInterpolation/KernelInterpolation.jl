@@ -38,6 +38,7 @@ include(joinpath(@__DIR__, "single_point_interpolation", "single_point_interpola
 include(joinpath(@__DIR__, "grid.jl"))
 
 ## Grid interpolation
+include(joinpath(@__DIR__, "grid_interpolation", "grid_interpolation.jl"))
 
 # Export function, marco, const...
 for name in filter(s -> !startswith(string(s), "#"), names(@__MODULE__, all = true))

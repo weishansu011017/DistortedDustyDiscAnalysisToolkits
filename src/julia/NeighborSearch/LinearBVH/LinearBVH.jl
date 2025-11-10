@@ -266,6 +266,86 @@ end
     return LBVH_query!(pool, stack, LBVH, point, T(radius))
 end
 
+@inline function _nearest_leaf_index(stack::VI, LBVH::LinearBVH{D, T},
+                                     point::NTuple{D, T}) where {D, T <: AbstractFloat, VI <: AbstractVector{Int}}
+    node_min = LBVH.node_aabb.min
+    node_max = LBVH.node_aabb.max
+    leaf_min = LBVH.leaf_aabb.min
+    leaf_max = LBVH.leaf_aabb.max
+
+    L = LBVH.brt.left_child
+    R = LBVH.brt.right_child
+    LL = LBVH.brt.is_leaf_left
+    RR = LBVH.brt.is_leaf_right
+    root = LBVH.root
+
+    @inline function dist2_to_node(i::Int)
+        s = zero(T)
+        @inbounds for d in 1:D
+            a = node_min[d][i]; b = node_max[d][i]; p = point[d]
+            t = p < a ? (a - p) : (p > b ? (p - b) : zero(T))
+            s += t * t
+        end
+        return s
+    end
+
+    @inline function leaf_dist2(i::Int)
+        s = zero(T)
+        @inbounds for d in 1:D
+            a = leaf_min[d][i]; b = leaf_max[d][i]; p = point[d]
+            t = p < a ? (a - p) : (p > b ? (p - b) : zero(T))
+            s += t * t
+        end
+        return s
+    end
+
+    best_idx = zero(eltype(stack))
+    best_dist2 = typemax(T)
+
+    if root == 0
+        nleaf = length(leaf_min[1])
+        @inbounds for leaf_idx in 1:nleaf
+            dist2 = leaf_dist2(leaf_idx)
+            if dist2 < best_dist2
+                best_dist2 = dist2
+                best_idx = leaf_idx
+            end
+        end
+        return best_idx
+    end
+
+    top = 0
+    top = _push!(stack, top, root)
+    while top > 0
+        node, top = _pop!(stack, top)
+        if dist2_to_node(node) <= best_dist2
+            if LL[node]
+                leaf_idx = L[node]
+                dist2 = leaf_dist2(leaf_idx)
+                if dist2 < best_dist2
+                    best_dist2 = dist2
+                    best_idx = leaf_idx
+                end
+            else
+                top = _push!(stack, top, L[node])
+            end
+
+            if RR[node]
+                leaf_idx = R[node]
+                dist2 = leaf_dist2(leaf_idx)
+                if dist2 < best_dist2
+                    best_dist2 = dist2
+                    best_idx = leaf_idx
+                end
+            else
+                top = _push!(stack, top, R[node])
+            end
+        end
+    end
+
+    return best_idx
+end
+
 """
     LBVH_query!(pool, stack, lbvh, point, radius_multiplier, h_array; atol = eps(T) * radius_multiplier)
 
@@ -293,33 +373,49 @@ fulfils the symmetric SPH criterion `‖x_a - x_b‖ < max(κ h_a, κ h_b)`.
     nleaf = length(LBVH.enc.order)
     length(h_array) == nleaf || throw(ArgumentError("length(h_array) = $(length(h_array)) does not match LBVH leaf count $nleaf."))
 
-    full_result = LBVH_query!(pool, stack, LBVH, point, T(Inf))
-    nearest_leaf = nearest_index(full_result)
-    nearest_leaf == 0 && return full_result, zero(T)
+    nearest_leaf = _nearest_leaf_index(stack, LBVH, point)
+    zero_idx = zero(eltype(pool))
+    nearest_leaf == 0 && return NeighborSelection(pool, zero_idx, zero_idx), zero(T)
 
     ha = h_array[nearest_leaf]
-    radius = radius_multiplier * ha
     tol = max(atol, zero(T))
 
-    while true
-        result = LBVH_query!(pool, stack, LBVH, point, radius)
-        count = result.count
-        count == 0 && return result, ha
+    global_max_h = maximum(h_array)
+    search_radius = radius_multiplier * max(ha, global_max_h)
+    candidate = LBVH_query!(pool, stack, LBVH, point, search_radius)
+    count = candidate.count
+    count == 0 && return NeighborSelection(pool, zero_idx, zero_idx), ha
 
-        max_h = ha
-        indices = result.pool
-        @inbounds for idx in 1:count
-            leaf_idx = indices[idx]
-            hb = h_array[leaf_idx]
-            max_h = hb > max_h ? hb : max_h
+    coords = LBVH.enc.coord
+    indices = candidate.pool
+    kept = zero_idx
+    closest_idx = zero_idx
+    closest_dist2 = typemax(T)
+
+    @inbounds for idx in 1:count
+        leaf_idx = indices[idx]
+        hb = h_array[leaf_idx]
+        limit = radius_multiplier * max(ha, hb) + tol
+        limit2 = limit * limit
+
+        dist2 = zero(T)
+        for d in 1:D
+            δ = coords[d][leaf_idx] - point[d]
+            dist2 += δ * δ
         end
 
-        new_radius = radius_multiplier * max_h
-        if new_radius <= radius + tol
-            return result, ha
+        if dist2 <= limit2
+            kept += one(eltype(pool))
+            indices[kept] = leaf_idx
+            if dist2 < closest_dist2
+                closest_dist2 = dist2
+                closest_idx = leaf_idx
+            end
         end
-        radius = new_radius
     end
+
+    kept == zero_idx && return NeighborSelection(pool, zero_idx, zero_idx), ha
+    return NeighborSelection(indices, kept, closest_idx), ha
 end
 
 @inline function LBVH_query!(pool::VI, stack::VI, LBVH::LinearBVH{D, T},

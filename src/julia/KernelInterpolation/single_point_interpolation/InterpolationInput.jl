@@ -73,7 +73,7 @@ This struct is designed for fast and safe interpolation on CPU and GPU. It conta
 - `quant::NTuple{NCOLUMN, V}` — Tuple of per-field scalar data arrays (e.g., pressure, temperature).
 """
 struct InterpolationInput{T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, NCOLUMN} <: AbstractInterpolationInput
-    Npart       :: Int64
+    Npart           :: Int64
     smoothed_kernel :: Type{K}
     x               :: V
     y               :: V

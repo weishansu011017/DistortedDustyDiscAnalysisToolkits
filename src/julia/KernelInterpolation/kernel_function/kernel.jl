@@ -240,6 +240,10 @@ end
         Δ = rab[i]
         r2 += Δ*Δ
     end
+  if iszero(r2)
+    fill!(out, zero(T))
+    return out
+  end
     r = sqrt(r2)
     q     = r / h
     coeff = KernelFunctionDiff(K, q) * KernelFunctionnorm(K, Val(D), T)
@@ -256,11 +260,15 @@ end
         Δ = ra[i] - rb[i]
         r2 += Δ*Δ
     end
+  if iszero(r2)
+    fill!(out, zero(T))
+    return out
+  end
     r = sqrt(r2)
     q     = r / h
     coeff = KernelFunctionDiff(K, q) * KernelFunctionnorm(K, Val(D), T)
 
-    @inbounds for i in eachindex(rab)
+    @inbounds for i in eachindex(out)
         out[i] = ((ra[i] - rb[i]) / r) * coeff
     end
     return out 
@@ -270,6 +278,9 @@ end
     r2 = zero(T)
     @inbounds for i in 1:D
         r2 += rab[i]^2
+    end
+    if iszero(r2)
+      return ntuple(_ -> zero(T), D)
     end
     r = sqrt(r2)
     q = r / h
@@ -283,6 +294,9 @@ end
     @inbounds for i in 1:D
         Δ = ra[i] - rb[i]
         r2 += Δ*Δ
+    end
+    if iszero(r2)
+      return ntuple(_ -> zero(T), D)
     end
     r = sqrt(r2)
     q     = r / h
