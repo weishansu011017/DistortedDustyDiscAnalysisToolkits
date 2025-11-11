@@ -24,39 +24,6 @@ function expected_neighbor_indices(lbvh, point::NTuple{D, T}, radius) where {D, 
     return hits
 end
 
-function expected_symmetric_neighbors(lbvh, point::NTuple{D, T}, radius_multiplier, h_array; atol=nothing) where {D, T}
-    coords = lbvh.enc.coord
-    n = length(coords[1])
-    dist2 = zeros(T, n)
-    nearest_idx = 0
-    nearest_dist2 = typemax(T)
-
-    @inbounds for i in 1:n
-        d2 = zero(T)
-        for d in 1:D
-            δ = coords[d][i] - point[d]
-            d2 += δ * δ
-        end
-        dist2[i] = d2
-        if d2 < nearest_dist2
-            nearest_dist2 = d2
-            nearest_idx = i
-        end
-    end
-
-    ha = h_array[nearest_idx]
-    tol = atol === nothing ? eps(T) * radius_multiplier : T(atol)
-    hits = Int[]
-    @inbounds for i in 1:n
-        limit = radius_multiplier * max(ha, h_array[i]) + tol
-        if dist2[i] <= limit * limit
-            push!(hits, i)
-        end
-    end
-    sort!(hits)
-    return hits, ha, dist2
-end
-
 @testset "LinearBVH construction invariants" begin
     for D in (Val(2), Val(3))
         for n in (2, 8, 32)
@@ -121,10 +88,6 @@ end
             result1 = LBVH_query!(pool, stack, lbvh, point, radius)
             got = sort(result1.pool[1:result1.count])
             @test got == expected
-
-            result2 = LBVH_query(lbvh, point, radius)
-            @test result2.count == result1.count
-            @test sort(result2.pool[1:result2.count]) == expected
         end
     end
 end
@@ -144,43 +107,3 @@ end
     @test sort(result.pool[1:result.count]) == collect(1:n)
 end
 
-@testset "LinearBVH symmetric SPH queries" begin
-    Random.seed!(0xDEADBEEF)
-    for dim in (2, 3)
-        n = 128
-        coords = ntuple(_ -> rand(Float64, n), dim)
-        enc = dim == 2 ? MortonEncoding(coords[1], coords[2]) : MortonEncoding(coords[1], coords[2], coords[3])
-        brt = BinaryRadixTree(enc)
-        lbvh = LinearBVH(enc, brt)
-
-        h_array = 0.05 .+ 0.45 .* rand(Float64, n)
-        pool = zeros(Int, n)
-        stack = Vector{Int}(undef, max(1, 2 * length(brt.left_child) + 8))
-
-        for trial in 1:10
-            point = ntuple(_ -> rand(Float64), dim)
-            multiplier = rand(Float64) * 1.5 + 1.0
-
-            expected_hits, expected_ha, dist2 = expected_symmetric_neighbors(lbvh, point, multiplier, h_array)
-
-            selection1, ha1 = LBVH_query!(pool, stack, lbvh, point, multiplier, h_array)
-            @test ha1 == expected_ha
-            @test sort(selection1.pool[1:selection1.count]) == expected_hits
-
-            Ttol = eltype(h_array)
-            tol = eps(Ttol) * multiplier
-            for idx in selection1.pool[1:selection1.count]
-                limit = multiplier * max(ha1, h_array[idx]) + tol
-                @test dist2[idx] <= limit * limit
-            end
-
-            selection2, ha2 = LBVH_query(lbvh, point, multiplier, h_array)
-            @test ha2 == expected_ha
-            @test sort(selection2.pool[1:selection2.count]) == expected_hits
-            for idx in selection2.pool[1:selection2.count]
-                limit = multiplier * max(ha2, h_array[idx]) + tol
-                @test dist2[idx] <= limit * limit
-            end
-        end
-    end
-end

@@ -287,9 +287,9 @@ function build_input(data::PhantomRevealerDataFrame,
     column_index = Dict{Symbol,Int}(name => idx for (idx, name) in enumerate(column_names))
 
     scalar_names = Tuple(scalars)
-    scalar_slots = ntuple(i -> scalar_names[i] ∈ (:rho, :ρ) ? 0 : column_index[scalar_names[i]], length(scalar_names))
+    scalar_slots = Tuple(column_index[name] for name in scalars)
     grad_names   = Tuple(gradients)
-    grad_slots   = ntuple(i -> grad_names[i] ∈ (:rho, :ρ) ? 0 : column_index[grad_names[i]], length(grad_names))
+    grad_slots   = Tuple(column_index[name] for name in gradients)
     div_names    = Tuple(divergences)
     div_slots    = Tuple(begin
         comps = _vector_components(name)

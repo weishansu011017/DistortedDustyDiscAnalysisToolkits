@@ -47,7 +47,7 @@ end
     neighbor_indices = neighbors.pool
     Npart :: Int64 = neighbors.count
     if Npart == 0
-    return zero(T)
+        return zero(T)
     end
 
     # Prepare for interpolation
@@ -78,16 +78,12 @@ end
 end
 
 ## Single quantity intepolation
-@inline function _quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, column_idx :: Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, column_idx :: Int64, ShepardNormalization :: Bool, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Return 0.0 if no particle in the data
     neighbor_indices = neighbors.pool
     Npart :: Int64 = neighbors.count
     if Npart == 0
         return zero(T)
-    end
-
-    if column_idx == 0
-        return _density_kernel(input, reference_point, ha, neighbors, itp_strategy)
     end
     # Prepare for interpolation
     # Known quantities
@@ -124,38 +120,33 @@ end
         A += Ab * mbWlρb
     end
     # Shepard normalization
-    A /= mWlρ
+    if ShepardNormalization
+        A /= mWlρ
+    end
     return A
 end
 
 ## Muti-columns intepolation
-@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}}
-    val_len = Val(length(input.quant))
-    columns = ntuple(identity, val_len)
-    return _quantities_interpolate_kernel!(output, input, reference_point, ha, neighbors, columns, itp_strategy)
-end
-
-@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, itp_strategy :: InterpolationStrategy) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
+@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, itp_strategy :: InterpolationStrategy) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
     neighbor_indices = neighbors.pool
     Npart :: Int64 = neighbors.count
-    ncols = length(columns)
 
-    @assert length(output) == ncols "Length of `output` must match the requested columns."
+    @assert length(output) == M "Length of `output` must match the requested columns."
 
-    if Npart == 0 || ncols == 0
+    if Npart == 0 || M == 0
         fill!(output, T(NaN))
         return
     end
 
+    # Prepare for interpolation
+    # Known quantities
     xs = input.x
     ys = input.y
     zs = input.z
     ms = input.m
     hs = input.h
     ρs = input.ρ
-    vals = input.quant
-    density_flags = ntuple(j -> columns[j] == 0, ncols)
-    has_nondensity = any(!flag for flag in density_flags)
+    vals = ntuple(j -> input.quant[columns[j]], Val(M))    
     Ktyp = input.smoothed_kernel
 
     mWlρ :: T = zero(T)
@@ -175,33 +166,34 @@ end
             W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
         end
 
-        mbW = mb * W
-        mbWlρb = mbW/ρb
-        if has_nondensity
-            mWlρ += mbWlρb
-        end
+        # Counting
+        mbWlρb = mb * W/ρb
+        mWlρ += mbWlρb           # Prepare for Shapard Normalization
 
-        @inbounds for j in 1:ncols
-            if density_flags[j]
-                output[j] += mbW
-            else
-                col_idx = columns[j]
-                output[j] += mbWlρb * vals[col_idx][i]
-            end
+        @inbounds for j in 1:M
+            output[j] += mbWlρb * vals[j][i]
         end
     end
 
-    if has_nondensity
-        @inbounds for j in 1:ncols
-            density_flags[j] && continue
+    # Shapard Normalization
+    @inbounds for j in eachindex(output)
+        if ShepardNormalization[j]
             output[j] /= mWlρ
         end
     end
-    return
+    return nothing
 end
 
-@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
-    return _quantities_interpolate_kernel!(output, input, reference_point, ha, neighbors, columns, itpSymmetric)
+@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}}
+    val_len = Val(length(input.quant))
+    columns = ntuple(identity, val_len)
+    ShepardNormalization = ntuple(_ -> true, val_len)
+    return _quantities_interpolate_kernel!(output, input, reference_point, ha, neighbors, columns, ShepardNormalization, itp_strategy)
+end
+
+
+@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization::NTuple{M, Bool}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
+    return _quantities_interpolate_kernel!(output, input, reference_point, ha, neighbors, columns, ShepardNormalization, itpSymmetric)
 end
 
 ## LOS density interpolation (Column / Surface density)
@@ -244,13 +236,7 @@ end
 end
 
 ## LOS quantities interpolation
-@inline function _LOS_quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}}
-    val_len = Val(length(input.quant))
-    columns = ntuple(identity, val_len)
-    return _LOS_quantities_interpolate_kernel!(output, input, reference_point, ha, neighbors, columns, itp_strategy)
-end
-
-@inline function _LOS_quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, itp_strategy :: InterpolationStrategy) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
+@inline function _LOS_quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, itp_strategy :: InterpolationStrategy) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
     neighbor_indices = neighbors.pool
     Npart :: Int64 = neighbors.count
     ncols = length(columns)
@@ -267,9 +253,7 @@ end
     ms = input.m
     hs = input.h
     ρs = input.ρ
-    vals = input.quant
-    density_flags = ntuple(j -> columns[j] == 0, ncols)
-    has_nondensity = any(!flag for flag in density_flags)
+    vals = ntuple(j -> input.quant[columns[j]], Val(M))  
     Ktyp = input.smoothed_kernel
 
     mWlρ :: T = zero(T)
@@ -289,33 +273,32 @@ end
             W = T(0.5) * (LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
         end
 
-        mbW = mb * W
-        mbWlρb = mbW/ρb
-        if has_nondensity
-            mWlρ += mbWlρb
-        end
+        # Counting
+        mbWlρb = mb * W/ρb
+        mWlρ += mbWlρb           # Prepare for Shapard Normalization
 
-        @inbounds for j in 1:ncols
-            if density_flags[j]
-                output[j] += mbW
-            else
-                col_idx = columns[j]
-                output[j] += mbWlρb * vals[col_idx][i]
-            end
+        @inbounds for j in 1:M
+            output[j] += mbWlρb * vals[j][i]
         end
     end
-
-    if has_nondensity
-        @inbounds for j in 1:ncols
-            density_flags[j] && continue
+    # Shapard Normalization
+    @inbounds for j in eachindex(output)
+        if ShepardNormalization[j]
             output[j] /= mWlρ
         end
     end
-    return
+    return nothing
 end
 
-@inline function _LOS_quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
-    return _LOS_quantities_interpolate_kernel!(output, input, reference_point, ha, neighbors, columns, itpSymmetric)
+@inline function _LOS_quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}}
+    val_len = Val(length(input.quant))
+    columns = ntuple(identity, val_len)
+    ShepardNormalization = ntuple(_ -> true, val_len)
+    return _LOS_quantities_interpolate_kernel!(output, input, reference_point, ha, neighbors, columns, ShepardNormalization, itp_strategy)
+end
+
+@inline function _LOS_quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
+    return _LOS_quantities_interpolate_kernel!(output, input, reference_point, ha, neighbors, columns, ShepardNormalization,  itpSymmetric)
 end
 
 """

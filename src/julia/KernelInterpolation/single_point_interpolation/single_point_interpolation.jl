@@ -101,8 +101,8 @@ This function computes the SPH-interpolated value of the `column_idx`-th scalar 
 - Interpolation uses symmetric SPH kernels with per-particle and target smoothing lengths.
 - `column_idx` must be within the bounds `1:NCOLUMN`, where `NCOLUMN` is the number of fields stored.
 """
-function quantity_interpolate(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, column_idx :: Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
-  return _quantity_interpolate_kernel(input, reference_point, ha, neighbors, column_idx, itp_strategy)
+function quantity_interpolate(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, column_idx :: Int64, ShepardNormalization :: Bool = true,itp_strategy :: InterpolationStrategy = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
+  return _quantity_interpolate_kernel(input, reference_point, ha, neighbors, column_idx, ShepardNormalization, itp_strategy)
 end
 
 ## Muti-columns intepolation
@@ -137,62 +137,58 @@ This function returns a vector of interpolated values corresponding to each phys
 - Shepard normalization is applied to ensure consistency.
 - Output order matches the order of scalar fields in `input.quant`.
 """
-function quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
+function quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
     workspace = zeros(T, NCOLUMN)
     if NCOLUMN == 0
-      return workspace
+        return workspace
     end
-    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, itp_strategy)
+    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, ShepardNormalization , itp_strategy)
     return workspace
 end
 
-function quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, M}
-    ncols = length(columns)
-    workspace = zeros(T, ncols)
+function quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M),itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, M}
+    workspace = zeros(T, M)
     if ncols == 0
-      return workspace
+        return workspace
     end
-    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, columns, itp_strategy)
+    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, columns, ShepardNormalization, itp_strategy)
     return workspace
 end
 
-function quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
+function quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
     if NCOLUMN == 0
-      return nothing
+        return nothing
     end  
     @assert length(workspace) == NCOLUMN "Length of `workspace` should be identical as NCOLUMN."
-      _quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, itp_strategy)
+    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, ShepardNormalization, itp_strategy)
 end
 
-function quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, M}
-    ncols = length(columns)
-    @assert length(workspace) == ncols "Length of `workspace` should match `columns`."
-    if ncols == 0
+function quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M), itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, M}
+    @assert length(workspace) == M "Length of `workspace` should match `columns`."
+    if M == 0
         return nothing
     end
-    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, columns, itp_strategy)
+    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, columns, ShepardNormalization, itp_strategy)
     return nothing
 end
 
-function quantities_interpolate!(buffer :: NTuple{NCOLUMN, SA}, workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, SA<:AbstractArray{T, 0}}
+function quantities_interpolate!(buffer :: NTuple{NCOLUMN, SA}, workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, SA<:AbstractArray{T, 0}}
     if NCOLUMN == 0
       return nothing
     end
     @assert length(workspace) == NCOLUMN "Length of `workspace` should be identical as NCOLUMN."
-    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, itp_strategy)
+    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, ShepardNormalization, itp_strategy)
     @inbounds for i in eachindex(buffer)
         buffer[i][] = workspace[i]
     end
 end
 
-function quantities_interpolate!(buffer :: NTuple{M, SA}, workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, itp_strategy :: InterpolationStrategy = itpSymmetric) where {M, NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, SA<:AbstractArray{T, 0}}
-    ncols = length(columns)
-    @assert length(workspace) == ncols "Length of `workspace` should match `columns`."
-    @assert M == ncols "Length of `buffer` should match `columns`."
-    if ncols == 0
+function quantities_interpolate!(buffer :: NTuple{M, SA}, workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: InterpolationStrategy = itpSymmetric) where {M, NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, SA<:AbstractArray{T, 0}}
+    @assert length(workspace) == M "Length of `workspace` should match `columns`."
+    if M == 0
       return nothing
     end
-    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, columns, itp_strategy)
+    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, columns, ShepardNormalization, itp_strategy)
     @inbounds for i in eachindex(buffer)
       buffer[i][] = workspace[i]
     end
@@ -268,62 +264,58 @@ This function performs SPH-based interpolation of each scalar field along the li
 - This function is intended for generating projected maps (e.g., surface density, emission measure).
 - Output order matches the ordering of scalar fields in `input.quant`.
 """
-function LOS_quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
+function LOS_quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
     workspace = zeros(T, NCOLUMN)
     if NCOLUMN == 0
       return workspace
     end
-  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, itp_strategy)
+  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, ShepardNormalization, itp_strategy)
     return workspace
 end
 
-function LOS_quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, M}
-    ncols = length(columns)
-    workspace = zeros(T, ncols)
-    if ncols == 0
+function LOS_quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M), itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, M}
+    workspace = zeros(T, M)
+    if M == 0
         return workspace
     end
-  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, columns, itp_strategy)
+  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, columns, ShepardNormalization, itp_strategy)
     return workspace
 end
 
-function LOS_quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
+function LOS_quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, M), itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
     if NCOLUMN == 0
       return nothing
     end
     @assert length(workspace) == NCOLUMN "Length of `workspace` should be identical as NCOLUMN."
-  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, itp_strategy)
+  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, ShepardNormalization, itp_strategy)
 end
 
-function LOS_quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, M}
-    ncols = length(columns)
-    @assert length(workspace) == ncols "Length of `workspace` should match `columns`."
-    if ncols == 0
+function LOS_quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M), itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, M}
+    @assert length(workspace) == M "Length of `workspace` should match `columns`."
+    if M == 0
         return nothing
     end
-  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, columns, itp_strategy)
+  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, columns, ShepardNormalization, itp_strategy)
   return nothing
 end
 
-function LOS_quantities_interpolate!(buffer :: NTuple{NCOLUMN, SA}, workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, SA<:AbstractArray{T, 0}}
+function LOS_quantities_interpolate!(buffer :: NTuple{NCOLUMN, SA}, workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection,ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, SA<:AbstractArray{T, 0}}
     if NCOLUMN == 0
       return nothing
     end
     @assert length(workspace) == NCOLUMN "Length of `workspace` should be identical as NCOLUMN."
-  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, itp_strategy)
+  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, ShepardNormalization, itp_strategy)
     @inbounds for i in eachindex(buffer)
         buffer[i][] = workspace[i]
     end
 end
 
-  function LOS_quantities_interpolate!(buffer :: NTuple{M, SA}, workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, itp_strategy :: InterpolationStrategy = itpSymmetric) where {M, NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, SA<:AbstractArray{T, 0}}
-    ncols = length(columns)
-    @assert length(workspace) == ncols "Length of `workspace` should match `columns`."
-    @assert M == ncols "Length of `buffer` should match `columns`."
-    if ncols == 0
+  function LOS_quantities_interpolate!(buffer :: NTuple{M, SA}, workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M), itp_strategy :: InterpolationStrategy = itpSymmetric) where {M, NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, SA<:AbstractArray{T, 0}}
+    @assert length(workspace) == M "Length of `workspace` should match `columns`."
+    if M == 0
       return nothing
     end
-    _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, columns, itp_strategy)
+    _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, columns, ShepardNormalization, itp_strategy)
     @inbounds for i in eachindex(buffer)
       buffer[i][] = workspace[i]
     end
