@@ -40,6 +40,12 @@ include(joinpath(@__DIR__, "julia", "StreamingInstability", "StreamingInstabilit
 @reexport using .StreamingInstability
 # include(joinpath(@__DIR__, "julia", "StreamingInstability", "growth_rate.jl"))
 
+##################### CUDA Extension #####################
+# Dummy file (similar to header file in C/C++, to declare the module), so that the module can be precompiled even if CUDA is not installed. End with .jlh to avoid being included by mistake. 
+include(joinpath(@__DIR__, "julia", "ExtDummy", "CUDAExtDummy.jlh"))        
+@reexport using .CUDAExtDummy
+
+
 
 
 function _init_Core()      
