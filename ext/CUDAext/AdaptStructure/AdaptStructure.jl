@@ -1,16 +1,10 @@
-module CUDAExtDummy
-
-
+module AdaptStructure
 using PhantomRevealer
+using CUDA
+using Adapt
 
-# Base
-
-function Greeting_CUDA end
-function to_CuVector end
-
-
-
-
+# InterpolationInput
+include(joinpath(@__DIR__, "InterpolationInput.jl"))
 
 # Export function, marco, const...
 for name in filter(s -> !startswith(string(s), "#"), names(@__MODULE__, all = true))

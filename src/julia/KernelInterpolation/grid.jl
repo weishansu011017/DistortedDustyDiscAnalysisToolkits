@@ -76,6 +76,13 @@ struct GeneralGrid{D, TF <: AbstractFloat, VG <: AbstractVector{TF}, VC <: Abstr
     coor :: VC
 end
 
+function Adapt.adapt_structure(to, x :: GeneralGrid)
+    PhantomRevealer.GeneralGrid(
+        Adapt.adapt(to, x.grid),
+        Adapt.adapt(to, x.coor)
+    )
+end
+
 """
     similar(grid::GeneralGrid)
 

@@ -84,6 +84,20 @@ struct InterpolationInput{T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPH
     quant           :: NTuple{NCOLUMN, V}
 end
 
+function Adapt.adapt_structure(to, x :: InterpolationInput)
+    PhantomRevealer.InterpolationInput(
+        x.Npart,
+        Adapt.adapt(to, x.smoothed_kernel),
+        Adapt.adapt(to, x.x),
+        Adapt.adapt(to, x.y),
+        Adapt.adapt(to, x.z),
+        Adapt.adapt(to, x.m),
+        Adapt.adapt(to, x.h),
+        Adapt.adapt(to, x.ρ),
+        ntuple(i->Adapt.adapt(to, x.quant[i]), length(x.quant))
+    )
+end
+
 # Some useful function 
 ## Get "Valid" range of data (the other would be 0)
 Base.length(inp::T) where {T<:AbstractInterpolationInput} = inp.Npart        # N
