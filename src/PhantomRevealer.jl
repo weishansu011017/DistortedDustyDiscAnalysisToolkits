@@ -41,12 +41,16 @@ include(joinpath(@__DIR__, "julia", "StreamingInstability", "StreamingInstabilit
 # include(joinpath(@__DIR__, "julia", "StreamingInstability", "growth_rate.jl"))
 
 ##################### CUDA Extension #####################
-# Dummy file (similar to header file in C/C++, to declare the module), so that the module can be precompiled even if CUDA is not installed. End with .jlh to avoid being included by mistake. 
+# Dummy file (similar to a C/C++ header) used to declare the module interface.
+# Enables precompilation even when CUDA is not available.
+# Named with .jlh to prevent accidental inclusion at runtime.
 include(joinpath(@__DIR__, "julia", "ExtDummy", "CUDAExtDummy.jlh"))        
 @reexport using .CUDAExtDummy
 
 #################### Metal Extension #####################
-# Dummy file (similar to header file in C/C++, to declare the module), so that the module can be precompiled even if CUDA is not installed. End with .jlh to avoid being included by mistake. 
+# Dummy file (similar to a C/C++ header) used to declare the module interface.
+# Enables precompilation even when CUDA is not available.
+# Named with .jlh to prevent accidental inclusion at runtime.
 include(joinpath(@__DIR__, "julia", "ExtDummy", "MetalExtDummy.jlh"))        
 @reexport using .MetalExtDummy
 

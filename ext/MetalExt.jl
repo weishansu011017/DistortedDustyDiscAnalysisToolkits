@@ -65,8 +65,8 @@ Calling it repeatedly will not speed up your GPU, but it will confirm that
 logging still works, which is arguably more satisfying.
 """
 function PhantomRevealer.Greeting_Metal()
-   t = hour(now())
-   word = ""
+    t = hour(now())
+    word = ""
     if 5 ≤ t < 12
         word = "Good morning"
     elseif 12 ≤ t < 18

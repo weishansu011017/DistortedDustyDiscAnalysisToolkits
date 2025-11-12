@@ -149,9 +149,17 @@ W2f32 = Smoothed_kernel_function(M4_spline, 0.8f0, 0.1f0, Val(2))
 W3f64 = Smoothed_kernel_function(C2_Wendland, 1.2, 0.5, Val(3))
 ```
 """
-@inline function Smoothed_kernel_function(::Type{K}, r::T, h::T, d::Val{D}) where {K<:AbstractSPHKernel, T<:AbstractFloat, D}
-    inv_hD = inv(h^D)
-    return inv_hD * Smoothed_kernel_function_dimensionless(K, r, h, d)
+@inline function Smoothed_kernel_function(::Type{K}, r::T, h::T, ::Val{1}) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+    inv_hD = inv(h)
+    return inv_hD * Smoothed_kernel_function_dimensionless(K, r, h, Val(1))
+end
+@inline function Smoothed_kernel_function(::Type{K}, r::T, h::T, ::Val{2}) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+    inv_hD = inv(h * h)
+    return inv_hD * Smoothed_kernel_function_dimensionless(K, r, h, Val(2))
+end
+@inline function Smoothed_kernel_function(::Type{K}, r::T, h::T, ::Val{3}) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+    inv_hD = inv(h * h * h)
+    return inv_hD * Smoothed_kernel_function_dimensionless(K, r, h, Val(3))
 end
 
 @inline function Smoothed_kernel_function(::Type{K}, r::T, h::S, d::Val{D}) where {K<:AbstractSPHKernel, T<:AbstractFloat, S<:AbstractFloat, D}
