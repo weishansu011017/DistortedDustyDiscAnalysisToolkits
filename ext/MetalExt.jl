@@ -1,25 +1,26 @@
-module CUDAExt
-using CUDA
+module MetalExt
+using Dates
+using Metal
 using PhantomRevealer
 
 """
-    PhantomRevealer.Greeting_CUDA()
+    PhantomRevealer.Greeting_Metal()
 
-A deliberately over-explained diagnostic utility that greets you from the CUDA
-extension layer and prints an exhaustive snapshot of your CUDA environment.
+A deliberately over-explained diagnostic utility that greets you from the Metal
+extension layer and prints an exhaustive snapshot of your Metal environment.
 
 # Overview
-`Greeting_CUDA()` is intentionally simple: it serves one purpose—to prove that
-`PhantomRevealer`’s CUDA extension is alive and able to communicate with
-`CUDA.jl`.  
-It does so by logging `"Hello from CUDAExt!"` and then calling
-`CUDA.versioninfo()`, which dumps every detectable component of your CUDA stack.
+`Greeting_Metal()` is intentionally simple: it serves one purpose—to prove that
+`PhantomRevealer`’s Metal extension is alive and able to communicate with
+`Metal.jl`.  
+It does so by logging `"Hello from MetalExt!"` and then calling
+`Metal.versioninfo()`, which dumps every detectable component of your Metal stack.
 
 # What It Actually Does
 1. Emits an `@info` message confirming that the extension is active.
-2. Invokes `CUDA.versioninfo()`, which queries:
+2. Invokes `Metal.versioninfo()`, which queries:
    - Installed driver and runtime versions
-   - CUDA toolkit path and compatibility
+   - Metal toolkit path and compatibility
    - GPU device inventory with model names and compute capabilities
    - Presence and versions of developer utilities such as `nvcc`, `nvlink`,
      and `ptxas`
@@ -28,7 +29,7 @@ It does so by logging `"Hello from CUDAExt!"` and then calling
 # Why It Exists
 This function is the software equivalent of shouting into the void and hearing
 an echo.  If you see version output, your extension linkage works.  
-If you do not, something in the dependency chain (`CUDA.jl`, drivers, or
+If you do not, something in the dependency chain (`Metal.jl`, drivers, or
 PhantomRevealer’s weak-dep mechanism) is broken.
 
 # Behaviour and Guarantees
@@ -37,34 +38,35 @@ PhantomRevealer’s weak-dep mechanism) is broken.
 - **Side effects:** console log and environment report.  
 - **Performance:** near-zero cost aside from context initialization.  
 - **State changes:** none. The call is read-only with respect to both
-  PhantomRevealer and CUDA contexts.
+  PhantomRevealer and Metal contexts.
 
 # When To Use
-- After installing `CUDA.jl`, to verify GPU accessibility.  
-- During CI or cluster deployment, to record the CUDA stack configuration.  
+- After installing `Metal.jl`, to verify GPU accessibility.  
+- During CI or cluster deployment, to record the Metal stack configuration.  
 - When filing bug reports, to attach reproducible environment data.  
-- When you just need reassurance that something, somewhere, still speaks CUDA.
+- When you just need reassurance that something, somewhere, still speaks Metal.
 
 # Example
 ```julia
-julia> using PhantomRevealer, CUDA
-julia> PhantomRevealer.Greeting_CUDA()
-[ Info: Hello from CUDAExt!
-CUDA runtime 12.3, driver 550.40.07
-Device 0: NVIDIA RTX 4090 (cc 8.9, 24576 MB)
+julia> using PhantomRevealer, Metal
+julia> PhantomRevealer.Greeting_Metal()
+[ Info: Hello from MetalExt!
+macOS 14.5.0, Darwin 23.5.0
+1 device:
+- Apple M2 10 GPU cores (64.000 KiB allocated)
 ...
 ```
 This function has no return value because knowledge is its only reward.
 
 Overwriting it during precompilation will anger Julia; declare the name in
-the main module with function `Greeting_CUDA`` end to stay on her good side.
+the main module with function `Greeting_Metal`` end to stay on her good side.
 
 Calling it repeatedly will not speed up your GPU, but it will confirm that
 logging still works, which is arguably more satisfying.
 """
-function PhantomRevealer.Greeting_CUDA()
-    t = hour(now())
-    word = ""
+function PhantomRevealer.Greeting_Metal()
+   t = hour(now())
+   word = ""
     if 5 ≤ t < 12
         word = "Good morning"
     elseif 12 ≤ t < 18
@@ -72,8 +74,9 @@ function PhantomRevealer.Greeting_CUDA()
     else
         word = "Good evening"
     end
-    @info "$(word) from CUDAExt!"
-    CUDA.versioninfo()
+
+    @info "$(word) from MetalExt!"
+    Metal.versioninfo()
 end
 
 end

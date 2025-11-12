@@ -1,11 +1,10 @@
-module CUDAExtDummy
-
+module MetalExtDummy
 
 using PhantomRevealer
 
 # Base
 
-function Greeting_CUDA end
+function Greeting_Metal end
 
 
 
