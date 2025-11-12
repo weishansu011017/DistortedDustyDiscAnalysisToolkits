@@ -74,7 +74,7 @@ This struct is designed for fast and safe interpolation on CPU and GPU. It conta
 """
 struct InterpolationInput{T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, NCOLUMN} <: AbstractInterpolationInput
     Npart           :: Int64
-    smoothed_kernel :: Type{K}
+    smoothed_kernel :: K
     x               :: V
     y               :: V
     z               :: V

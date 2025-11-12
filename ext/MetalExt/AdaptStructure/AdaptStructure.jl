@@ -1,14 +1,10 @@
-module MetalExtDummy
-
+module AdaptStructure
 using PhantomRevealer
+using Metal
+using Adapt
 
-# Base
-
-function Greeting_Metal end
-function to_MtlVector end
-
-
-
+# InterpolationInput
+include(joinpath(@__DIR__, "InterpolationInput.jl"))
 
 # Export function, marco, const...
 for name in filter(s -> !startswith(string(s), "#"), names(@__MODULE__, all = true))

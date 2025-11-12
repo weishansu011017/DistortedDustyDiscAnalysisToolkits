@@ -20,7 +20,7 @@ end
     zs = input.z
     ms = input.m
     hs = input.h
-    Ktyp = input.smoothed_kernel
+    Ktyp = typeof(input.smoothed_kernel)
 
     # Initialize counter
     rho :: T = zero(T)
@@ -56,7 +56,7 @@ end
     ys = input.y
     zs = input.z
     hs = input.h
-    Ktyp = input.smoothed_kernel
+    Ktyp = typeof(input.smoothed_kernel)
 
     # Initialize counter
     n :: T = zero(T)
@@ -94,7 +94,7 @@ end
     hs = input.h
     ρs = input.ρ
     As = input.quant[column_idx]
-    Ktyp = input.smoothed_kernel
+    Ktyp = typeof(input.smoothed_kernel)
 
     # Initialize counter
     A :: T = zero(T)
@@ -147,7 +147,7 @@ end
     hs = input.h
     ρs = input.ρ
     vals = ntuple(j -> input.quant[columns[j]], Val(M))    
-    Ktyp = input.smoothed_kernel
+    Ktyp = typeof(input.smoothed_kernel)
 
     mWlρ :: T = zero(T)
     fill!(output, zero(T))
@@ -211,7 +211,7 @@ end
     ys = input.y
     ms = input.m
     hs = input.h
-    Ktyp = input.smoothed_kernel
+    Ktyp = typeof(input.smoothed_kernel)
 
     # Initialize counter
     Sigma :: T = zero(T)
@@ -254,7 +254,7 @@ end
     hs = input.h
     ρs = input.ρ
     vals = ntuple(j -> input.quant[columns[j]], Val(M))  
-    Ktyp = input.smoothed_kernel
+    Ktyp = typeof(input.smoothed_kernel)
 
     mWlρ :: T = zero(T)
     fill!(output, zero(T))
@@ -323,7 +323,7 @@ end
     ms = input.m
     hs = input.h
     ρs = input.ρ
-    Ktyp = input.smoothed_kernel
+    Ktyp = typeof(input.smoothed_kernel)
 
     # Initialize counter
     ∇ρxf :: T = zero(T)
@@ -425,7 +425,7 @@ end
     hs = input.h
     ρs = input.ρ
     As = input.quant[column_idx]
-    Ktyp = input.smoothed_kernel
+    Ktyp = typeof(input.smoothed_kernel)
 
     # Initialize counter
 
@@ -538,7 +538,7 @@ end
     Axs = input.quant[Ax_column_idx]
     Ays = input.quant[Ay_column_idx]
     Azs = input.quant[Az_column_idx]
-    Ktyp = input.smoothed_kernel
+    Ktyp = typeof(input.smoothed_kernel)
 
     # Initialize counter
     ∇Af :: T = zero(T)
@@ -651,7 +651,7 @@ end
     Axs = input.quant[Ax_column_idx]
     Ays = input.quant[Ay_column_idx]
     Azs = input.quant[Az_column_idx]
-    Ktyp = input.smoothed_kernel
+    Ktyp = typeof(input.smoothed_kernel)
 
     # Initialize counter
     ∇Axf :: T = zero(T)

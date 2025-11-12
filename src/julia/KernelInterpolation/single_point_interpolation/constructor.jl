@@ -138,7 +138,7 @@ function build_input(data::PhantomRevealerDataFrame,
     quant = ntuple(i -> Vector{Tprom}(data[!, column_names[i]]), NCOLUMN)
 
     input = InterpolationInput{Tprom, Vector{Tprom}, K, NCOLUMN}(
-        N, smoothed_kernel, x, y, z, m, h, ρ, quant
+        N, smoothed_kernel(), x, y, z, m, h, ρ, quant
     )
 
     column_index = Dict{Symbol,Int}(name => idx for (idx, name) in enumerate(column_names))
@@ -281,7 +281,7 @@ function build_input(data::PhantomRevealerDataFrame,
     quant = ntuple(i -> Vector{Tprom}(data[!, column_names[i]]), NCOLUMN)
 
     input = InterpolationInput{Tprom, Vector{Tprom}, K, NCOLUMN}(
-        N, smoothed_kernel, x, y, z, m, h, ρ, quant
+        N, (smoothed_kernel()), x, y, z, m, h, ρ, quant
     )
 
     column_index = Dict{Symbol,Int}(name => idx for (idx, name) in enumerate(column_names))

@@ -3,6 +3,10 @@ using Dates
 using Metal
 using PhantomRevealer
 
+# Adapt structure
+include(joinpath(@__DIR__, "MetalExt", "AdaptStructure", "AdaptStructure.jl"))
+
+
 """
     PhantomRevealer.Greeting_Metal()
 
