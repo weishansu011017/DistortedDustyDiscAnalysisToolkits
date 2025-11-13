@@ -17,11 +17,11 @@ function _neighbor_selection(pool, stack, lbvh, strategy, point, multiplier, h_v
     end
     ha = mean(h_values)
     gather_radius = ha * multiplier
-    selection = NS.LBVH_query!(pool, stack, lbvh, point, gather_radius)
+    selection = NS.LBVH_query!(pool, lbvh, point, gather_radius)
     nearest = NS.nearest_index(selection)
     ha = h_values[nearest]
     radius = multiplier * ha
-    selection = NS.LBVH_query!(pool, stack, lbvh, point, radius)
+    selection = NS.LBVH_query!(pool, lbvh, point, radius)
     nearest = selection.count == 0 ? nearest : NS.nearest_index(selection)
     return selection, h_values[nearest]
 end
@@ -72,7 +72,7 @@ end
     end
 
     # Build LBVH and query neighbors using the same dataset
-    lbvh = KI.LinearBVH!(input)
+    lbvh = KI.LinearBVH!(input, Val(3))
     ordered_indices = Int.(lbvh.enc.order)
     divv_column = divv_column[ordered_indices]
     pool = zeros(Int, input.Npart)

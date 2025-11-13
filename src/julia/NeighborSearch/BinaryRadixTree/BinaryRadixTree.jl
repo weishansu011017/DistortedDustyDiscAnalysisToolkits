@@ -10,8 +10,6 @@ struct BinaryRadixTree{TI <: Unsigned, VI <: AbstractVector{TI},  A <: AbstractV
     is_leaf_left  :: B
     is_leaf_right :: B
 
-    depth         :: TI
-
     # For GPU LBVH construction
     leaf_parent   :: VI
     node_parent   :: VI

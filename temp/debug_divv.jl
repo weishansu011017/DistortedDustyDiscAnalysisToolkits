@@ -20,13 +20,13 @@ input, catalog = PhantomRevealer.build_input(gas, mass_source; scalars = Symbol[
 
 grid = KI.GeneralGrid(gas.dfdata.x, gas.dfdata.y, gas.dfdata.z)
 
-LBVH = KI.LinearBVH!(input, CodeType = UInt64)
+LBVH = KI.LinearBVH!(input, Val(3), CodeType = UInt64)
 pool = zeros(Int, length(input.x))
 stack = Vector{Int}(undef, max(1, 2 * length(LBVH.brt.left_child) + 8))
 multiplier = KI.KernelFunctionValid(input.smoothed_kernel, eltype(input.h))
 
 point = grid.coor[1]
-selection_sym, ha_sym = NS.LBVH_query!(pool, stack, LBVH, point, multiplier, input.h)
+selection_sym, ha_sym = NS.LBVH_query!(pool, LBVH, point, multiplier, input.h)
 println("Symmetric selection count: ", selection_sym.count, " ha=", ha_sym)
 div_slots = catalog.div_slots[1]
 div_manual = KI._divergence_quantity_interpolate_kernel(input, point, ha_sym, selection_sym, div_slots[1], div_slots[2], div_slots[3], KI.itpSymmetric)
@@ -66,7 +66,7 @@ if selection_sym.count > 0
 end
 
 gather_radius = multiplier * (sum(input.h) / length(input.h))
-selection_gather = NS.LBVH_query!(pool, stack, LBVH, point, gather_radius)
+selection_gather = NS.LBVH_query!(pool, LBVH, point, gather_radius)
 println("Gather initial count: ", selection_gather.count)
 
 grids_sym, order_sym = KI.GeneralGridInterpolation(grid, input, catalog, KI.itpSymmetric)

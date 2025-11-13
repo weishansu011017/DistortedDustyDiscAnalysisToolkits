@@ -1,39 +1,44 @@
 
 
-
-function GeneralGridInterpolation(grid_template::GeneralGrid{D}, input::ITPINPUT, catalog::InterpolationCatalog{N, G, Div, C, L}, itp_strategy::InterpolationStrategy = itpSymmetric) where {D, N, G, Div, C, L, T <: AbstractFloat, ITPINPUT <: InterpolationInput{T}}
+function _initialize_interpolation(grid_template::GeneralGrid{D}, input::ITPINPUT, catalog::InterpolationCatalog{N, G, Div, C, L}, itp_strategy::InterpolationStrategy = itpSymmetric) where {D, N, G, Div, C, L, T <: AbstractFloat, ITPINPUT <: InterpolationInput{T}}
     # Generate a grid array for result
     order = catalog.ordered_names
     grids = ntuple(_ -> similar(grid_template), Val(L))
-    gridv = grid_template.coor
 
     # Generate a Linear BVH structure for neighborhood searching
-    LBVH = LinearBVH!(input, CodeType = UInt64)
-
-    # Constructing empty pools and stacks for neighborhood searching
-    npart = get_npart(input)
-    pool_capacity = max(1, npart)
-    pools = [zeros(Int, pool_capacity) for _ in 1:nthreads()]
-    stack_capacity = max(1, 2 * npart + 6)                # 2 * (npart - 1) + 8
-    stacks = [zeros(Int, stack_capacity) for _ in 1:nthreads()]
+    LBVH = LinearBVH!(input, Val(D), CodeType = UInt64)
 
     # Get the multiplier of smoother radius for interpolation
-    multiplier = KernelFunctionValid(input.smoothed_kernel, T)
+    multiplier = KernelFunctionValid(typeof(input.smoothed_kernel), T)
     if itp_strategy == itpSymmetric || itp_strategy == itpScatter
-        multiplier *= T(2.5)
-    elseif itp_strategy == itpGather
         multiplier *= T(1.5)
+    elseif itp_strategy == itpGather
+        multiplier *= T(1.1)
     else
         throw(ArgumentError("Unknown interpolation strategy: $(itp_strategy)"))
     end
-    h_values = input.h
-    mean_h = isempty(h_values) ? zero(T) : sum(h_values) / length(h_values)
-    gather_radius = multiplier * mean_h
+    return grids, LBVH, order, multiplier
+end
+
+function _workspaces(pool_capacity :: Int, catalog::InterpolationCatalog{N, G, Div, C, L}, T :: Type) where {N, G, Div, C, L}
+    # Constructing empty pools and stacks for neighborhood searching
+    pools = [zeros(Int, pool_capacity) for _ in 1:nthreads()]
 
     # Constructing an empty space for scalar interpolations
     scalar_count = length(catalog.scalar_slots)
     scalar_workspaces = [zeros(T, scalar_count) for _ in 1:nthreads()]
+    return pools, scalar_count, scalar_workspaces
+end
 
+function _interpolation_single_thread!()
+end
+
+function GeneralGridInterpolation(grid_template::GeneralGrid{D}, input::ITPINPUT, catalog::InterpolationCatalog{N, G, Div, C, L}, itp_strategy::InterpolationStrategy = itpSymmetric; pool_capacity :: Int = 2048) where {D, N, G, Div, C, L, T <: AbstractFloat, ITPINPUT <: InterpolationInput{T}}
+    grids, LBVH, order, multiplier = _initialize_interpolation(grid_template, input, catalog, itp_strategy)
+    gridv = grid_template.coor
+
+    pools, scalar_count, scalar_workspaces = _workspaces(length(input)÷2, catalog, T)
+    @info"Starting interpolation..."
     @time begin
     @inbounds @threads for i in eachindex(gridv)
         # Get temp space
@@ -42,16 +47,15 @@ function GeneralGridInterpolation(grid_template::GeneralGrid{D}, input::ITPINPUT
             tid = 1
         end
         pool = pools[tid]
-        stack = stacks[tid]
         workspace = scalar_workspaces[tid]
 
         # Get the target
         point = gridv[i]
-
+        
         # Particles searching
-        selection = LBVH_query!(pool, stack, LBVH, point, gather_radius)
-        ha = input.h[selection.nearest]
-        selection = LBVH_query!(pool, stack, LBVH, point, multiplier * ha)
+        ha_nearest_idx, _ = LBVH_find_nearest(LBVH, point)
+        ha = input.h[ha_nearest_idx]
+        selection = LBVH_query!(pool, LBVH, point, multiplier * ha)
 
         # Interpolation
         out_idx = 1        
@@ -97,6 +101,7 @@ function GeneralGridInterpolation(grid_template::GeneralGrid{D}, input::ITPINPUT
         @assert out_idx == L + 1 "InterpolationCatalog ordering mismatch: expected $L values, stored $(out_idx - 1)"
     end
     end
+    @info"End interpolation..."
 
     return GridInterpolationResult{L}(grids, order)
 end

@@ -7,16 +7,16 @@ const MassFromParams = PhantomRevealer.MassFromParams
 
 function neighbor_selection(pool, stack, lbvh, strategy, point, multiplier, h_values, gather_radius)
     if strategy == KI.itpSymmetric || strategy == KI.itpScatter
-        return NS.LBVH_query!(pool, stack, lbvh, point, multiplier, h_values)
+        return NS.LBVH_query!(pool, lbvh, point, multiplier, h_values)
     elseif strategy == KI.itpGather
-        selection = NS.LBVH_query!(pool, stack, lbvh, point, gather_radius)
+        selection = NS.LBVH_query!(pool, lbvh, point, gather_radius)
         if selection.count == 0
             return selection, zero(eltype(h_values))
         end
         nearest = NS.nearest_index(selection)
         ha = h_values[nearest]
         radius = multiplier * ha
-        selection = NS.LBVH_query!(pool, stack, lbvh, point, radius)
+        selection = NS.LBVH_query!(pool, lbvh, point, radius)
         nearest = selection.count == 0 ? nearest : NS.nearest_index(selection)
         return selection, h_values[nearest]
     else
@@ -99,7 +99,7 @@ function main()
         curls = Symbol[],
     )
 
-    lbvh = KI.LinearBVH!(input)
+    lbvh = KI.LinearBVH!(input, Val(3))
     multiplier = KI.KernelFunctionValid(input.smoothed_kernel, eltype(input.h))
     mean_h = isempty(input.h) ? zero(eltype(input.h)) : sum(input.h) / length(input.h)
     gather_radius = multiplier * mean_h

@@ -49,7 +49,7 @@ function main()
         smoothed_kernel = KI.M4_spline,
     )
 
-    lbvh = KI.LinearBVH!(input)
+    lbvh = KI.LinearBVH!(input, Val(3))
     multiplier = KI.KernelFunctionValid(input.smoothed_kernel, eltype(input.h))
     mean_h = isempty(input.h) ? zero(eltype(input.h)) : sum(input.h) / length(input.h)
     gather_radius = multiplier * mean_h

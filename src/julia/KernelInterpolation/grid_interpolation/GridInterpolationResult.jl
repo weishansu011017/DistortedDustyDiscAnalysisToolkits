@@ -1,4 +1,4 @@
 struct GridInterpolationResult{L}
     grids :: NTuple{L, <:AbstractInterpolationGrid}
-    coors :: NTuple{L, Symbol}
+    order :: NTuple{L, Symbol}
 end

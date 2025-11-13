@@ -67,7 +67,7 @@ function PhantomRevealer.to_CuVector(grid :: GeneralGrid{D, TF, VG, VC}) where {
 end
 
 function PhantomRevealer.to_CuVector(grid :: StructuredGrid{D, TF, V, A}) where {D, TF <: AbstractFloat, V <: AbstractVector{TF}, A <: AbstractArray{TF, D}}
-    return StructuredGrid{D, TF, CuVector{TF}, MtlArray{TF, D}}(
+    return StructuredGrid{D, TF, CuVector{TF}, CuArray{TF, D}}(
         CuArray{TF, D}(grid.grid),
         ntuple(i -> CuVector{TF}(grid.axes[i]), D),
         grid.size
