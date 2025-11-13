@@ -12,6 +12,7 @@ Implementations live under the `BinaryRadixTree/` and `LinearBVH/` directories.
 module NeighborSearch
 using .Threads
 using Statistics
+using Adapt
 
 # Binary radix tree
 include(joinpath(@__DIR__, "BinaryRadixTree", "MortonCode.jl"))

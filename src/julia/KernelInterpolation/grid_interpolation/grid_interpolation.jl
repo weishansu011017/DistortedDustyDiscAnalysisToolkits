@@ -11,9 +11,10 @@ function GeneralGridInterpolation(grid_template::GeneralGrid{D}, input::ITPINPUT
     LBVH = LinearBVH!(input, CodeType = UInt64)
 
     # Constructing empty pools and stacks for neighborhood searching
-    pool_capacity = max(1, length(input.x))
+    npart = get_npart(input)
+    pool_capacity = max(1, npart)
     pools = [zeros(Int, pool_capacity) for _ in 1:nthreads()]
-    stack_capacity = max(1, 2 * length(LBVH.brt.left_child) + 8)
+    stack_capacity = max(1, 2 * npart + 6)                # 2 * (npart - 1) + 8
     stacks = [zeros(Int, stack_capacity) for _ in 1:nthreads()]
 
     # Get the multiplier of smoother radius for interpolation

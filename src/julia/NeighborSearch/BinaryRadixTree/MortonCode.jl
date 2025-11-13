@@ -10,6 +10,15 @@ struct MortonEncoding{D, TF <: AbstractFloat, TI <: Unsigned, VF <: AbstractVect
     coord    :: NTuple{D, VF} # Original data points
 end
 
+function Adapt.adapt_structure(to, x :: ME) where {D, ME <: MortonEncoding{D}}
+    MortonEncoding(
+        Adapt.adapt(to, x.order),
+        Adapt.adapt(to, x.codes),
+        ntuple(i -> Adapt.adapt(to, x.coord[i]), D)
+    )
+end
+
+
 # Encoding & decoding morton code 
 ## The 3D morton code we used is (UInt64)(0(x0)(y0)(z0)(x1)(y1)......(z20)(x21)(y21)(z21)) or (UInt32)(00(x0)(y0)(z0)...(z9)(x10)(y10)(z10))
 @inline function _expand_bits3D(x::UInt32)

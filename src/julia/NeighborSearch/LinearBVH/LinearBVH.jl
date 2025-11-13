@@ -8,6 +8,13 @@ struct AABB{D, TF <: AbstractFloat, VF <: AbstractVector{TF}}
     max :: NTuple{D, VF}
 end
 
+function Adapt.adapt_structure(to, x :: AB) where {D, AB <: AABB{D}}
+    AABB(
+        ntuple(i -> Adapt.adapt(to, x.min[i]), D),
+        ntuple(i -> Adapt.adapt(to, x.max[i]), D)
+    )
+end
+
 struct LinearBVH{D, TF <: AbstractFloat, TI <: Unsigned, VF <: AbstractVector{TF}, VI <: AbstractVector{TI}, A <: AbstractVector{Int}, B <: AbstractVector{Bool}}
     enc :: MortonEncoding{D, TF, TI, VF, VI}
     brt :: BinaryRadixTree{TI, VI, A, B}
@@ -15,6 +22,17 @@ struct LinearBVH{D, TF <: AbstractFloat, TI <: Unsigned, VF <: AbstractVector{TF
     node_aabb :: AABB{D, TF, VF}
     root :: Int
 end
+
+function Adapt.adapt_structure(to, x :: LBVH) where {D, LBVH <: LinearBVH{D}}
+    LinearBVH(
+        Adapt.adapt(to, x.enc),
+        Adapt.adapt(to, x.brt),
+        Adapt.adapt(to, x.leaf_aabb),
+        Adapt.adapt(to, x.node_aabb),
+        x.root
+    )
+end
+
 
 @inline function _push!(stack::AbstractVector{Int}, top::Int, value::Int)
     new_top = top + 1

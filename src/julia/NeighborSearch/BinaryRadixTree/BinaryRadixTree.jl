@@ -10,11 +10,26 @@ struct BinaryRadixTree{TI <: Unsigned, VI <: AbstractVector{TI},  A <: AbstractV
     is_leaf_left  :: B
     is_leaf_right :: B
 
+    depth         :: TI
+
     # For GPU LBVH construction
     leaf_parent   :: VI
     node_parent   :: VI
     visit_counter :: VI
 end
+
+function Adapt.adapt_structure(to, x :: BinaryRadixTree)
+    BinaryRadixTree(
+        Adapt.adapt(to, x.left_child),
+        Adapt.adapt(to, x.right_child),
+        Adapt.adapt(to, x.is_leaf_left),
+        Adapt.adapt(to, x.is_leaf_right),
+        Adapt.adapt(to, x.leaf_parent),
+        Adapt.adapt(to, x.node_parent),
+        Adapt.adapt(to, x.visit_counter),
+    )
+end
+
 
 
 @inline function _range_direction(codes::V, i::Int) where {TI<:Unsigned, V<:AbstractVector{TI}}

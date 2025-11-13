@@ -77,14 +77,14 @@ end
     divv_column = divv_column[ordered_indices]
     pool = zeros(Int, input.Npart)
     stack = Vector{Int}(undef, max(1, 2 * length(lbvh.brt.left_child) + 8))
-    multiplier = KI.KernelFunctionValid(input.smoothed_kernel, T)
+    multiplier = KI.KernelFunctionValid(typeof(input.smoothed_kernel), T)
 
     # Divergence of velocity matches dumpfile column for sampled particles across strategies
     @test length(catalog.div_slots) == 1
     div_slot = catalog.div_slots[1]
     strategies = (KI.itpSymmetric, KI.itpScatter, KI.itpGather)
 
-    multiplier = KI.KernelFunctionValid(input.smoothed_kernel, T)
+    multiplier = KI.KernelFunctionValid(typeof(input.smoothed_kernel), T)
     mean_h = isempty(input.h) ? zero(T) : sum(input.h) / length(input.h)
     gather_radius = multiplier * mean_h
     pool_length = max(1, length(input.x))

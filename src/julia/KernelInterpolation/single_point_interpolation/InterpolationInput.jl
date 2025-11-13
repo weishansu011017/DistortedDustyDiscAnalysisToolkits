@@ -84,8 +84,8 @@ struct InterpolationInput{T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPH
     quant           :: NTuple{NCOLUMN, V}
 end
 
-function Adapt.adapt_structure(to, x :: InterpolationInput)
-    PhantomRevealer.InterpolationInput(
+function Adapt.adapt_structure(to, x :: ITPINPUT) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, NCOLUMN, ITPINPUT <: InterpolationInput{T, V, K, NCOLUMN}}
+    InterpolationInput(
         x.Npart,
         Adapt.adapt(to, x.smoothed_kernel),
         Adapt.adapt(to, x.x),
@@ -94,7 +94,7 @@ function Adapt.adapt_structure(to, x :: InterpolationInput)
         Adapt.adapt(to, x.m),
         Adapt.adapt(to, x.h),
         Adapt.adapt(to, x.ρ),
-        ntuple(i->Adapt.adapt(to, x.quant[i]), length(x.quant))
+        ntuple(i->Adapt.adapt(to, x.quant[i]), NCOLUMN)
     )
 end
 
@@ -146,13 +146,31 @@ end
     return data
 end
 
-function LinearBVH!(inp::InterpolationInput; CodeType :: Type{TI} = UInt64) where {TI<:Unsigned}
+function LinearBVH!(inp::InterpolationInput, ::Val{3}; CodeType :: Type{TI} = UInt64) where {TI<:Unsigned}
     enc = MortonEncoding(inp.x, inp.y, inp.z, CodeType=CodeType)
     order = enc.order
 
     _apply_permutation!(inp.x, order)
     _apply_permutation!(inp.y, order)
     _apply_permutation!(inp.z, order)
+    _apply_permutation!(inp.m, order)
+    _apply_permutation!(inp.h, order)
+    _apply_permutation!(inp.ρ, order)
+    for column in inp.quant
+        _apply_permutation!(column, order)
+    end
+
+    brt = BinaryRadixTree(enc)
+    LBVH = LinearBVH(enc, brt)
+    return LBVH
+end
+
+function LinearBVH!(inp::InterpolationInput, ::Val{2}; CodeType :: Type{TI} = UInt64) where {TI<:Unsigned}
+    enc = MortonEncoding(inp.x, inp.y, CodeType=CodeType)
+    order = enc.order
+
+    _apply_permutation!(inp.x, order)
+    _apply_permutation!(inp.y, order)
     _apply_permutation!(inp.m, order)
     _apply_permutation!(inp.h, order)
     _apply_permutation!(inp.ρ, order)

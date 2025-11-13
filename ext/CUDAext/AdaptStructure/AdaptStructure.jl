@@ -3,8 +3,8 @@ using PhantomRevealer
 using CUDA
 using Adapt
 
-# InterpolationInput
-include(joinpath(@__DIR__, "InterpolationInput.jl"))
+# to_CuVector()
+include(joinpath(@__DIR__, "to_CuVector.jl"))
 
 # Export function, marco, const...
 for name in filter(s -> !startswith(string(s), "#"), names(@__MODULE__, all = true))

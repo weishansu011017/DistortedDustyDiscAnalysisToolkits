@@ -13,6 +13,7 @@ All numerical implementations are organized under the `table/`,
 module KernelInterpolation
 using .Threads 
 using StaticArrays
+using Adapt
 
 using PhantomRevealer.NeighborSearch
 

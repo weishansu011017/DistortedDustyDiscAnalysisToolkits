@@ -77,7 +77,7 @@ struct GeneralGrid{D, TF <: AbstractFloat, VG <: AbstractVector{TF}, VC <: Abstr
 end
 
 function Adapt.adapt_structure(to, x :: GeneralGrid)
-    PhantomRevealer.GeneralGrid(
+    GeneralGrid(
         Adapt.adapt(to, x.grid),
         Adapt.adapt(to, x.coor)
     )
@@ -183,6 +183,14 @@ struct StructuredGrid{D, TF <: AbstractFloat, V <: AbstractVector{TF}, A <: Abst
     grid :: A
     axes :: NTuple{D, V}
     size :: NTuple{D, Int}
+end
+
+function Adapt.adapt_structure(to, x :: SG) where {D, TF <: AbstractFloat, V <: AbstractVector{TF}, A <: AbstractArray{TF, D}, SG <: StructuredGrid{D, TF, V, A}}
+    StructuredGrid(
+        Adapt.adapt(to, x.grid),
+        ntuple(i -> Adapt.adapt(to, x.axes[i]), D),
+        Adapt.adapt(to, x.coor)
+    )
 end
 
 ## Extent Base functions

@@ -209,12 +209,12 @@ immutable container and a host-side catalog for name-to-column lookup.
 - All values are promoted to a consistent floating-point type `T`.
 """
 function build_input(data::PhantomRevealerDataFrame,
-                            mass_from_params::MassFromParams;
-                            scalars::Vector{Symbol},
-                            gradients::Vector{Symbol}=Symbol[],
-                            divergences::Vector{Symbol}=Symbol[],
-                            curls::Vector{Symbol}=Symbol[],
-                            smoothed_kernel::Type{K}=M5_spline) where {K<:AbstractSPHKernel}
+                     mass_from_params::MassFromParams;
+                     scalars::Vector{Symbol},
+                     gradients::Vector{Symbol}=Symbol[],
+                     divergences::Vector{Symbol}=Symbol[],
+                     curls::Vector{Symbol}=Symbol[],
+                     smoothed_kernel::Type{K}=M5_spline) where {K<:AbstractSPHKernel}
     N = get_npart(data)
 
     # Collect every column we must materialise into the quant tuple
