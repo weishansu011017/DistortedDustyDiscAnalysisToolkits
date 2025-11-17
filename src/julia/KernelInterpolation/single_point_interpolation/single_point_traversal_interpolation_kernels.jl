@@ -1113,7 +1113,7 @@ end
     mb = input.m[i]
     Ab = input.quant[column_idx][i]
     rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
-    ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.hs[i])
+    ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.h[i])
     ∂xW = ∇W[1]
     ∂yW = ∇W[2]
     ∂zW = ∇W[3]
@@ -1138,7 +1138,7 @@ end
     Ab = input.quant[column_idx][i]
     rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
     ∇Wa = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
-    ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.hs[i])
+    ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.h[i])
     ∂xW = T(0.5) * (∇Wa[1] + ∇Wb[1])
     ∂yW = T(0.5) * (∇Wa[2] + ∇Wb[2])
     ∂zW = T(0.5) * (∇Wa[3] + ∇Wb[3])
@@ -1342,7 +1342,7 @@ end
     Ayb = input.quant[Ay_column_idx][i]
     Azb = input.quant[Az_column_idx][i]
     rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
-    ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.hs[i])
+    ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.h[i])
     ∂xW = ∇W[1]
     ∂yW = ∇W[2]
     ∂zW = ∇W[3]
@@ -1367,7 +1367,7 @@ end
     Azb = input.quant[Az_column_idx][i]
     rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
     ∇Wa = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
-    ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.hs[i])
+    ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.h[i])
     ∂xW = T(0.5) * (∇Wa[1] + ∇Wb[1])
     ∂yW = T(0.5) * (∇Wa[2] + ∇Wb[2])
     ∂zW = T(0.5) * (∇Wa[3] + ∇Wb[3])
@@ -1572,7 +1572,7 @@ end
     Ayb = input.quant[Ay_column_idx][i]
     Azb = input.quant[Az_column_idx][i]
     rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
-    ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.hs[i])
+    ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.h[i])
     ∂xW = ∇W[1]
     ∂yW = ∇W[2]
     ∂zW = ∇W[3]
@@ -1599,7 +1599,7 @@ end
     Azb = input.quant[Az_column_idx][i]
     rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
     ∇Wa = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
-    ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.hs[i])
+    ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.h[i])
     ∂xW = T(0.5) * (∇Wa[1] + ∇Wb[1])
     ∂yW = T(0.5) * (∇Wa[2] + ∇Wb[2])
     ∂zW = T(0.5) * (∇Wa[3] + ∇Wb[3])

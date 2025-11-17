@@ -274,6 +274,21 @@ function _normalize_vector(v :: V) where {T <: AbstractFloat, V <: AbstractVecto
     return normalized_v
 end
 
+@inline function _normalize_vector!(normalized_v :: V, v :: V) where {T <: AbstractFloat, V <: AbstractVector{T}}
+    vmin = minimum(v); vmax = maximum(v)
+    Δv = vmax - vmin
+    if Δv == 0
+        fill!(normalized_v, 0.5)
+        return nothing
+    end
+    invΔv = inv(Δv)
+
+    @inbounds for i in eachindex(v)
+        _normalize_vector!(normalized_v, v, vmin, invΔv, i)
+    end
+    return nothing
+end
+
 function _quantize_coords(x::V, y::V, z::V; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, V<:AbstractVector{T}}
     # Normalize coordinate to [0, 1)
     fx = _normalize_vector(x)
@@ -301,6 +316,34 @@ function _quantize_coords(x::V, y::V, z::V; CodeType :: Type{TI} = UInt64) where
     return ix, iy, iz
 end
 
+@inline function _quantize_coords!(ix :: V, iy :: V, iz :: V, fvs :: NTuple{3, V}, x::V, y::V, z::V; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, V<:AbstractVector{T}}
+    # Scaling the coordinate to [0, 2^k - 1)
+    scale = _axis_scale(Val(3), CodeType, T)
+    
+    # Normalize coordinate to [0, 1)
+    fx = fvs[1]
+    fy = fvs[2]
+    fz = fvs[3]
+    _normalize_vector!(fx, x)
+    _normalize_vector!(fy, y)
+    _normalize_vector!(fz, z)
+
+    @inbounds @threads for i in eachindex(ix, iy, iz)
+        fxi = fx[i]; fyi = fy[i]; fzi = fz[i]
+
+        ixi = CodeType(floor(scale * fxi))
+        iyi = CodeType(floor(scale * fyi))
+        izi = CodeType(floor(scale * fzi))
+
+        @inbounds begin
+            ix[i] = ixi
+            iy[i] = iyi
+            iz[i] = izi
+        end
+    end
+    return nothing
+end
+
 function _quantize_coords(x::V, y::V; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, V<:AbstractVector{T}}
     # Normalize coordinate to [0, 1)
     fx = _normalize_vector(x)
@@ -322,6 +365,30 @@ function _quantize_coords(x::V, y::V; CodeType :: Type{TI} = UInt64) where {TI <
         end
     end
     return ix, iy
+end
+
+@inline function _quantize_coords!(ix :: V, iy :: V, fvs :: NTuple{2, V}, x::V, y::V; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, V<:AbstractVector{T}}
+    # Scaling the coordinate to [0, 2^k - 1)
+    scale = _axis_scale(Val(2), CodeType, T)
+    
+    # Normalize coordinate to [0, 1)
+    fx = fvs[1]
+    fy = fvs[2]
+    _normalize_vector!(fx, x)
+    _normalize_vector!(fy, y)
+
+    @inbounds @threads for i in eachindex(ix, iy)
+        fxi = fx[i]; fyi = fy[i]
+
+        ixi = CodeType(floor(scale * fxi))
+        iyi = CodeType(floor(scale * fyi))
+
+        @inbounds begin
+            ix[i] = ixi
+            iy[i] = iyi
+        end
+    end
+    return nothing
 end
 
 """
