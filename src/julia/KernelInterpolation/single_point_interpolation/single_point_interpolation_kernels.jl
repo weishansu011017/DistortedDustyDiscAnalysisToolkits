@@ -1,12 +1,6 @@
-# Determine interpolation type
-@enum InterpolationStrategy begin
-    itpGather
-    itpScatter
-    itpSymmetric
-end
 
 ## Density
-@inline function _density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, ITPSTRATEGY <: AbstractInterpolationStrategy}
     # Return 0.0 if no particle in the data
     neighbor_indices = neighbors.pool
     Npart :: Int64 = neighbors.count
@@ -42,7 +36,7 @@ end
 end
 
 ## Number density
-@inline function _number_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _number_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, ITPSTRATEGY <: AbstractInterpolationStrategy}
     # Return 0.0 if no particle in the data
     neighbor_indices = neighbors.pool
     Npart :: Int64 = neighbors.count
@@ -78,7 +72,7 @@ end
 end
 
 ## Single quantity intepolation
-@inline function _quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, column_idx :: Int64, ShepardNormalization :: Bool, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, column_idx :: Int64, ShepardNormalization :: Bool, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, ITPSTRATEGY <: AbstractInterpolationStrategy}
     # Return 0.0 if no particle in the data
     neighbor_indices = neighbors.pool
     Npart :: Int64 = neighbors.count
@@ -127,7 +121,7 @@ end
 end
 
 ## Muti-columns intepolation
-@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, itp_strategy :: InterpolationStrategy) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
+@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, itp_strategy :: Type{ITPSTRATEGY}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, ITPSTRATEGY <: AbstractInterpolationStrategy, M}
     neighbor_indices = neighbors.pool
     Npart :: Int64 = neighbors.count
 
@@ -184,7 +178,7 @@ end
     return nothing
 end
 
-@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}}
+@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, ITPSTRATEGY <: AbstractInterpolationStrategy}
     val_len = Val(length(input.quant))
     columns = ntuple(identity, val_len)
     ShepardNormalization = ntuple(_ -> true, val_len)
@@ -196,8 +190,70 @@ end
     return _quantities_interpolate_kernel!(output, input, reference_point, ha, neighbors, columns, ShepardNormalization, itpSymmetric)
 end
 
+@inline function _quantities_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, itp_strategy :: Type{ITPSTRATEGY}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, M, ITPSTRATEGY <: AbstractInterpolationStrategy}
+    neighbor_indices = neighbors.pool
+    Npart :: Int64 = neighbors.count
+
+    output :: NTuple{M, T} = ntuple(_ -> zero(T), M)
+
+    if Npart == 0 || M == 0
+        return output 
+    end
+
+    # Prepare for interpolation
+    # Known quantities
+    xs = input.x
+    ys = input.y
+    zs = input.z
+    ms = input.m
+    hs = input.h
+    ρs = input.ρ
+    vals = ntuple(j -> input.quant[columns[j]], Val(M))    
+    Ktyp = typeof(input.smoothed_kernel)
+
+    mWlρ :: T = zero(T)
+
+    @inbounds for k in 1:Npart
+        i = neighbor_indices[k]
+        mb = ms[i]
+        ρb = ρs[i]
+        rb :: NTuple{3, T} = (xs[i], ys[i], zs[i])
+        W :: T = zero(T)
+        if itp_strategy == itpGather
+            W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
+        elseif itp_strategy == itpScatter
+            W = Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i])
+        elseif itp_strategy == itpSymmetric
+            W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, hs[i]))
+        end
+
+        # Counting
+        mbWlρb = mb * W/ρb
+        mWlρ += mbWlρb           # Prepare for Shapard Normalization
+        
+        @inbounds for j in 1:M
+            output = Base.setindex(output, output[j] + mbWlρb * vals[j][i], j)
+        end
+    end
+
+    # Shapard Normalization
+    @inbounds for j in eachindex(output)
+        if ShepardNormalization[j]
+            output = Base.setindex(output, output[j]/mWlρ, j)
+        end
+    end
+    return output
+end
+
+@inline function _quantities_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, ITPSTRATEGY <: AbstractInterpolationStrategy}
+    val_len = Val(length(input.quant))
+    columns = ntuple(identity, val_len)
+    ShepardNormalization = ntuple(_ -> true, val_len)
+    return _quantities_interpolate_kernel!(input, reference_point, ha, neighbors, columns, ShepardNormalization, itp_strategy)
+end
+
 ## LOS density interpolation (Column / Surface density)
-@inline function _LOS_density_kernel(input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _LOS_density_kernel(input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, ITPSTRATEGY <: AbstractInterpolationStrategy}
     # Return 0.0 if no particle in the data
     neighbor_indices = neighbors.pool
     Npart :: Int64 = neighbors.count
@@ -236,7 +292,7 @@ end
 end
 
 ## LOS quantities interpolation
-@inline function _LOS_quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, itp_strategy :: InterpolationStrategy) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
+@inline function _LOS_quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, itp_strategy :: Type{ITPSTRATEGY}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, ITPSTRATEGY <: AbstractInterpolationStrategy, M}
     neighbor_indices = neighbors.pool
     Npart :: Int64 = neighbors.count
     ncols = length(columns)
@@ -290,7 +346,7 @@ end
     return nothing
 end
 
-@inline function _LOS_quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}}
+@inline function _LOS_quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, ITPSTRATEGY <: AbstractInterpolationStrategy}
     val_len = Val(length(input.quant))
     columns = ntuple(identity, val_len)
     ShepardNormalization = ntuple(_ -> true, val_len)
@@ -307,7 +363,7 @@ end
       = (1/ρ(r))((∑_b m_b*ρ_b*∇W(r-r_b)) - ∑_b m_b*∇W(r-r_b)
 """
 # Single column gradient density intepolation
-@inline function _gradient_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _gradient_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, ITPSTRATEGY <: AbstractInterpolationStrategy}
     # Return (NaN) if no particle in the data
     neighbor_indices = neighbors.pool
     Npart :: Int64 = neighbors.count
@@ -408,7 +464,7 @@ end
       = ∇Af - ∇Ab
 """
 # Single column gradient value intepolation
-@inline function _gradient_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, column_idx :: Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _gradient_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, column_idx :: Int64, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, ITPSTRATEGY <: AbstractInterpolationStrategy}
     # Return (NaN) if no particle in the data
     neighbor_indices = neighbors.pool
     Npart :: Int64 = neighbors.count
@@ -519,7 +575,7 @@ end
            = ∇⋅A(r)
 """
 # Single column divergence value intepolation
-@inline function _divergence_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, Ax_column_idx :: Int64, Ay_column_idx :: Int64, Az_column_idx :: Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _divergence_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, Ax_column_idx :: Int64, Ay_column_idx :: Int64, Az_column_idx :: Int64, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, ITPSTRATEGY <: AbstractInterpolationStrategy}
     # Return 0.0 if no particle in the data
     neighbor_indices = neighbors.pool
     Npart :: Int64 = neighbors.count
@@ -632,7 +688,7 @@ end
        = -(1/ρ(r))*(∇×Af - ∇×Ab)
 """
 # Single column curl value intepolation
-@inline function _curl_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, Ax_column_idx :: Int64, Ay_column_idx :: Int64, Az_column_idx :: Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _curl_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, Ax_column_idx :: Int64, Ay_column_idx :: Int64, Az_column_idx :: Int64, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, ITPSTRATEGY <: AbstractInterpolationStrategy}
     # Return 0.0 if no particle in the data
     neighbor_indices = neighbors.pool
     Npart :: Int64 = neighbors.count

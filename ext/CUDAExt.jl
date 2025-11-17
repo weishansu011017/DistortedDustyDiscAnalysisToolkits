@@ -1,11 +1,12 @@
 module CUDAExt
 using Dates
 using CUDA
+using Reexport
 using PhantomRevealer
 
 # Adapt structure
 include(joinpath(@__DIR__, "CUDAExt", "AdaptStructure", "AdaptStructure.jl"))
-
+@reexport using .AdaptStructure
 
 """
     PhantomRevealer.Greeting_CUDA()

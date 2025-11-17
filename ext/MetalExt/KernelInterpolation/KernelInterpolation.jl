@@ -1,16 +1,9 @@
-module CUDAExtDummy
-
-
+module KernelInterpolation
 using PhantomRevealer
+using Metal
 
-# Base
-
-function Greeting_CUDA end
-function to_CuVector end
-function to_HostVector end
-
-struct CUDAComputeBackend <: AbstractExecutionBackend end
-
+# Grid interpolation
+include(joinpath(@__DIR__, "grid_interpolation", "grid_interpolation.jl"))
 
 # Export function, marco, const...
 for name in filter(s -> !startswith(string(s), "#"), names(@__MODULE__, all = true))

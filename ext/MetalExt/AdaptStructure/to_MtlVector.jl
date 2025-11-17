@@ -21,14 +21,6 @@ function PhantomRevealer.to_MtlVector(enc :: MortonEncoding{D, TF, TI, VF, VI}) 
     )
 end
 
-function PhantomRevealer.to_MtlVector(enc :: MortonEncoding{D, TF, TI, VF, VI}) where {D, TF <: AbstractFloat, TI <: Unsigned, VF <: AbstractVector{TF}, VI <: AbstractVector{TI}}
-    return MortonEncoding{D, Float32, TI, MtlVector{Float32}, MtlVector{TI}}(
-        MtlVector{TI}(enc.order),
-        MtlVector{TI}(enc.codes),
-        ntuple(i -> MtlVector{Float32}(enc.coord[i]), D),
-    )
-end
-
 function PhantomRevealer.to_MtlVector(brt :: BinaryRadixTree{TI, VI, A, B}) where {TI <: Unsigned, VI <: AbstractVector{TI},  A <: AbstractVector{Int}, B <: AbstractVector{Bool}}
     return BinaryRadixTree{TI, MtlVector{TI}, MtlVector{Int}, MtlVector{Bool}}(
         MtlVector{Int}(brt.left_child),

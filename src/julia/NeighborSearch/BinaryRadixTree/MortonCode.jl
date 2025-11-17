@@ -122,7 +122,7 @@ end
 function _encode_morton_code3D(ix :: V, iy :: V, iz :: V) where {T <: Unsigned, V <: AbstractVector{T}}
     code  = similar(ix)
     order = similar(ix)
-    @inbounds for i in eachindex(ix, iy, iz)
+    @inbounds @threads for i in eachindex(ix, iy, iz)
         _encode_morton_code3D!(code, order, ix, iy, iz, i)
     end
     return code, order
@@ -169,7 +169,7 @@ end
 function _encode_morton_code2D(ix :: V, iy :: V) where {T <: Unsigned, V <: AbstractVector{T}}
     code  = similar(ix)
     order = similar(ix)
-    @inbounds for i in eachindex(ix, iy)
+    @inbounds @threads for i in eachindex(ix, iy)
         _encode_morton_code2D!(code, order, ix, iy, i)
     end
     return code, order
@@ -285,7 +285,7 @@ function _quantize_coords(x::V, y::V, z::V; CodeType :: Type{TI} = UInt64) where
     ix = similar(x, CodeType)
     iy = similar(y, CodeType)
     iz = similar(z, CodeType)
-    @inbounds for i in eachindex(ix, iy, iz)
+    @inbounds @threads for i in eachindex(ix, iy, iz)
         fxi = fx[i]; fyi = fy[i]; fzi = fz[i]
 
         ixi = CodeType(floor(scale * fxi))
@@ -310,7 +310,7 @@ function _quantize_coords(x::V, y::V; CodeType :: Type{TI} = UInt64) where {TI <
     scale = _axis_scale(Val(2), CodeType, T)
     ix = similar(x, CodeType)
     iy = similar(y, CodeType)
-    @inbounds for i in eachindex(ix, iy)
+    @inbounds @threads for i in eachindex(ix, iy)
         fxi = fx[i]; fyi = fy[i]
 
         ixi = CodeType(floor(scale * fxi))
@@ -337,14 +337,14 @@ Sort particles by Morton code in-place.
 """
 @inline function sort_by_morton!(enc::MortonEncoding)
     p = sortperm(enc.codes; alg=QuickSort)
-    enc.codes .= enc.codes[p]
-    enc.order .= enc.order[p]
+    Base.permute!(enc.codes, p)
+    Base.permute!(enc.order, p)
     for dir in enc.coord
-        dir .= dir[p]
+        Base.permute!(dir, p)
     end
     @inbounds for i in 2:length(enc.codes)
         if enc.codes[i] <= enc.codes[i - 1]
-            enc.codes[i] = enc.codes[i - 1] + one(eltype(enc.codes))
+            enc.codes[i] = enc.codes[i-1] + one(eltype(enc.codes))
         end
     end
     return p

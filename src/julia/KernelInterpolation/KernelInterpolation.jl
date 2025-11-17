@@ -30,10 +30,16 @@ include(joinpath(@__DIR__, "kernel_function", "kernels", "C6_Wendland.jl"))
 include(joinpath(@__DIR__, "kernel_function", "losintegrated_kernel.jl"))
 
 ## Single point interpolation
+include(joinpath(@__DIR__, "InterpolationStrategy.jl"))
 include(joinpath(@__DIR__, "single_point_interpolation", "InterpolationCatalog.jl"))
 include(joinpath(@__DIR__, "single_point_interpolation", "InterpolationInput.jl"))
+### Neighbor Selection
 include(joinpath(@__DIR__, "single_point_interpolation", "single_point_interpolation_kernels.jl"))
 include(joinpath(@__DIR__, "single_point_interpolation", "single_point_interpolation.jl"))
+### LBVH Traversal
+include(joinpath(@__DIR__, "single_point_interpolation", "single_point_traversal_interpolation_kernels.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "single_point_traversal_interpolation.jl"))
+
 
 ## Grids
 include(joinpath(@__DIR__, "grid.jl"))

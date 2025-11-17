@@ -7,188 +7,353 @@ The New single point SPH interpolation
 # Kernel interpolation
 ## Density
 """
-    density(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) -> T
+    density(input::InterpolationInput{T, V, K},
+            reference_point::NTuple{3, T},
+            ha::T,
+            LBVH::LinearBVH,
+            itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> T
 
-Compute SPH density at a given reference point using the input particle data.
+Compute SPH density at a given reference point using a Linear Bounding Volume
+Hierarchy (LBVH) for neighbour search.
 
-This function computes the SPH density via a summation over all filtered particles in `input`, using the kernel function specified by `smoothed_kernel`. Internally, it dispatches to a low-level `_density_kernel` implementation optimized for performance and static typing.
+This variant of `density` performs neighbour discovery via the supplied `LBVH`,
+querying particles whose AABBs intersect the smoothing region centred at
+`reference_point` with smoothing length `ha`. The resulting particle subset is
+passed into a low-level `_density_kernel` implementation optimised for static
+types and high-performance SPH interpolation.
 
 # Parameters
-- `input::InterpolationInput{...}`  
-  Preprocessed read-only SPH particle data container. Must be constructed using `build_input(...)`.
+- `input::InterpolationInput{T, V, K}`  
+  Preprocessed, read-only SPH particle data container constructed using
+  `build_input(...)`.
 - `reference_point::NTuple{3, T}`  
-  Cartesian coordinate (x, y, z) of the interpolation location, in the same unit as particle positions.
+  Spatial position (x, y, z) where the density is evaluated.
 - `ha::T`  
-  Target smoothing length used at the interpolation point (same type as interpolated fields).
-- `neighbors::NeighborSelection`  
-  Neighbor selection holding the particle indices and count.
-- `itp_strategy::InterpolationStrategy=itpSymmetric`: 
-  Kernel interpolation strategy controlling how the smoothing length is applied to W(r,h).  
-  - `itpGather`: Use only `h_a`, the smoothing length centered at the target point. (Hernquist & Katz (1989), Price (2012))
-  - `itpScatter`: Use only `h_b`, the smoothing length from each source particle. (Price (2007, SPLASH), Monaghan (1992))
-  - `itpSymmetric`: Use averaged kernel value `0.5*(W(h_a) + W(h_b))`. (Monaghan (1992))
+  Target smoothing length at the interpolation point.
+- `LBVH::LinearBVH`  
+  Linear bounding volume hierarchy built over particle positions. Used to
+  identify candidate neighbours whose bounding boxes intersect the kernel
+  support radius.
+- `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
+  Kernel interpolation strategy determining how `h_a` and `h_b` contribute to
+  the smoothing kernel:  
+  - `itpGather`: use only the target-point smoothing length `h_a`.  
+  - `itpScatter`: use only particle smoothing lengths `h_b`.  
+  - `itpSymmetric`: use the averaged kernel `0.5*(W(h_a)+W(h_b))`.
 
 # Returns
-- `ρ_interp::T` — Interpolated density at the reference point, computed by SPH summation.
-
-# Notes
-- The kernel is symmetrized using the target smoothing length `ha` and particle-specific `h[i]`.
-
+- `ρ_interp::T`  
+  Interpolated SPH density at `reference_point`, computed via kernel summation
+  over all LBVH-selected neighbours.
 """
-function density(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
-  return _density_kernel(input, reference_point, ha, neighbors, itp_strategy)
+function density(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
+  return _density_kernel(input, reference_point, ha, LBVH, itp_strategy)
 end
 
 ## Number density
 """
-    number_density(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) -> T
+    number_density(input::InterpolationInput{T, V, K},
+                   reference_point::NTuple{3, T},
+                   ha::T,
+                   LBVH::LinearBVH,
+                   itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> T
 
-Compute SPH number density at a given reference point using particle data.
+Compute the SPH number density at a given reference point using a Linear
+Bounding Volume Hierarchy (LBVH) for neighbour search.
 
-This function evaluates the particle number density — the kernel-weighted sum of 1 per particle — at a specified spatial location. It calls `_number_density_kernel` internally, which performs a summation over all active particles in the input.
+This variant of `number_density` identifies neighbouring particles through the
+supplied `LBVH`, selecting leaf AABBs intersecting the spherical support region
+centred at `reference_point` with smoothing length `ha`. The selected particles
+are passed to a low-level `_number_density_kernel` optimised for static typing
+and high-performance SPH interpolation.
 
 # Parameters
-- `input::InterpolationInput{...}`  
-  Preprocessed, read-only SPH data container holding fixed-length particle arrays.
+- `input::InterpolationInput{T, V, K}`  
+  Preprocessed, read-only SPH particle data container constructed via
+  `build_input(...)`.
 - `reference_point::NTuple{3, T}`  
-  The Cartesian coordinate (x, y, z) where the number density is evaluated.
+  Cartesian coordinates (x, y, z) of the evaluation point.
 - `ha::T`  
-  Target smoothing length used at the interpolation point (same type as interpolated fields).
-- `neighbors::NeighborSelection`  
-  Neighbor selection holding the particle indices and count.
-- `itp_strategy::InterpolationStrategy=itpSymmetric`: 
-  Kernel interpolation strategy controlling how the smoothing length is applied to W(r,h).  
-  - `itpGather`: Use only `h_a`, the smoothing length centered at the target point. (Hernquist & Katz (1989), Price (2012))
-  - `itpScatter`: Use only `h_b`, the smoothing length from each source particle. (Price (2007, SPLASH), Monaghan (1992))
-  - `itpSymmetric`: Use averaged kernel value `0.5*(W(h_a) + W(h_b))`. (Monaghan (1992))
+  Target smoothing length at the interpolation location.
+- `LBVH::LinearBVH`  
+  Linear bounding volume hierarchy constructed from particle positions. Used to
+  determine candidate neighbours inside the kernel support.
+- `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
+  Strategy controlling the use of `h_a` and `h_b` in the kernel evaluation:  
+  - `itpGather`: use only the target-point smoothing length `h_a`.  
+  - `itpScatter`: use only particle smoothing lengths `h_b`.  
+  - `itpSymmetric`: average kernel value `0.5*(W(h_a)+W(h_b))`.
 
 # Returns
-- `n_interp::T` — Interpolated SPH number density at the reference point.
+- `n_interp::T`  
+  Interpolated SPH number density at `reference_point`, computed by summation
+  over all neighbours returned by the LBVH search.
 """
-function number_density(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
-  return _number_density_kernel(input, reference_point, ha, neighbors, itp_strategy)
+function number_density(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
+  return _number_density_kernel(input, reference_point, ha, LBVH, itp_strategy)
 end
 
 ## Single quantity intepolation
 """
-    quantity_interpolate(input::InterpolationInput{...}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, column_idx::Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) -> T
+    quantity_interpolate(input::InterpolationInput{T, V, K},
+                         reference_point::NTuple{3, T},
+                         ha::T,
+                         LBVH::LinearBVH,
+                         column_idx::Int64,
+                         ShepardNormalization::Bool = true,
+                         itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> T
 
-Interpolate a specific scalar quantity at a reference point using SPH kernel smoothing.
+Interpolate an arbitrary SPH quantity at a given reference point using a Linear
+Bounding Volume Hierarchy (LBVH) for neighbour search.
 
-This function computes the SPH-interpolated value of the `column_idx`-th scalar field in the `quant` tuple. It uses symmetric kernel averaging (`W = 0.5(Wa + Wb)`) and Shepard normalization to ensure consistency and stability.
+This routine selects neighbouring particles by intersecting the LBVH leaf AABBs
+with the spherical kernel support of radius `ha` centred at `reference_point`.
+The filtered neighbours are then passed to the low-level
+`_quantity_interpolate_kernel`, which performs SPH interpolation of the
+requested particle field indexed by `column_idx`. Optional Shepard
+normalization can be applied to enforce partition-of-unity behaviour.
 
 # Parameters
-- `input::InterpolationInput{...}`  
-  Pre-filled SPH data container holding all necessary physical fields.
+- `input::InterpolationInput{T, V, K}`  
+  Preprocessed SPH particle data container created via `build_input(...)`.
 - `reference_point::NTuple{3, T}`  
-  The spatial location (x, y, z) in Cartesian coordinates where interpolation is evaluated.
+  Spatial coordinates (x, y, z) where the field is interpolated.
 - `ha::T`  
-  Target smoothing length used at the interpolation point (same type as interpolated fields).
-- `neighbors::NeighborSelection`  
-  Neighbor selection holding the particle indices and count.
+  Target smoothing length at the interpolation point.
+- `LBVH::LinearBVH`  
+  Linear bounding volume hierarchy built over particle positions. Determines
+  candidate neighbours via AABB–kernel intersection.
 - `column_idx::Int64`  
-  The index of the scalar quantity to interpolate, referring to the `quant` tuple (starting from 1).
-- `itp_strategy::InterpolationStrategy=itpSymmetric`: 
-  Kernel interpolation strategy controlling how the smoothing length is applied to W(r,h).  
-  - `itpGather`: Use only `h_a`, the smoothing length centered at the target point. (Hernquist & Katz (1989), Price (2012))
-  - `itpScatter`: Use only `h_b`, the smoothing length from each source particle. (Price (2007, SPLASH), Monaghan (1992))
-  - `itpSymmetric`: Use averaged kernel value `0.5*(W(h_a) + W(h_b))`. (Monaghan (1992))
+  Index of the particle field/column to interpolate.
+- `ShepardNormalization::Bool = true`  
+  When true, apply Shepard normalization to the kernel weights.
+- `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
+  Kernel interpolation strategy specifying how `h_a` and `h_b` contribute to
+  the kernel evaluation:  
+  - `itpGather`: use only `h_a`.  
+  - `itpScatter`: use only `h_b`.  
+  - `itpSymmetric`: use the averaged kernel value `0.5*(W(h_a)+W(h_b))`.
 
 # Returns
-- `A_interp::T` — Interpolated scalar value at the specified location.
-
-# Notes
-- Interpolation uses symmetric SPH kernels with per-particle and target smoothing lengths.
-- `column_idx` must be within the bounds `1:NCOLUMN`, where `NCOLUMN` is the number of fields stored.
+- `q_interp::T`  
+  Interpolated SPH field value at `reference_point`, obtained from summation
+  over neighbours selected via LBVH traversal.
 """
-function quantity_interpolate(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, column_idx :: Int64, ShepardNormalization :: Bool = true,itp_strategy :: InterpolationStrategy = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
-  return _quantity_interpolate_kernel(input, reference_point, ha, neighbors, column_idx, ShepardNormalization, itp_strategy)
+function quantity_interpolate(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, column_idx :: Int64, ShepardNormalization :: Bool = true,itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
+  return _quantity_interpolate_kernel(input, reference_point, ha, LBVH, column_idx, ShepardNormalization, itp_strategy)
 end
 
 ## Muti-columns intepolation
 """
-    quantities_interpolate(input::InterpolationInput, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) -> Vector{T}
+    quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN},
+                           reference_point::NTuple{3, T},
+                           ha::T,
+                           LBVH::LinearBVH,
+                           ShepardNormalization::NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN),
+                           itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> NTuple{NCOLUMN, T}
 
-Interpolate all scalar fields in `input.quant` at a 3D reference point using SPH with Shepard normalization.
+Interpolate all registered scalar fields in an `InterpolationInput` at a 3D
+location using an LBVH-accelerated neighbour search.
 
-This function returns a vector of interpolated values corresponding to each physical quantity in `input.quant`. The interpolation is symmetric, using both the reference and particle smoothing lengths.
+The LBVH traversal identifies all particles whose kernel support intersects the
+sphere of radius `ha` centred at `reference_point`. For each neighbour, the SPH
+kernel contribution is accumulated into a compile-time sized accumulator
+(`NTuple{NCOLUMN, T}`). This avoids dynamic allocation and ensures GPU
+compatibility. Shepard normalization can be toggled independently per field.
 
 # Parameters
-- `input::InterpolationInput{...}`  
-  A read-only container with SPH particle data and scalar fields
+- `input::InterpolationInput{T, V, K, NCOLUMN}`  
+  SPH particle dataset containing `NCOLUMN` scalar fields.
 - `reference_point::NTuple{3, T}`  
-  3D Cartesian coordinate (x, y, z) where interpolation is evaluated.
+  Spatial location `(x, y, z)` at which interpolation is performed.
 - `ha::T`  
-  Target smoothing length used at the interpolation point (same type as interpolated fields).
-- `neighbors::NeighborSelection`  
-  Neighbor selection holding the particle indices and count.
-- `itp_strategy::InterpolationStrategy=itpSymmetric`: 
-  Kernel interpolation strategy controlling how the smoothing length is applied to W(r,h).  
-  - `itpGather`: Use only `h_a`, the smoothing length centered at the target point. (Hernquist & Katz (1989), Price (2012))
-  - `itpScatter`: Use only `h_b`, the smoothing length from each source particle. (Price (2007, SPLASH), Monaghan (1992))
-  - `itpSymmetric`: Use averaged kernel value `0.5*(W(h_a) + W(h_b))`. (Monaghan (1992))
+  Smoothing length associated with the interpolation point.
+- `LBVH::LinearBVH`  
+  Bounding volume hierarchy used for neighbour discovery.
+- `ShepardNormalization::NTuple{NCOLUMN, Bool}`  
+  Per-field Shepard-normalization flags.
+- `itp_strategy::Type{ITPSTRATEGY}`  
+  Kernel policy determining whether the contribution uses  
+  `hₐ`, `hᵢ`, or their symmetric average.
 
 # Returns
-- `::Vector{T}`  
-  A vector of length `NCOLUMN`, each entry corresponding to the interpolated value of a scalar field (e.g., pressure, temperature).
-
-# Notes
-- Uses symmetric kernel averaging between `ha` and `hᵢ`.
-- Shepard normalization is applied to ensure consistency.
-- Output order matches the order of scalar fields in `input.quant`.
+- `::NTuple{NCOLUMN, T}`  
+  A statically sized tuple containing the interpolated values of all fields
+  in the same order as they appear in `input.quant`.
 """
-function quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
-    workspace = zeros(T, NCOLUMN)
-    if NCOLUMN == 0
-        return workspace
-    end
-    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, ShepardNormalization , itp_strategy)
-    return workspace
+function quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
+    return _quantities_interpolate_kernel(input, reference_point, ha, LBVH, ShepardNormalization , itp_strategy)
 end
 
-function quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M),itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, M}
-    workspace = zeros(T, M)
-    if ncols == 0
-        return workspace
-    end
-    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, columns, ShepardNormalization, itp_strategy)
-    return workspace
+"""
+    quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN},
+                           reference_point::NTuple{3, T},
+                           ha::T,
+                           LBVH::LinearBVH,
+                           columns::NTuple{M, Int},
+                           ShepardNormalization::NTuple{M, Bool} = ntuple(_ -> true, M),
+                           itp_strategy::Type{ITPSTRATEGY} = itpSymmetric)
+        -> NTuple{M, T}
+
+Interpolate a selected subset of SPH particle scalar fields at a 3D location
+using an LBVH-accelerated neighbour search.
+
+Only the fields specified by `columns` are evaluated. The LBVH traversal
+identifies particles whose kernel support intersects the sphere of radius `ha`
+centred at `reference_point`. For each neighbour, contributions are accumulated
+into a compile-time sized `NTuple{M,T}`, ensuring full type stability and GPU
+compatibility. Shepard normalization can be independently enabled for each
+requested field.
+
+# Parameters
+- `input::InterpolationInput{T, V, K, NCOLUMN}`  
+  SPH particle dataset containing `NCOLUMN` scalar fields.
+- `reference_point::NTuple{3, T}`  
+  Cartesian coordinates `(x, y, z)` where interpolation is evaluated.
+- `ha::T`  
+  Smoothing length associated with the interpolation point.
+- `LBVH::LinearBVH`  
+  Linear bounding volume hierarchy used for neighbour discovery.
+- `columns::NTuple{M, Int}`  
+  Indices of the particle fields to be interpolated.  
+  `M` is the number of requested fields.
+- `ShepardNormalization::NTuple{M, Bool}`  
+  Flags enabling per-field Shepard normalization.
+- `itp_strategy::Type{ITPSTRATEGY}`  
+  Kernel interpolation policy determining the use of `hₐ`, `hᵢ`, or their
+  symmetric average.
+
+# Returns
+- `::NTuple{M, T}`  
+  Fixed-size tuple containing the interpolated values of the requested fields,
+  in the same order as specified in `columns`.
+"""
+function quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M),itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy, M}
+    return _quantities_interpolate_kernel(input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
 end
 
-function quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
+## Multiple-Quantity Interpolation (In-Place)
+"""
+    quantities_interpolate!(workspace::Vector{T},
+                            input::InterpolationInput{T, V, K, NCOLUMN},
+                            reference_point::NTuple{3, T},
+                            ha::T,
+                            LBVH::LinearBVH,
+                            ShepardNormalization::NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN),
+                            itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> Nothing
+
+In-place SPH interpolation of all particle fields stored in an
+`InterpolationInput`, using LBVH-based neighbour search.
+
+This routine computes interpolated values for **all `NCOLUMN` scalar fields**
+and writes them directly into the provided `workspace` array. Neighbours are
+selected by intersecting LBVH leaf AABBs with the kernel support region of
+radius `ha` around `reference_point`. No memory allocation occurs except for
+caller-provided buffers. The core computation is delegated to the in-place
+`_quantities_interpolate_kernel!`.
+
+# Parameters
+- `workspace::Vector{T}`  
+  Preallocated output buffer of length `NCOLUMN`. Filled with interpolated
+  values.
+- `input::InterpolationInput{T, V, K, NCOLUMN}`  
+  Preprocessed SPH particle data with `NCOLUMN` scalar fields.
+- `reference_point::NTuple{3, T}`  
+  Evaluation position (x, y, z).
+- `ha::T`  
+  Target smoothing length at the interpolation location.
+- `LBVH::LinearBVH`  
+  Linear bounding volume hierarchy for neighbour selection.
+- `ShepardNormalization::NTuple{NCOLUMN, Bool}`  
+  Per-field Shepard normalization flags. Defaults to all `true`.
+- `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
+  Kernel interpolation strategy specifying how `h_a` and `h_b` are combined:  
+  - `itpGather`: use only `h_a`.  
+  - `itpScatter`: use only `h_b`.  
+  - `itpSymmetric`: average kernel value `0.5*(W(h_a)+W(h_b))`.
+
+# Returns
+`nothing`. The results are written directly into `workspace`.
+"""
+function quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
     if NCOLUMN == 0
         return nothing
     end  
     @assert length(workspace) == NCOLUMN "Length of `workspace` should be identical as NCOLUMN."
-    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, ShepardNormalization, itp_strategy)
+    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, LBVH, ShepardNormalization, itp_strategy)
 end
 
-function quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M), itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, M}
+"""
+    quantities_interpolate!(workspace::Vector{T},
+                            input::InterpolationInput{T, V, K, NCOLUMN},
+                            reference_point::NTuple{3, T},
+                            ha::T,
+                            LBVH::LinearBVH,
+                            columns::NTuple{M, Int},
+                            ShepardNormalization::NTuple{M, Bool} = ntuple(_ -> true, M),
+                            itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> Nothing
+
+In-place interpolation of a **selected subset** of particle fields using an
+LBVH-based neighbour search.
+
+This variant of `quantities_interpolate!` computes interpolated values for only
+the fields specified by `columns`. It writes the results into the provided
+`workspace`, whose length must match the number of selected fields `M`. The
+LBVH is used to select neighbouring particles whose bounding boxes intersect
+the smoothing sphere of radius `ha` centred at `reference_point`. The
+in-place `_quantities_interpolate_kernel!` performs the SPH summation and (if
+enabled) Shepard normalization.
+
+# Parameters
+- `workspace::Vector{T}`  
+  Preallocated output buffer of length `M`. Filled with interpolated values.
+- `input::InterpolationInput{T, V, K, NCOLUMN}`  
+  Preprocessed SPH particle dataset containing `NCOLUMN` scalar fields.
+- `reference_point::NTuple{3, T}`  
+  Spatial coordinates (x, y, z) for interpolation.
+- `ha::T`  
+  Target smoothing length at the interpolation point.
+- `LBVH::LinearBVH`  
+  Linear bounding volume hierarchy used to identify candidate neighbours.
+- `columns::NTuple{M, Int}`  
+  Indices of the particle fields to interpolate.
+- `ShepardNormalization::NTuple{M, Bool} = ntuple(_ -> true, M)`  
+  Per-field Shepard normalization flags corresponding to `columns`.
+- `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
+  Kernel interpolation strategy controlling how `h_a` and `h_b` are combined:  
+  - `itpGather`: use only `h_a`.  
+  - `itpScatter`: use only `h_b`.  
+  - `itpSymmetric`: average kernel `0.5*(W(h_a) + W(h_b))`.
+
+# Returns
+`nothing`. Results are written directly into `workspace`.
+"""
+function quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy, M}
     @assert length(workspace) == M "Length of `workspace` should match `columns`."
     if M == 0
         return nothing
     end
-    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, columns, ShepardNormalization, itp_strategy)
+    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
     return nothing
 end
 
-function quantities_interpolate!(buffer :: NTuple{NCOLUMN, SA}, workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, SA<:AbstractArray{T, 0}}
+function quantities_interpolate!(buffer :: NTuple{NCOLUMN, SA}, workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, SA<:AbstractArray{T, 0}, ITPSTRATEGY <: AbstractInterpolationStrategy}
     if NCOLUMN == 0
       return nothing
     end
     @assert length(workspace) == NCOLUMN "Length of `workspace` should be identical as NCOLUMN."
-    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, ShepardNormalization, itp_strategy)
+    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, LBVH, ShepardNormalization, itp_strategy)
     @inbounds for i in eachindex(buffer)
         buffer[i][] = workspace[i]
     end
 end
 
-function quantities_interpolate!(buffer :: NTuple{M, SA}, workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: InterpolationStrategy = itpSymmetric) where {M, NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, SA<:AbstractArray{T, 0}}
+function quantities_interpolate!(buffer :: NTuple{M, SA}, workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {M, NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, SA<:AbstractArray{T, 0}, ITPSTRATEGY <: AbstractInterpolationStrategy}
     @assert length(workspace) == M "Length of `workspace` should match `columns`."
     if M == 0
       return nothing
     end
-    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, columns, ShepardNormalization, itp_strategy)
+    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
     @inbounds for i in eachindex(buffer)
       buffer[i][] = workspace[i]
     end
@@ -197,125 +362,263 @@ end
 
 ## LOS density interpolation (Column / Surface density)
 """
-    LOS_density(input::InterpolationInput{...}, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) -> T
+    LOS_density(input::InterpolationInput{T, V, K},
+                reference_point::NTuple{2, T},
+                ha::T,
+                LBVH::LinearBVH,
+                itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> T
 
-Compute the **line-of-sight (LOS) column density** at a 2D position by integrating SPH particle contributions along the z-axis.
+Compute the SPH line-of-sight (LOS) density at a 2-D reference point using an
+LBVH for neighbour identification.
 
-This function projects the 3D SPH density field onto the x–y plane, computing the surface density at a given (x, y) coordinate. It internally calls a kernel `_LOS_density_kernel` that performs SPH summation with symmetric kernel averaging.
+This function evaluates the projected (column) density along the line of sight
+by summing contributions from particles whose AABBs intersect the circular
+kernel support of radius `ha` in the 2-D projected space. The LBVH efficiently
+selects candidate neighbours, and `_LOS_density_kernel` performs the
+projection-aware SPH density summation.
 
 # Parameters
-- `input::InterpolationInput{...}`  
-  Immutable, read-only SPH input container containing positions, mass, density, smoothing length, and kernel information.
+- `input::InterpolationInput{T, V, K}`  
+  Preprocessed 3-D SPH particle data container.
 - `reference_point::NTuple{2, T}`  
-  A 2D coordinate (x, y) specifying the location on the projection plane at which the LOS column density is evaluated.
+  2-D projected spatial position (e.g., image-plane coordinates).
 - `ha::T`  
-  Target smoothing length used at the interpolation point (same type as interpolated fields).
-- `neighbors::NeighborSelection`  
-  Neighbor selection holding the particle indices and count.
-- `itp_strategy::InterpolationStrategy=itpSymmetric`: 
-  Kernel interpolation strategy controlling how the smoothing length is applied to W(r,h).  
-  - `itpGather`: Use only `h_a`, the smoothing length centered at the target point. (Hernquist & Katz (1989), Price (2012))
-  - `itpScatter`: Use only `h_b`, the smoothing length from each source particle. (Price (2007, SPLASH), Monaghan (1992))
-  - `itpSymmetric`: Use averaged kernel value `0.5*(W(h_a) + W(h_b))`. (Monaghan (1992))
+  Smoothing length associated with the projected kernel.
+- `LBVH::LinearBVH`  
+  Linear bounding volume hierarchy built over particle positions, projected for
+  LOS search.
+- `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
+  Kernel interpolation strategy defining how `h_a` and `h_b` contribute in the
+  projected kernel:
+  - `itpGather`: use only `h_a`.  
+  - `itpScatter`: use only `h_b`.  
+  - `itpSymmetric`: average kernel value.
 
 # Returns
-- `Σ::T`  
-  Total column density at the given location, i.e., integrated \rho(z)  dz estimated via SPH.
-
-# Notes
-- Assumes the LOS is aligned with the z-axis.
-- Requires full particle positions and densities to be preloaded.
-- Output is a scalar in units of mass per area.
+- `Σ_interp::T`  
+  Projected SPH column density at the given 2-D reference point.
 """
-function LOS_density(input::InterpolationInput{T, V, K}, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
-  return _LOS_density_kernel(input, reference_point, ha, neighbors, itp_strategy)
+function LOS_density(input::InterpolationInput{T, V, K}, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
+  return _LOS_density_kernel(input, reference_point, ha, LBVH, itp_strategy)
 end
 
 
 ## LOS quantities interpolation
 """
-    LOS_quantities_interpolate(input::InterpolationInput, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) -> Vector{T}
+    LOS_quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN},
+                               reference_point::NTuple{2, T},
+                               ha::T,
+                               LBVH::LinearBVH,
+                               ShepardNormalization::NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN),
+                               itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> Vector{T}
 
-Compute the line-of-sight (LOS) projection of all scalar fields in `input.quant` at a 2D sky-plane location.
+Interpolate all SPH particle fields in *projected (2-D) space* using an LBVH
+for neighbour selection, producing line-of-sight (LOS)–weighted quantities.
 
-This function performs SPH-based interpolation of each scalar field along the line-of-sight direction (usually the z-axis), evaluated at a fixed (x, y) point on the image or projection plane. The result is a vector of LOS-integrated quantities (e.g., column density, projected temperature).
+This routine computes LOS-projected interpolated values for all `NCOLUMN` scalar
+fields. Candidate neighbours are obtained by intersecting LBVH leaf AABBs with
+the circular kernel support of radius `ha` centred at the 2-D projection
+`reference_point`. The resulting particle subset is passed into
+`_LOS_quantities_interpolate_kernel!`, which performs projection-aware SPH
+summation and optional Shepard normalization.
 
 # Parameters
-- `input::InterpolationInput{...}`  
-  A read-only, isbits SPH input container with all scalar quantities
+- `input::InterpolationInput{T, V, K, NCOLUMN}`  
+  Preprocessed SPH particle dataset containing `NCOLUMN` scalar fields.
 - `reference_point::NTuple{2, T}`  
-  The 2D Cartesian coordinate (x, y) in the projection plane.
+  2-D projected coordinates where LOS quantities are evaluated.
 - `ha::T`  
-  Target smoothing length used at the interpolation point (same type as interpolated fields).
-- `neighbors::NeighborSelection`  
-  Neighbor selection holding the particle indices and count.
-- `itp_strategy::InterpolationStrategy=itpSymmetric`: 
-  Kernel interpolation strategy controlling how the smoothing length is applied to W(r,h).  
-  - `itpGather`: Use only `h_a`, the smoothing length centered at the target point. (Hernquist & Katz (1989), Price (2012))
-  - `itpScatter`: Use only `h_b`, the smoothing length from each source particle. (Price (2007, SPLASH), Monaghan (1992))
-  - `itpSymmetric`: Use averaged kernel value `0.5*(W(h_a) + W(h_b))`. (Monaghan (1992))
+  Smoothing length used for the projected kernel support.
+- `LBVH::LinearBVH`  
+  Linear bounding volume hierarchy providing neighbour candidates in
+  projected space.
+- `ShepardNormalization::NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN)`  
+  Per-field Shepard normalization flags for LOS interpolation.
+- `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
+  Kernel interpolation strategy (`itpGather`, `itpScatter`, `itpSymmetric`).
 
 # Returns
-- `::Vector{T}`  
-  A vector of length `NCOLUMN`, each entry corresponding to the LOS-projected value of a scalar field in `input.quant`.
-
-# Notes
-- The kernel smoothing is performed in 3D but the integration is projected onto the 2D plane.
-- This function is intended for generating projected maps (e.g., surface density, emission measure).
-- Output order matches the ordering of scalar fields in `input.quant`.
+- `workspace::Vector{T}`  
+  A vector of length `NCOLUMN` containing LOS-projected interpolated values for
+  each field.
 """
-function LOS_quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
+function LOS_quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
     workspace = zeros(T, NCOLUMN)
     if NCOLUMN == 0
       return workspace
     end
-  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, ShepardNormalization, itp_strategy)
+  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, LBVH, ShepardNormalization, itp_strategy)
     return workspace
 end
 
-function LOS_quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M), itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, M}
+"""
+    LOS_quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN},
+                               reference_point::NTuple{2, T},
+                               ha::T,
+                               LBVH::LinearBVH,
+                               columns::NTuple{M, Int},
+                               ShepardNormalization::NTuple{M, Bool} = ntuple(_ -> true, M),
+                               itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> Vector{T}
+
+Interpolate a selected subset of SPH particle fields in projected (2-D) space
+using an LBVH for neighbour detection, producing line-of-sight (LOS) weighted
+quantities.
+
+This variant computes LOS-projected interpolated values only for the fields
+listed in `columns`. An output workspace of size `M` is allocated. Neighbours
+are identified through LBVH intersection tests between particle AABBs and the
+circular kernel support of radius `ha` centered at the 2-D `reference_point`.
+Computation is handled by `_LOS_quantities_interpolate_kernel!`, which performs
+the LOS-aware SPH summation with optional Shepard normalization.
+
+# Parameters
+- `input::InterpolationInput{T, V, K, NCOLUMN}`  
+  Preprocessed SPH dataset containing `NCOLUMN` scalar fields.
+- `reference_point::NTuple{2, T}`  
+  2-D projected evaluation position.
+- `ha::T`  
+  Kernel smoothing length used in the projected space.
+- `LBVH::LinearBVH`  
+  Linear bounding volume hierarchy used to select neighbour candidates.
+- `columns::NTuple{M, Int}`  
+  Indices of the fields to interpolate.
+- `ShepardNormalization::NTuple{M, Bool} = ntuple(_ -> true, M)`  
+  Per-field Shepard normalization flags corresponding to `columns`.
+- `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
+  Kernel interpolation strategy (`itpGather`, `itpScatter`, `itpSymmetric`).
+
+# Returns
+- `workspace::Vector{T}`  
+  Vector of length `M` containing LOS-projected interpolated values for the
+  selected fields.
+"""
+function LOS_quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy, M}
     workspace = zeros(T, M)
     if M == 0
         return workspace
     end
-  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, columns, ShepardNormalization, itp_strategy)
+  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
     return workspace
 end
 
-function LOS_quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, M), itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
+"""
+    LOS_quantities_interpolate!(workspace::Vector{T},
+                                input::InterpolationInput{T, V, K, NCOLUMN},
+                                reference_point::NTuple{2, T},
+                                ha::T,
+                                LBVH::LinearBVH,
+                                ShepardNormalization::NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN),
+                                itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> Nothing
+
+In-place interpolation of all SPH particle fields in projected (2-D) space
+using LBVH-based neighbour search, producing line-of-sight (LOS) weighted
+quantities.
+
+This function computes LOS-projected interpolated values for all `NCOLUMN`
+fields and writes the results directly into the user-provided `workspace`
+buffer. Neighbours are selected by intersecting LBVH leaf AABBs with the
+circular kernel support of radius `ha` centred at the 2-D projected position
+`reference_point`. The core computation is performed by
+`_LOS_quantities_interpolate_kernel!`, which evaluates LOS-weighted SPH
+summations with optional Shepard normalization.
+
+# Parameters
+- `workspace::Vector{T}`  
+  Preallocated buffer of length `NCOLUMN`. Filled with LOS-projected
+  interpolated values.
+- `input::InterpolationInput{T, V, K, NCOLUMN}`  
+  Preprocessed SPH dataset containing `NCOLUMN` scalar particle fields.
+- `reference_point::NTuple{2, T}`  
+  Evaluation point in 2-D projected space.
+- `ha::T`  
+  Smoothing length associated with the projected kernel.
+- `LBVH::LinearBVH`  
+  Linear bounding volume hierarchy used to identify neighbour candidates.
+- `ShepardNormalization::NTuple{NCOLUMN, Bool}`  
+  Per-field Shepard normalization flags. Must match the number of fields.
+- `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
+  Kernel interpolation mode (`itpGather`, `itpScatter`, `itpSymmetric`).
+
+# Returns
+`nothing`. Results are written directly into `workspace`.
+"""
+function LOS_quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, M), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
     if NCOLUMN == 0
       return nothing
     end
     @assert length(workspace) == NCOLUMN "Length of `workspace` should be identical as NCOLUMN."
-  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, ShepardNormalization, itp_strategy)
+  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, LBVH, ShepardNormalization, itp_strategy)
 end
 
-function LOS_quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M), itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, M}
+"""
+    LOS_quantities_interpolate!(workspace::Vector{T},
+                                input::InterpolationInput{T, V, K, NCOLUMN},
+                                reference_point::NTuple{2, T},
+                                ha::T,
+                                LBVH::LinearBVH,
+                                columns::NTuple{M, Int},
+                                ShepardNormalization::NTuple{M, Bool} = ntuple(_ -> true, M),
+                                itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> Nothing
+
+In-place interpolation of a selected subset of SPH particle fields in projected
+(2-D) space using LBVH-based neighbour search, producing line-of-sight (LOS)
+weighted quantities.
+
+This method computes LOS-projected SPH interpolated values only for the fields
+listed in `columns`. The caller-provided `workspace` must have length `M`,
+matching the number of selected fields. Neighbouring particles are determined
+via LBVH intersection between leaf AABBs and the projected kernel support
+(circle of radius `ha`). The computation is performed by
+`_LOS_quantities_interpolate_kernel!`, which applies LOS-weighted SPH summation
+and optional Shepard normalization.
+
+# Parameters
+- `workspace::Vector{T}`  
+  Output buffer of length `M` to be filled in-place.
+- `input::InterpolationInput{T, V, K, NCOLUMN}`  
+  Preprocessed SPH particle data.
+- `reference_point::NTuple{2, T}`  
+  2-D projected evaluation location.
+- `ha::T`  
+  Smoothing length for the projected kernel.
+- `LBVH::LinearBVH`  
+  LBVH used for neighbour identification in projected space.
+- `columns::NTuple{M, Int}`  
+  Indices of scalar fields to interpolate.
+- `ShepardNormalization::NTuple{M, Bool} = ntuple(_ -> true, M)`  
+  Shepard normalization flags corresponding to the selected fields.
+- `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
+  Kernel interpolation strategy (`itpGather`, `itpScatter`, `itpSymmetric`).
+
+# Returns
+`nothing`. All results are written directly into `workspace`.
+"""
+function LOS_quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy, M}
     @assert length(workspace) == M "Length of `workspace` should match `columns`."
     if M == 0
         return nothing
     end
-  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, columns, ShepardNormalization, itp_strategy)
+  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
   return nothing
 end
 
-function LOS_quantities_interpolate!(buffer :: NTuple{NCOLUMN, SA}, workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection,ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: InterpolationStrategy = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, SA<:AbstractArray{T, 0}}
+function LOS_quantities_interpolate!(buffer :: NTuple{NCOLUMN, SA}, workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH,ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, SA<:AbstractArray{T, 0}, ITPSTRATEGY <: AbstractInterpolationStrategy}
     if NCOLUMN == 0
       return nothing
     end
     @assert length(workspace) == NCOLUMN "Length of `workspace` should be identical as NCOLUMN."
-  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, ShepardNormalization, itp_strategy)
+  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, LBVH, ShepardNormalization, itp_strategy)
     @inbounds for i in eachindex(buffer)
         buffer[i][] = workspace[i]
     end
 end
 
-  function LOS_quantities_interpolate!(buffer :: NTuple{M, SA}, workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, neighbors :: NeighborSelection, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M), itp_strategy :: InterpolationStrategy = itpSymmetric) where {M, NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, SA<:AbstractArray{T, 0}}
+  function LOS_quantities_interpolate!(buffer :: NTuple{M, SA}, workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {M, NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, SA<:AbstractArray{T, 0}, ITPSTRATEGY <: AbstractInterpolationStrategy}
     @assert length(workspace) == M "Length of `workspace` should match `columns`."
     if M == 0
       return nothing
     end
-    _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, neighbors, columns, ShepardNormalization, itp_strategy)
+    _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
     @inbounds for i in eachindex(buffer)
       buffer[i][] = workspace[i]
     end
@@ -327,160 +630,171 @@ end
     gradient_density(input::InterpolationInput{T, V, K},
                      reference_point::NTuple{3, T},
                      ha::T,
-                     neighbors::NeighborSelection,
-                     itp_strategy :: InterpolationStrategy = itpSymmetric)
+                     LBVH::LinearBVH,
+                     itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> NTuple{3, T}
 
-Compute the SPH gradient of the density field at a given point using symmetric kernel formulation.
+Compute the SPH density gradient ∇ρ at a 3-D reference point using an LBVH for
+efficient neighbour selection.
 
-This function wraps `_gradient_density_kernel(...)` and evaluates the gradient of density
-at a specified 3D location using the provided neighbor indices and SPH kernel.
+This routine evaluates the spatial gradient of the SPH density field by
+performing kernel-gradient summation over particles whose AABBs intersect the
+spherical support region of radius `ha` centred at `reference_point`. Neighbour
+selection is handled by the LBVH, while `_gradient_density_kernel` performs the
+actual SPH gradient computation using the specified interpolation strategy.
 
 # Parameters
 - `input::InterpolationInput{T, V, K}`  
-  The interpolation data container, including particle properties and kernel type.
+  Preprocessed SPH particle data structure.
 - `reference_point::NTuple{3, T}`  
-  The physical position where the gradient is evaluated.
+  Evaluation point (x, y, z) in 3-D space.
 - `ha::T`  
-  The smoothing length of the reference point.
-- `neighbors::NeighborSelection`  
-  Neighbor selection holding the particle indices and count.
-- `itp_strategy::InterpolationStrategy=itpSymmetric`: 
-  Kernel interpolation strategy controlling how the smoothing length is applied to W(r,h).  
-  - `itpGather`: Use only `h_a`, the smoothing length centered at the target point. (Hernquist & Katz (1989), Price (2012))
-  - `itpScatter`: Use only `h_b`, the smoothing length from each source particle. (Price (2007, SPLASH), Monaghan (1992))
-  - `itpSymmetric`: Use averaged kernel value `0.5*(W(h_a) + W(h_b))`. (Monaghan (1992))
+  Smoothing length at the interpolation point.
+- `LBVH::LinearBVH`  
+  Linear bounding volume hierarchy used for neighbour queries.
+- `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
+  Kernel interpolation strategy controlling the use of `h_a` and `h_b`:  
+  - `itpGather` — use only `h_a`  
+  - `itpScatter` — use only `h_b`  
+  - `itpSymmetric` — use the averaged kernel gradient
 
 # Returns
-- `::NTuple{3, T}`  
-  The gradient of the density field, ∇ρ, at the reference point.  
-  If `neighbors` is empty or ρ is zero, returns `(NaN, NaN, NaN)`.
+- `∇ρ::NTuple{3, T}`  
+  The SPH density gradient evaluated at `reference_point`.
 """
-function gradient_density(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, itp_strategy :: InterpolationStrategy = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
-  return _gradient_density_kernel(input, reference_point, ha, neighbors, itp_strategy)
+function gradient_density(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
+  return _gradient_density_kernel(input, reference_point, ha, LBVH, itp_strategy)
 end
 
 # Single column gradient value intepolation
 """
-    gradient_quantity_interpolate(input::InterpolationInput, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, column_idx::Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) -> NTuple{3, T}
+    gradient_quantity_interpolate(input::InterpolationInput{T, V, K},
+                                  reference_point::NTuple{3, T},
+                                  ha::T,
+                                  LBVH::LinearBVH,
+                                  column_idx::Int64,
+                                  itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> NTuple{3, T}
 
-Estimate the gradient ∇A of a single scalar quantity at a 3D reference point via SPH interpolation.
+Compute the spatial gradient of an arbitrary SPH quantity at a 3-D reference
+point using LBVH-based neighbour search.
 
-The gradient value of any arbitrary scalar quantity A would be estimated by
-
-∇A(r) = (1/ρ(r))∑_b m_b*(A_b-A(r))∇W(r-r_b)
-
-This function returns the spatial gradient of a given scalar field in `input.quant[column_idx]`, computed using a symmetrized SPH formulation with Shepard normalization. The kernel gradient is averaged over both the target smoothing length `ha` and each particle's `h`.
+This function evaluates the gradient ∇Q of the particle field indexed by
+`column_idx`. Neighbours are selected by intersecting LBVH leaf AABBs with the
+kernel support sphere of radius `ha`. The low-level
+`_gradient_quantity_interpolate_kernel` performs the SPH gradient summation
+using the specified kernel interpolation strategy.
 
 # Parameters
-- `input::InterpolationInput{...}`  
-  Immutable, read-only container for SPH particle data.
+- `input::InterpolationInput{T, V, K}`  
+  Preprocessed SPH particle data.
 - `reference_point::NTuple{3, T}`  
-  The 3D Cartesian coordinates at which to evaluate the gradient.
+  3-D position (x, y, z) where the quantity gradient is evaluated.
 - `ha::T`  
-  Target smoothing length used at the interpolation point (same type as interpolated fields).
-- `neighbors::NeighborSelection`  
-  Neighbor selection holding the particle indices and count.
+  Smoothing length at the evaluation point.
+- `LBVH::LinearBVH`  
+  Linear bounding volume hierarchy used to identify neighbouring particles.
 - `column_idx::Int64`  
-  Index of the target scalar field in the `input.quant` tuple.
-- `itp_strategy::InterpolationStrategy=itpSymmetric`: 
-  Kernel interpolation strategy controlling how the smoothing length is applied to W(r,h).  
-  - `itpGather`: Use only `h_a`, the smoothing length centered at the target point. (Hernquist & Katz (1989), Price (2012))
-  - `itpScatter`: Use only `h_b`, the smoothing length from each source particle. (Price (2007, SPLASH), Monaghan (1992))
-  - `itpSymmetric`: Use averaged kernel value `0.5*(W(h_a) + W(h_b))`. (Monaghan (1992))
+  Index of the scalar field whose gradient is to be interpolated.
+- `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
+  Kernel interpolation strategy (`itpGather`, `itpScatter`, `itpSymmetric`).
 
 # Returns
-- `::NTuple{3, T}`  
-  The interpolated gradient vector (∂x A, ∂y A, ∂z A). If no valid particles are present, returns `(NaN, NaN, NaN)`.
-
-# Notes
-- Uses symmetrized kernel and its gradient:  
-   W = 0.5 (W_{ah} + W_{bh}), ∇W = 0.5 (∇W_{ah} + ∇W_{bh}) 
+- `∇Q::NTuple{3, T}`  
+  The interpolated gradient of the selected quantity at `reference_point`.
 """
-function gradient_quantity_interpolate(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, column_idx :: Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
-  return _gradient_quantity_interpolate_kernel(input, reference_point, ha, neighbors, column_idx, itp_strategy)
+function gradient_quantity_interpolate(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, column_idx :: Int64, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
+  return _gradient_quantity_interpolate_kernel(input, reference_point, ha, LBVH, column_idx, itp_strategy)
 end
 
 # Single column divergence value intepolation
 """
-    divergence_quantity_interpolate(input::InterpolationInput, reference_point::NTuple{3, T}, ha :: T, neighbors::NeighborSelection, Ax_column_idx::Int64, Ay_column_idx::Int64, Az_column_idx::Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) -> T
+    divergence_quantity_interpolate(input::InterpolationInput{T, V, K},
+                                    reference_point::NTuple{3, T},
+                                    ha::T,
+                                    LBVH::LinearBVH,
+                                    Ax_column_idx::Int64,
+                                    Ay_column_idx::Int64,
+                                    Az_column_idx::Int64,
+                                    itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> T
 
-Estimate the divergence ∇·A of a vector quantity at a 3D reference point via SPH interpolation.
+Compute the divergence of a vector-valued SPH quantity at a 3-D reference point
+using LBVH-based neighbour search.
 
-The divergence of any arbitrary vector quantity A would be estimated by
-
-∇⋅A(r) = (1/ρ(r))∑_b m_b*(A_b-A(r))⋅∇W(r-r_b)
-
-This function computes the divergence at a given position from three scalar fields stored in `input.quant`, identified by their corresponding indices. It symmetrizes the kernel gradient using both the target smoothing length and each particle’s individual smoothing length.
+This routine evaluates the divergence ∇·A of a vector field **A = (Aₓ, Aᵧ, A_z)**,
+where each component is stored in the SPH dataset as a separate scalar column,
+given by `Ax_column_idx`, `Ay_column_idx`, and `Az_column_idx`. Neighbours are
+selected through LBVH AABB–sphere intersection using the smoothing length `ha`.
+The SPH divergence summation is performed by
+`_divergence_quantity_interpolate_kernel`.
 
 # Parameters
-- `input::InterpolationInput{...}`  
-  Read-only, GPU-friendly container for SPH particle data.
+- `input::InterpolationInput{T, V, K}`  
+  Preprocessed SPH particle dataset.
 - `reference_point::NTuple{3, T}`  
-  The 3D Cartesian coordinates at which the divergence is computed.
+  3-D position (x, y, z) where the divergence is evaluated.
 - `ha::T`  
-  Target smoothing length used at the interpolation point (same type as interpolated fields).
-- `neighbors::NeighborSelection`  
-  Neighbor selection holding the particle indices and count.
-- `Ax_column_idx::Int64`, `Ay_column_idx::Int64`, `Az_column_idx::Int64`  
-  Indices of the scalar fields representing the x, y, and z components of the vector field \vec{A}.
-- `itp_strategy::InterpolationStrategy=itpSymmetric`: 
-  Kernel interpolation strategy controlling how the smoothing length is applied to W(r,h).  
-  - `itpGather`: Use only `h_a`, the smoothing length centered at the target point. (Hernquist & Katz (1989), Price (2012))
-  - `itpScatter`: Use only `h_b`, the smoothing length from each source particle. (Price (2007, SPLASH), Monaghan (1992))
-  - `itpSymmetric`: Use averaged kernel value `0.5*(W(h_a) + W(h_b))`. (Monaghan (1992))
+  Smoothing length at the evaluation point.
+- `LBVH::LinearBVH`  
+  Linear bounding volume hierarchy used for neighbour discovery.
+- `Ax_column_idx::Int64`  
+  Column index of the x-component of the vector field.
+- `Ay_column_idx::Int64`  
+  Column index of the y-component of the vector field.
+- `Az_column_idx::Int64`  
+  Column index of the z-component of the vector field.
+- `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
+  Kernel interpolation strategy (`itpGather`, `itpScatter`, `itpSymmetric`).
 
 # Returns
-- `::T`  
-  The interpolated divergence ∇·A at the reference point. Returns `NaN` if no valid particles are present or if the local density is zero.
-
-# Notes
-- Uses symmetrized kernel value and gradient:  
-
-  W = 0.5 (W_{ah} + W_{bh}), ∇W = 0.5 (∇W_{ah} + ∇W_{bh})
-
-- Includes normalization via the estimated ρ(r) and subtraction of \vec{A}(r) to ensure conservative and stable estimates.
+- `∇·A::T`  
+  Divergence of the vector field evaluated at `reference_point`.
 """
-function divergence_quantity_interpolate(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, Ax_column_idx :: Int64, Ay_column_idx :: Int64, Az_column_idx :: Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
-  return _divergence_quantity_interpolate_kernel(input, reference_point, ha, neighbors, Ax_column_idx, Ay_column_idx, Az_column_idx, itp_strategy)
+function divergence_quantity_interpolate(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, Ax_column_idx :: Int64, Ay_column_idx :: Int64, Az_column_idx :: Int64, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
+  return _divergence_quantity_interpolate_kernel(input, reference_point, ha, LBVH, Ax_column_idx, Ay_column_idx, Az_column_idx, itp_strategy)
 end
 
 # Single column curl value intepolation
 """
-    curl_quantity_interpolate(input::InterpolationInput, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, Ax_column_idx::Int64, Ay_column_idx::Int64, Az_column_idx::Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) -> NTuple{3, T}
+    curl_quantity_interpolate(input::InterpolationInput{T, V, K},
+                              reference_point::NTuple{3, T},
+                              ha::T,
+                              LBVH::LinearBVH,
+                              Ax_column_idx::Int64,
+                              Ay_column_idx::Int64,
+                              Az_column_idx::Int64,
+                              itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> NTuple{3, T}
 
-Estimate the curl ∇×A of a vector field at a 3D reference point via symmetrized SPH interpolation.
+Compute the curl of a vector-valued SPH quantity at a 3-D reference point using
+LBVH-based neighbour search.
 
-This function computes the curl of a 3-component vector field stored in `input.quant`, specified by the three column indices. The formulation follows Price (2012), Eq. (79), using a symmetrized kernel and gradient with Shepard normalization. The expression is:
-
-∇×A(r) = - (1 / ρ(r)) * [ ∑₍b₎ m_b * A_b × ∇W(r - r_b) - A(r) × ∑₍b₎ m_b * ∇W(r - r_b) ]
+This function evaluates the curl **∇×A** of a vector field  
+A = (Aₓ, Aᵧ, A_z), where each component is stored in a separate scalar column
+indexed by `Ax_column_idx`, `Ay_column_idx`, and `Az_column_idx`. Neighbours are
+collected by checking intersection of LBVH leaf AABBs with the spherical kernel
+support of radius `ha`. The SPH curl summation is implemented in
+`_curl_quantity_interpolate_kernel`.
 
 # Parameters
-- `input::InterpolationInput{...}`  
-  Immutable, read-only container for SPH particle data.
+- `input::InterpolationInput{T, V, K}`  
+  Preprocessed SPH particle data.
 - `reference_point::NTuple{3, T}`  
-  The Cartesian position at which to compute the curl.
+  3-D Cartesian point (x, y, z) where the curl is evaluated.
 - `ha::T`  
-  Target smoothing length used at the interpolation point (same type as interpolated fields).
-- `neighbors::NeighborSelection`  
-  Neighbor selection holding the particle indices and count.
-- `Ax_column_idx`, `Ay_column_idx`, `Az_column_idx`  
-  Column indices of the three components A_x, A_y, A_z of the vector field.
-- `itp_strategy::InterpolationStrategy=itpSymmetric`: 
-  Kernel interpolation strategy controlling how the smoothing length is applied to W(r,h).  
-  - `itpGather`: Use only `h_a`, the smoothing length centered at the target point. (Hernquist & Katz (1989), Price (2012))
-  - `itpScatter`: Use only `h_b`, the smoothing length from each source particle. (Price (2007, SPLASH), Monaghan (1992))
-  - `itpSymmetric`: Use averaged kernel value `0.5*(W(h_a) + W(h_b))`. (Monaghan (1992))
+  Smoothing length at the interpolation point.
+- `LBVH::LinearBVH`  
+  Linear bounding volume hierarchy used for neighbour detection.
+- `Ax_column_idx::Int64`  
+  Column index of the x-component of the vector field.
+- `Ay_column_idx::Int64`  
+  Column index of the y-component of the vector field.
+- `Az_column_idx::Int64`  
+  Column index of the z-component of the vector field.
+- `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
+  Kernel interpolation strategy (`itpGather`, `itpScatter`, `itpSymmetric`).
 
 # Returns
-- `::NTuple{3, T}`  
-  The curl vector (∂yAz - ∂zAy, ∂zAx - ∂xAz, ∂xAy - ∂yAx) evaluated at the given point. Returns `(NaN, NaN, NaN)` if no valid particles exist.
-
-# Notes
-- Uses symmetrized SPH kernel average:  
-  W = 0.5(W_a + W_b), ∇W = 0.5(∇W_a + ∇W_b)
-- The result is scaled by `1/ρ(r)` to maintain consistency with SPH conventions.
-- The negative sign follows the antisymmetric form in Price (2012).
+- `∇×A::NTuple{3, T}`  
+  The curl of the vector field evaluated at `reference_point`.
 """
-function curl_quantity_interpolate(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, neighbors :: NeighborSelection, Ax_column_idx :: Int64, Ay_column_idx :: Int64, Az_column_idx :: Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
-  return _curl_quantity_interpolate_kernel(input, reference_point, ha, neighbors, Ax_column_idx, Ay_column_idx, Az_column_idx, itp_strategy)
+function curl_quantity_interpolate(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, Ax_column_idx :: Int64, Ay_column_idx :: Int64, Az_column_idx :: Int64, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
+  return _curl_quantity_interpolate_kernel(input, reference_point, ha, LBVH, Ax_column_idx, Ay_column_idx, Az_column_idx, itp_strategy)
 end

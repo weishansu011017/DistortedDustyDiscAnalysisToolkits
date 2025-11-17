@@ -6,8 +6,9 @@ using PhantomRevealer
 
 function Greeting_Metal end
 function to_MtlVector end
+# function to_HostVector end            # Already defined in CUDAExtDummy
 
-
+struct MetalComputeBackend <: AbstractExecutionBackend end
 
 
 # Export function, marco, const...

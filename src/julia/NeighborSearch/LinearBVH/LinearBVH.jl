@@ -3,6 +3,8 @@ Linear Bounding Volume Hierarchy (LBVH) construction and traversal utilities
     by Wei-Shan Su,  
     November 14, 2025
 """
+
+################# Define structures #################
 struct AABB{D, TF <: AbstractFloat, VF <: AbstractVector{TF}}
     min :: NTuple{D, VF}
     max :: NTuple{D, VF}
@@ -33,6 +35,7 @@ function Adapt.adapt_structure(to, x :: LBVH) where {D, LBVH <: LinearBVH{D}}
     )
 end
 
+################# Constructing LBVH #################
 @inline function _push!(stack::AbstractVector{Int}, top::Int, value::Int)
     new_top = top + 1
     @inbounds stack[new_top] = value
@@ -153,7 +156,7 @@ end
     fill!(visit, zero_visit)
     one_visit = one(eltype(visit))
 
-    stack = Vector{Int}(undef, max(1, 2 * nint + 8))
+    stack = Vector{Int}(undef, 128)
     top = _push!(stack, 0, root)
 
     while top > 0
@@ -226,6 +229,7 @@ function LinearBVH(enc::MortonEncoding{D, TF, TI, VF, VI}, brt::BinaryRadixTree{
     return LBVH
 end
 
+################# Traversal and Query #################
 """
     LBVH_probe_neighbors(LBVH, point, radius)
 
@@ -663,3 +667,4 @@ end
                              radius::S) where {D, T <: AbstractFloat, S <: AbstractFloat, VI <: AbstractVector{Int}}
     return LBVH_query!(pool, stack, LBVH, point, T(radius))
 end
+###################################################

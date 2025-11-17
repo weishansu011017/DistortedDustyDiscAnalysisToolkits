@@ -21,14 +21,6 @@ function PhantomRevealer.to_CuVector(enc :: MortonEncoding{D, TF, TI, VF, VI}) w
     )
 end
 
-function PhantomRevealer.to_CuVector(enc :: MortonEncoding{D, TF, TI, VF, VI}) where {D, TF <: AbstractFloat, TI <: Unsigned, VF <: AbstractVector{TF}, VI <: AbstractVector{TI}}
-    return MortonEncoding{D, TF, TI, CuVector{TF}, CuVector{TI}}(
-        CuVector{TI}(enc.order),
-        CuVector{TI}(enc.codes),
-        ntuple(i -> CuVector{TF}(enc.coord[i]), D),
-    )
-end
-
 function PhantomRevealer.to_CuVector(brt :: BinaryRadixTree{TI, VI, A, B}) where {TI <: Unsigned, VI <: AbstractVector{TI},  A <: AbstractVector{Int}, B <: AbstractVector{Bool}}
     return BinaryRadixTree{TI, CuVector{TI}, CuVector{Int}, CuVector{Bool}}(
         CuVector{Int}(brt.left_child),

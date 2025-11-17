@@ -1,26 +1,27 @@
-# Determine interpolation type
-@enum InterpolationStrategy begin
-    itpGather
-    itpScatter
-    itpSymmetric
-end
 
 ## Density
-@inline function _density_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, itp_strategy :: InterpolationStrategy, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _density_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, :: Type{itpGather}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
     Ktyp = typeof(input.smoothed_kernel)
-    W :: T = zero(T)
-    
-    if itp_strategy == itpGather
-        W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
-    elseif itp_strategy == itpScatter
-        W = Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i])
-    elseif itp_strategy == itpSymmetric
-        W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i]))
-    end
+    W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
     return input.m[i] * W
 end
-@inline function _density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+
+@inline function _density_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, :: Type{itpScatter}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
+    Ktyp = typeof(input.smoothed_kernel)
+    W = Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i])
+    return input.m[i] * W
+end
+
+@inline function _density_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, :: Type{itpSymmetric}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
+    Ktyp = typeof(input.smoothed_kernel)
+    W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i]))
+    return input.m[i] * W
+end
+
+@inline function _density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, ITPSTRATEGY <: AbstractInterpolationStrategy}
     # Prepare for interpolation
     Ktyp = typeof(input.smoothed_kernel)
     Kvalid = KernelFunctionValid(Ktyp, T)
@@ -46,10 +47,10 @@ end
     radius2 = radius * radius
 
     # Handle empty tree
-    if root == 0
+    if iszero(root)
         nleaf = length(leaf_min[1])
         @inbounds for leaf_idx in 1:nleaf
-            d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+            d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
             if d2 <= radius2
                 ########### Found a neighbor, do accumulation ###########
                 rho += _density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
@@ -62,11 +63,11 @@ end
     # Start traversal
     node = root
     while node != 0
-        dist2_node = _dist2_to_node_aabb(node_min, node_max, reference_point, node)
+        dist2_node = NeighborSearch._dist2_to_node_aabb(node_min, node_max, reference_point, node)
         if dist2_node <= radius2
             if LL[node]
                 @inbounds leaf_idx = L[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
                 if d2 <= radius2
                     ########### Found a neighbor, do accumulation ###########
                     rho += _density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
@@ -75,7 +76,7 @@ end
             end
             if RR[node]
                 @inbounds leaf_idx = R[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
                 if d2 <= radius2
                     ########### Found a neighbor, do accumulation ###########
                     rho += _density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
@@ -92,30 +93,37 @@ end
                 continue
             end
 
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         else
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         end
     end
     return rho
 end
 
 ## Number density
-@inline function _number_density_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, itp_strategy :: InterpolationStrategy, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _number_density_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T,  :: Type{itpGather}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
     Ktyp = typeof(input.smoothed_kernel)
-    W :: T = zero(T)
-    
-    if itp_strategy == itpGather
-        W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
-    elseif itp_strategy == itpScatter
-        W = Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i])
-    elseif itp_strategy == itpSymmetric
-        W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i]))
-    end
+    W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
     return W
 end
-@inline function _number_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+
+@inline function _number_density_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T,  :: Type{itpScatter}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
+    Ktyp = typeof(input.smoothed_kernel)
+    W = Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i])
+    return W
+end
+
+@inline function _number_density_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T,  :: Type{itpSymmetric}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
+    Ktyp = typeof(input.smoothed_kernel)
+    W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i]))
+    return W
+end
+
+@inline function _number_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, ITPSTRATEGY <: AbstractInterpolationStrategy}
     # Prepare for interpolation
     Ktyp = typeof(input.smoothed_kernel)
     Kvalid = KernelFunctionValid(Ktyp, T)
@@ -141,10 +149,10 @@ end
     radius2 = radius * radius
 
     # Handle empty tree
-    if root == 0
+    if iszero(root)
         nleaf = length(leaf_min[1])
         @inbounds for leaf_idx in 1:nleaf
-            d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+            d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
             if d2 <= radius2
                 ########### Found a neighbor, do accumulation ###########
                 n += _number_density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
@@ -157,11 +165,11 @@ end
     # Start traversal
     node = root
     while node != 0
-        dist2_node = _dist2_to_node_aabb(node_min, node_max, reference_point, node)
+        dist2_node = NeighborSearch._dist2_to_node_aabb(node_min, node_max, reference_point, node)
         if dist2_node <= radius2
             if LL[node]
                 @inbounds leaf_idx = L[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
                 if d2 <= radius2
                     ########### Found a neighbor, do accumulation ###########
                     n += _number_density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
@@ -170,7 +178,7 @@ end
             end
             if RR[node]
                 @inbounds leaf_idx = R[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
                 if d2 <= radius2
                     ########### Found a neighbor, do accumulation ###########
                     n += _number_density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
@@ -187,52 +195,79 @@ end
                 continue
             end
 
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         else
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         end
     end
     return n
 end
 
 ## Single quantity intepolation
-@inline function _quantity_interpolate_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, column_idx :: Int64, itp_strategy :: InterpolationStrategy, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _quantity_interpolate_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, column_idx :: Int64, :: Type{itpGather}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     Ktyp = typeof(input.smoothed_kernel)
     mb = input.m[i]
     ρb = input.ρ[i]
     Ab = input.quant[column_idx][i]
     rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
-    W :: T = zero(T)
-    if itp_strategy == itpGather
-        W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
-    elseif itp_strategy == itpScatter
-        W = Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i])
-    elseif itp_strategy == itpSymmetric
-        W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i]))
-    end
-
+    W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
     mbWlρb = mb * W/ρb
     return Ab * mbWlρb
 end
-@inline function _ShepardNormalization_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, itp_strategy :: InterpolationStrategy, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+
+@inline function _quantity_interpolate_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, column_idx :: Int64, :: Type{itpScatter}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    Ktyp = typeof(input.smoothed_kernel)
+    mb = input.m[i]
+    ρb = input.ρ[i]
+    Ab = input.quant[column_idx][i]
+    rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
+    W = Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i])
+    mbWlρb = mb * W/ρb
+    return Ab * mbWlρb
+end
+
+@inline function _quantity_interpolate_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, column_idx :: Int64, :: Type{itpSymmetric}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    Ktyp = typeof(input.smoothed_kernel)
+    mb = input.m[i]
+    ρb = input.ρ[i]
+    Ab = input.quant[column_idx][i]
+    rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
+    W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i]))
+    mbWlρb = mb * W/ρb
+    return Ab * mbWlρb
+end
+
+@inline function _ShepardNormalization_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, :: Type{itpGather}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     Ktyp = typeof(input.smoothed_kernel)
     mb = input.m[i]
     ρb = input.ρ[i]
     rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
-    W :: T = zero(T)
-    if itp_strategy == itpGather
-        W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
-    elseif itp_strategy == itpScatter
-        W = Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i])
-    elseif itp_strategy == itpSymmetric
-        W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i]))
-    end
-
+    W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
     mbWlρb = mb * W/ρb
     return mbWlρb
 end
 
-@inline function _quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, column_idx :: Int64, ShepardNormalization :: Bool, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _ShepardNormalization_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, :: Type{itpScatter}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    Ktyp = typeof(input.smoothed_kernel)
+    mb = input.m[i]
+    ρb = input.ρ[i]
+    rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
+    W = Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i])
+    mbWlρb = mb * W/ρb
+    return mbWlρb
+end
+
+@inline function _ShepardNormalization_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, :: Type{itpSymmetric}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    Ktyp = typeof(input.smoothed_kernel)
+    mb = input.m[i]
+    ρb = input.ρ[i]
+    rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
+    W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i]))
+    mbWlρb = mb * W/ρb
+    return mbWlρb
+end
+
+@inline function _quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, column_idx :: Int64, ShepardNormalization :: Bool, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, ITPSTRATEGY <: AbstractInterpolationStrategy}
     # Prepare for interpolation
     Ktyp = typeof(input.smoothed_kernel)
     Kvalid = KernelFunctionValid(Ktyp, T)
@@ -259,10 +294,10 @@ end
     radius2 = radius * radius
 
     # Handle empty tree
-    if root == 0
+    if iszero(root)
         nleaf = length(leaf_min[1])
         @inbounds for leaf_idx in 1:nleaf
-            d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+            d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
             if d2 <= radius2
                 ########### Found a neighbor, do accumulation ###########
                 A += _quantity_interpolate_accumulation(input, reference_point, ha, column_idx, itp_strategy, leaf_idx)
@@ -280,11 +315,11 @@ end
     # Start traversal
     node = root
     while node != 0
-        dist2_node = _dist2_to_node_aabb(node_min, node_max, reference_point, node)
+        dist2_node = NeighborSearch._dist2_to_node_aabb(node_min, node_max, reference_point, node)
         if dist2_node <= radius2
             if LL[node]
                 @inbounds leaf_idx = L[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
                 if d2 <= radius2
                     ########### Found a neighbor, do accumulation ###########
                     A += _quantity_interpolate_accumulation(input, reference_point, ha, column_idx, itp_strategy, leaf_idx)
@@ -312,9 +347,9 @@ end
                 continue
             end
 
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         else
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         end
     end
     # Shepard normalization
@@ -325,7 +360,7 @@ end
 end
 
 ## Muti-columns intepolation
-@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, itp_strategy :: InterpolationStrategy) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
+@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, itp_strategy :: Type{ITPSTRATEGY}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, ITPSTRATEGY <: AbstractInterpolationStrategy, M}
     @assert length(output) == M "Length of `output` must match the requested columns."
     # Prepare for interpolation
     Ktyp = typeof(input.smoothed_kernel)
@@ -353,10 +388,10 @@ end
     radius2 = radius * radius
 
     # Handle empty tree
-    if root == 0
+    if iszero(root)
         nleaf = length(leaf_min[1])
         @inbounds for leaf_idx in 1:nleaf
-            d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+            d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
             if d2 <= radius2
                 ########### Found a neighbor, do accumulation ###########
                 mWlρ += _ShepardNormalization_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
@@ -379,11 +414,11 @@ end
     # Start traversal
     node = root
     while node != 0
-        dist2_node = _dist2_to_node_aabb(node_min, node_max, reference_point, node)
+        dist2_node = NeighborSearch._dist2_to_node_aabb(node_min, node_max, reference_point, node)
         if dist2_node <= radius2
             if LL[node]
                 @inbounds leaf_idx = L[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
                 if d2 <= radius2
                     ########### Found a neighbor, do accumulation ###########
                     mWlρ += _ShepardNormalization_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
@@ -396,7 +431,7 @@ end
             end
             if RR[node]
                 @inbounds leaf_idx = R[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
                 if d2 <= radius2
                     ########### Found a neighbor, do accumulation ###########
                     mWlρ += _ShepardNormalization_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
@@ -417,13 +452,13 @@ end
                 continue
             end
 
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         else
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         end
     end
     # Shepard normalization
-    @inbounds for j in eachindex(output)
+    @inbounds for j in 1:M
         if ShepardNormalization[j]
             output[j] /= mWlρ
         end
@@ -432,29 +467,150 @@ end
 end
 
 
-@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}}
+@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, ITPSTRATEGY <: AbstractInterpolationStrategy}
     val_len = Val(length(input.quant))
     columns = ntuple(identity, val_len)
     ShepardNormalization = ntuple(_ -> true, val_len)
-    return _quantities_interpolate_kernel!(output, input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
+    _quantities_interpolate_kernel!(output, input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
+    return nothing
+end
+
+@inline function _quantities_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, itp_strategy :: Type{ITPSTRATEGY}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, ITPSTRATEGY <: AbstractInterpolationStrategy, M}
+    # Prepare for interpolation
+    Ktyp = typeof(input.smoothed_kernel)
+    Kvalid = KernelFunctionValid(Ktyp, T)
+
+    # Initialize counter
+    mWlρ :: T = zero(T)
+    output :: NTuple{M, T} = ntuple(_ -> zero(T), M)
+
+    # LBVH data
+    node_min = LBVH.node_aabb.min
+    node_max = LBVH.node_aabb.max
+    leaf_min = LBVH.leaf_aabb.min
+    leaf_max = LBVH.leaf_aabb.max
+
+    L  = LBVH.brt.left_child
+    R  = LBVH.brt.right_child
+    LL = LBVH.brt.is_leaf_left
+    RR = LBVH.brt.is_leaf_right
+    node_parent = LBVH.brt.node_parent
+    root = LBVH.root
+
+    # Do traversal
+    radius = Kvalid * ha
+    radius2 = radius * radius
+
+    # Handle empty tree
+    if iszero(root)
+        nleaf = length(leaf_min[1])
+        @inbounds for leaf_idx in 1:nleaf
+            d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+            if d2 <= radius2
+                ########### Found a neighbor, do accumulation ###########
+                mWlρ += _ShepardNormalization_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
+                @inbounds for j in 1:M
+                    column_idx = columns[j]
+                    output = Base.setindex(output, output[j] + _quantity_interpolate_accumulation(input, reference_point, ha, column_idx, itp_strategy, leaf_idx), j)
+                end
+                #########################################################
+            end
+        end
+        # Shepard normalization
+        @inbounds for j in 1:M
+            if ShepardNormalization[j]
+                output = Base.setindex(output, output[j]/mWlρ, j)
+            end
+        end
+        return output
+    end
+
+    # Start traversal
+    node = root
+    while node != 0
+        dist2_node = NeighborSearch._dist2_to_node_aabb(node_min, node_max, reference_point, node)
+        if dist2_node <= radius2
+            if LL[node]
+                @inbounds leaf_idx = L[node]
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                if d2 <= radius2
+                    ########### Found a neighbor, do accumulation ###########
+                    mWlρ += _ShepardNormalization_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
+                    @inbounds for j in 1:M
+                        column_idx = columns[j]
+                        output = Base.setindex(output, output[j] + _quantity_interpolate_accumulation(input, reference_point, ha, column_idx, itp_strategy, leaf_idx), j)
+                    end
+                    #########################################################
+                end
+            end
+            if RR[node]
+                @inbounds leaf_idx = R[node]
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                if d2 <= radius2
+                    ########### Found a neighbor, do accumulation ###########
+                    mWlρ += _ShepardNormalization_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
+                    @inbounds for j in 1:M
+                        column_idx = columns[j]
+                        output = Base.setindex(output, output[j] + _quantity_interpolate_accumulation(input, reference_point, ha, column_idx, itp_strategy, leaf_idx), j)
+                    end
+                    #########################################################
+                end
+            end
+
+            if !LL[node]
+                node = L[node]
+                continue
+            end
+            if !RR[node]
+                node = R[node]
+                continue
+            end
+
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
+        else
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
+        end
+    end
+    # Shepard normalization
+    @inbounds for j in 1:M
+        if ShepardNormalization[j]
+            output = Base.setindex(output, output[j] / mWlρ, j)
+        end
+    end
+    return output
+end
+
+@inline function _quantities_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, ITPSTRATEGY <: AbstractInterpolationStrategy}
+    val_len = Val(length(input.quant))
+    columns = ntuple(identity, val_len)
+    ShepardNormalization = ntuple(_ -> true, val_len)
+    return _quantities_interpolate_kernel(input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
 end
 
 ## LOS density interpolation (Column / Surface density)
-@inline function _LOS_density_accumulation(input :: ITPINPUT, reference_point::NTuple{2, T}, ha :: T, itp_strategy :: InterpolationStrategy, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _LOS_density_accumulation(input :: ITPINPUT, reference_point::NTuple{2, T}, ha :: T, :: Type{itpGather}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    rb :: NTuple{2, T} = (input.x[i], input.y[i])
+    Ktyp = typeof(input.smoothed_kernel)
+    W = LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
+    return input.m[i] * W
+end
+
+@inline function _LOS_density_accumulation(input :: ITPINPUT, reference_point::NTuple{2, T}, ha :: T, :: Type{itpScatter}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    rb :: NTuple{2, T} = (input.x[i], input.y[i])
+    Ktyp = typeof(input.smoothed_kernel)
+    W = LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i])
+    return input.m[i] * W
+end
+
+@inline function _LOS_density_accumulation(input :: ITPINPUT, reference_point::NTuple{2, T}, ha :: T, :: Type{itpSymmetric}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     rb :: NTuple{2, T} = (input.x[i], input.y[i])
     Ktyp = typeof(input.smoothed_kernel)
     W :: T = zero(T)
-    
-    if itp_strategy == itpGather
-        W = LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
-    elseif itp_strategy == itpScatter
-        W = LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i])
-    elseif itp_strategy == itpSymmetric
-        W = T(0.5) * (LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i]))
-    end
+    W = T(0.5) * (LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i]))
     return input.m[i] * W
 end
-@inline function _LOS_density_kernel(input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+
+@inline function _LOS_density_kernel(input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, ITPSTRATEGY <: AbstractInterpolationStrategy}
     # Prepare for interpolation
     Ktyp = typeof(input.smoothed_kernel)
     Kvalid = KernelFunctionValid(Ktyp, T)
@@ -480,10 +636,10 @@ end
     radius2 = radius * radius
 
     # Handle empty tree
-    if root == 0
+    if iszero(root)
         nleaf = length(leaf_min[1])
         @inbounds for leaf_idx in 1:nleaf
-            d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+            d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
             if d2 <= radius2
                 ########### Found a neighbor, do accumulation ###########
                 Sigma += _LOS_density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
@@ -496,11 +652,11 @@ end
     # Start traversal
     node = root
     while node != 0
-        dist2_node = _dist2_to_node_aabb(node_min, node_max, reference_point, node)
+        dist2_node = NeighborSearch._dist2_to_node_aabb(node_min, node_max, reference_point, node)
         if dist2_node <= radius2
             if LL[node]
                 @inbounds leaf_idx = L[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
                 if d2 <= radius2
                     ########### Found a neighbor, do accumulation ###########
                     Sigma += _LOS_density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
@@ -509,7 +665,7 @@ end
             end
             if RR[node]
                 @inbounds leaf_idx = R[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
                 if d2 <= radius2
                     ########### Found a neighbor, do accumulation ###########
                     Sigma += _LOS_density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
@@ -526,57 +682,78 @@ end
                 continue
             end
 
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         else
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         end
     end
     return Sigma
 end
 
 ## LOS quantities interpolation
-@inline function _LOS_quantity_interpolate_accumulation(input :: ITPINPUT, reference_point::NTuple{2, T}, ha :: T, column_idx :: Int64, itp_strategy :: InterpolationStrategy, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
-    rb :: NTuple{2, T} = (input.x[i], input.y[i])
+@inline function _LOS_quantity_interpolate_accumulation(input :: ITPINPUT, reference_point::NTuple{2, T}, ha :: T, column_idx :: Int64, :: Type{itpGather}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     Ktyp = typeof(input.smoothed_kernel)
-    W :: T = zero(T)
-
     mb = input.m[i]
     ρb = input.ρ[i]
     Ab = input.quant[column_idx][i]
     rb :: NTuple{2, T} = (input.x[i], input.y[i])
-    W :: T = zero(T)
-    if itp_strategy == itpGather
-        W = LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
-    elseif itp_strategy == itpScatter
-        W = LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i])
-    elseif itp_strategy == itpSymmetric
-        W = T(0.5) * (LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i]))
-    end
-
+    W = LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
     mbWlρb = mb * W/ρb
     return Ab * mbWlρb
 end
-@inline function _LOS_ShepardNormalization_accumulation(input :: ITPINPUT, reference_point::NTuple{2, T}, ha :: T, itp_strategy :: InterpolationStrategy, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
-    rb :: NTuple{2, T} = (input.x[i], input.y[i])
-    Ktyp = typeof(input.smoothed_kernel)
-    W :: T = zero(T)
 
+@inline function _LOS_quantity_interpolate_accumulation(input :: ITPINPUT, reference_point::NTuple{2, T}, ha :: T, column_idx :: Int64, :: Type{itpScatter}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    Ktyp = typeof(input.smoothed_kernel)
+    mb = input.m[i]
+    ρb = input.ρ[i]
+    Ab = input.quant[column_idx][i]
+    rb :: NTuple{2, T} = (input.x[i], input.y[i])
+    W = LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i])
+    mbWlρb = mb * W/ρb
+    return Ab * mbWlρb
+end
+
+@inline function _LOS_quantity_interpolate_accumulation(input :: ITPINPUT, reference_point::NTuple{2, T}, ha :: T, column_idx :: Int64, :: Type{itpSymmetric}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    Ktyp = typeof(input.smoothed_kernel)
+    mb = input.m[i]
+    ρb = input.ρ[i]
+    Ab = input.quant[column_idx][i]
+    rb :: NTuple{2, T} = (input.x[i], input.y[i])
+    W = T(0.5) * (LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i]))
+    mbWlρb = mb * W/ρb
+    return Ab * mbWlρb
+end
+
+@inline function _LOS_ShepardNormalization_accumulation(input :: ITPINPUT, reference_point::NTuple{2, T}, ha :: T, :: Type{itpGather}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    Ktyp = typeof(input.smoothed_kernel)
     mb = input.m[i]
     ρb = input.ρ[i]
     rb :: NTuple{2, T} = (input.x[i], input.y[i])
-    W :: T = zero(T)
-    if itp_strategy == itpGather
-        W = LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
-    elseif itp_strategy == itpScatter
-        W = LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i])
-    elseif itp_strategy == itpSymmetric
-        W = T(0.5) * (LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i]))
-    end
-
+    W = LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
     mbWlρb = mb * W/ρb
     return mbWlρb
 end
-@inline function _LOS_quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, itp_strategy :: InterpolationStrategy) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
+
+@inline function _LOS_ShepardNormalization_accumulation(input :: ITPINPUT, reference_point::NTuple{2, T}, ha :: T, :: Type{itpScatter}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    Ktyp = typeof(input.smoothed_kernel)
+    mb = input.m[i]
+    ρb = input.ρ[i]
+    rb :: NTuple{2, T} = (input.x[i], input.y[i])
+    W = LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i])
+    mbWlρb = mb * W/ρb
+    return mbWlρb
+end
+
+@inline function _LOS_ShepardNormalization_accumulation(input :: ITPINPUT, reference_point::NTuple{2, T}, ha :: T, :: Type{itpSymmetric}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    Ktyp = typeof(input.smoothed_kernel)
+    mb = input.m[i]
+    ρb = input.ρ[i]
+    rb :: NTuple{2, T} = (input.x[i], input.y[i])
+    W = T(0.5) * (LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + LOSint_Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i]))
+    mbWlρb = mb * W/ρb
+    return mbWlρb
+end
+@inline function _LOS_quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, itp_strategy :: Type{ITPSTRATEGY}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, ITPSTRATEGY <: AbstractInterpolationStrategy, M}
     @assert length(output) == M "Length of `output` must match the requested columns."
     # Prepare for interpolation
     Ktyp = typeof(input.smoothed_kernel)
@@ -604,10 +781,10 @@ end
     radius2 = radius * radius
 
     # Handle empty tree
-    if root == 0
+    if iszero(root)
         nleaf = length(leaf_min[1])
         @inbounds for leaf_idx in 1:nleaf
-            d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+            d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
             if d2 <= radius2
                 ########### Found a neighbor, do accumulation ###########
                 mWlρ += _LOS_ShepardNormalization_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
@@ -629,11 +806,11 @@ end
     # Start traversal
     node = root
     while node != 0
-        dist2_node = _dist2_to_node_aabb(node_min, node_max, reference_point, node)
+        dist2_node = NeighborSearch._dist2_to_node_aabb(node_min, node_max, reference_point, node)
         if dist2_node <= radius2
             if LL[node]
                 @inbounds leaf_idx = L[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
                 if d2 <= radius2
                     ########### Found a neighbor, do accumulation ###########
                     mWlρ += _LOS_ShepardNormalization_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
@@ -646,7 +823,7 @@ end
             end
             if RR[node]
                 @inbounds leaf_idx = R[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
                 if d2 <= radius2
                     ########### Found a neighbor, do accumulation ###########
                     mWlρ += _LOS_ShepardNormalization_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
@@ -667,9 +844,9 @@ end
                 continue
             end
 
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         else
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         end
     end
     # Shepard normalization
@@ -681,7 +858,7 @@ end
     return nothing
 end
 
-@inline function _LOS_quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}}
+@inline function _LOS_quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, ITPSTRATEGY <: AbstractInterpolationStrategy}
     val_len = Val(length(input.quant))
     columns = ntuple(identity, val_len)
     ShepardNormalization = ntuple(_ -> true, val_len)
@@ -694,50 +871,15 @@ end
       = (1/ρ(r))((∑_b m_b*ρ_b*∇W(r-r_b)) - ∑_b m_b*∇W(r-r_b)
 """
 # Single column gradient density intepolation
-@inline function _gradient_density_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, itp_strategy :: InterpolationStrategy, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
-    rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
+@inline function _gradient_density_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, :: Type{itpGather}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     Ktyp = typeof(input.smoothed_kernel)
-    W :: T = zero(T)
-    
-    if itp_strategy == itpGather
-        W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
-    elseif itp_strategy == itpScatter
-        W = Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i])
-    elseif itp_strategy == itpSymmetric
-        W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i]))
-    end
-
     mb = input.m[i]
     ρb = input.ρ[i]
     rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
-    W :: T = zero(T)
-    if itp_strategy == itpGather
-        W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
-    elseif itp_strategy == itpScatter
-        W = Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i])
-    elseif itp_strategy == itpSymmetric
-        W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, input.h[i]))
-    end
-    ∂xW :: T = zero(T)
-    ∂yW :: T = zero(T)
-    ∂zW :: T = zero(T)
-    if itp_strategy == itpGather
-        ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
-        ∂xW = ∇W[1]
-        ∂yW = ∇W[2]
-        ∂zW = ∇W[3]
-    elseif itp_strategy == itpScatter
-        ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.h[i])
-        ∂xW = ∇W[1]
-        ∂yW = ∇W[2]
-        ∂zW = ∇W[3]
-    elseif itp_strategy == itpSymmetric
-        ∇Wa = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
-        ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.h[i])
-        ∂xW = T(0.5) * (∇Wa[1] + ∇Wb[1])
-        ∂yW = T(0.5) * (∇Wa[2] + ∇Wb[2])
-        ∂zW = T(0.5) * (∇Wa[3] + ∇Wb[3])
-    end
+    ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
+    ∂xW = ∇W[1]
+    ∂yW = ∇W[2]
+    ∂zW = ∇W[3]
 
     # Gradient
     mb∂xW = mb * ∂xW
@@ -752,7 +894,57 @@ end
     ∇ρzb = mb∂zW
     return ∇ρxf, ∇ρyf, ∇ρzf, ∇ρxb, ∇ρyb, ∇ρzb
 end
-@inline function _gradient_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+
+@inline function _gradient_density_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, :: Type{itpScatter}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    Ktyp = typeof(input.smoothed_kernel)
+    mb = input.m[i]
+    ρb = input.ρ[i]
+    rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
+    ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.h[i])
+    ∂xW = ∇W[1]
+    ∂yW = ∇W[2]
+    ∂zW = ∇W[3]
+
+    # Gradient
+    mb∂xW = mb * ∂xW
+    mb∂yW = mb * ∂yW
+    mb∂zW = mb * ∂zW
+
+    ∇ρxf = mb∂xW * ρb
+    ∇ρyf = mb∂yW * ρb
+    ∇ρzf = mb∂zW * ρb
+    ∇ρxb = mb∂xW
+    ∇ρyb = mb∂yW
+    ∇ρzb = mb∂zW
+    return ∇ρxf, ∇ρyf, ∇ρzf, ∇ρxb, ∇ρyb, ∇ρzb
+end
+
+@inline function _gradient_density_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, :: Type{itpSymmetric}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    Ktyp = typeof(input.smoothed_kernel)
+    mb = input.m[i]
+    ρb = input.ρ[i]
+    rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
+    ∇Wa = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
+    ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.h[i])
+    ∂xW = T(0.5) * (∇Wa[1] + ∇Wb[1])
+    ∂yW = T(0.5) * (∇Wa[2] + ∇Wb[2])
+    ∂zW = T(0.5) * (∇Wa[3] + ∇Wb[3])
+
+    # Gradient
+    mb∂xW = mb * ∂xW
+    mb∂yW = mb * ∂yW
+    mb∂zW = mb * ∂zW
+
+    ∇ρxf = mb∂xW * ρb
+    ∇ρyf = mb∂yW * ρb
+    ∇ρzf = mb∂zW * ρb
+    ∇ρxb = mb∂xW
+    ∇ρyb = mb∂yW
+    ∇ρzb = mb∂zW
+    return ∇ρxf, ∇ρyf, ∇ρzf, ∇ρxb, ∇ρyb, ∇ρzb
+end
+
+@inline function _gradient_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, ITPSTRATEGY <: AbstractInterpolationStrategy}
     # Prepare for interpolation
     Ktyp = typeof(input.smoothed_kernel)
     Kvalid = KernelFunctionValid(Ktyp, T)
@@ -785,10 +977,10 @@ end
     radius2 = radius * radius
 
     # Handle empty tree
-    if root == 0
+    if iszero(root)
         nleaf = length(leaf_min[1])
         @inbounds for leaf_idx in 1:nleaf
-            d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+            d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
             if d2 <= radius2
                 ########### Found a neighbor, do accumulation ###########
                 ∇ρxfW, ∇ρyfW, ∇ρzfW, ∇ρxbW, ∇ρybW, ∇ρzbW = _gradient_density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
@@ -821,11 +1013,11 @@ end
     # Start traversal
     node = root
     while node != 0
-        dist2_node = _dist2_to_node_aabb(node_min, node_max, reference_point, node)
+        dist2_node = NeighborSearch._dist2_to_node_aabb(node_min, node_max, reference_point, node)
         if dist2_node <= radius2
             if LL[node]
                 @inbounds leaf_idx = L[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
                 if d2 <= radius2
                     ########### Found a neighbor, do accumulation ###########
                     ∇ρxfW, ∇ρyfW, ∇ρzfW, ∇ρxbW, ∇ρybW, ∇ρzbW = _gradient_density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
@@ -841,7 +1033,7 @@ end
             end
             if RR[node]
                 @inbounds leaf_idx = R[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
                 if d2 <= radius2
                     ########### Found a neighbor, do accumulation ###########
                     ∇ρxfW, ∇ρyfW, ∇ρzfW, ∇ρxbW, ∇ρybW, ∇ρzbW = _gradient_density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
@@ -865,9 +1057,9 @@ end
                 continue
             end
 
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         else
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         end
     end
     if iszero(ρ)
@@ -892,39 +1084,15 @@ end
       = ∇Af - ∇Ab
 """
 # Single column gradient value intepolation
-@inline function _gradient_quantity_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, column_idx :: Int64, itp_strategy :: InterpolationStrategy, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _gradient_quantity_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, column_idx :: Int64, :: Type{itpGather}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     Ktyp = typeof(input.smoothed_kernel)
     mb = input.m[i]
     Ab = input.quant[column_idx][i]
     rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
-    W :: T = zero(T)
-    if itp_strategy == itpGather
-        W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
-    elseif itp_strategy == itpScatter
-        W = Smoothed_kernel_function(Ktyp, reference_point, rb, input.hs[i])
-    elseif itp_strategy == itpSymmetric
-        W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, input.hs[i]))
-    end
-    ∂xW :: T = zero(T)
-    ∂yW :: T = zero(T)
-    ∂zW :: T = zero(T)
-    if itp_strategy == itpGather
-        ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
-        ∂xW = ∇W[1]
-        ∂yW = ∇W[2]
-        ∂zW = ∇W[3]
-    elseif itp_strategy == itpScatter
-        ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.hs[i])
-        ∂xW = ∇W[1]
-        ∂yW = ∇W[2]
-        ∂zW = ∇W[3]
-    elseif itp_strategy == itpSymmetric
-        ∇Wa = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
-        ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.hs[i])
-        ∂xW = T(0.5) * (∇Wa[1] + ∇Wb[1])
-        ∂yW = T(0.5) * (∇Wa[2] + ∇Wb[2])
-        ∂zW = T(0.5) * (∇Wa[3] + ∇Wb[3])
-    end
+    ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
+    ∂xW = ∇W[1]
+    ∂yW = ∇W[2]
+    ∂zW = ∇W[3]
 
     # Gradient
     mb∂xW = mb * ∂xW
@@ -939,7 +1107,57 @@ end
     ∇Azb = mb∂zW
     return ∇Axf, ∇Ayf, ∇Azf, ∇Axb, ∇Ayb, ∇Azb
 end
-@inline function _gradient_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, column_idx :: Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+
+@inline function _gradient_quantity_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, column_idx :: Int64, :: Type{itpScatter}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    Ktyp = typeof(input.smoothed_kernel)
+    mb = input.m[i]
+    Ab = input.quant[column_idx][i]
+    rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
+    ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.hs[i])
+    ∂xW = ∇W[1]
+    ∂yW = ∇W[2]
+    ∂zW = ∇W[3]
+    
+    # Gradient
+    mb∂xW = mb * ∂xW
+    mb∂yW = mb * ∂yW
+    mb∂zW = mb * ∂zW
+
+    ∇Axf = mb∂xW * Ab
+    ∇Ayf = mb∂yW * Ab
+    ∇Azf = mb∂zW * Ab
+    ∇Axb = mb∂xW
+    ∇Ayb = mb∂yW
+    ∇Azb = mb∂zW
+    return ∇Axf, ∇Ayf, ∇Azf, ∇Axb, ∇Ayb, ∇Azb
+end
+
+@inline function _gradient_quantity_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, column_idx :: Int64, :: Type{itpSymmetric}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    Ktyp = typeof(input.smoothed_kernel)
+    mb = input.m[i]
+    Ab = input.quant[column_idx][i]
+    rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
+    ∇Wa = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
+    ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.hs[i])
+    ∂xW = T(0.5) * (∇Wa[1] + ∇Wb[1])
+    ∂yW = T(0.5) * (∇Wa[2] + ∇Wb[2])
+    ∂zW = T(0.5) * (∇Wa[3] + ∇Wb[3])
+
+    # Gradient
+    mb∂xW = mb * ∂xW
+    mb∂yW = mb * ∂yW
+    mb∂zW = mb * ∂zW
+
+    ∇Axf = mb∂xW * Ab
+    ∇Ayf = mb∂yW * Ab
+    ∇Azf = mb∂zW * Ab
+    ∇Axb = mb∂xW
+    ∇Ayb = mb∂yW
+    ∇Azb = mb∂zW
+    return ∇Axf, ∇Ayf, ∇Azf, ∇Axb, ∇Ayb, ∇Azb
+end
+
+@inline function _gradient_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, column_idx :: Int64, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, ITPSTRATEGY <: AbstractInterpolationStrategy}
     # Prepare for interpolation
     Ktyp = typeof(input.smoothed_kernel)
     Kvalid = KernelFunctionValid(Ktyp, T)
@@ -974,15 +1192,15 @@ end
     radius2 = radius * radius
 
     # Handle empty tree
-    if root == 0
+    if iszero(root)
         nleaf = length(leaf_min[1])
         @inbounds for leaf_idx in 1:nleaf
-            d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+            d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
             if d2 <= radius2
                 ########### Found a neighbor, do accumulation ###########
                 ∇AxfW, ∇AyfW, ∇AzfW, ∇AxbW, ∇AybW, ∇AzbW = _gradient_quantity_accumulation(input, reference_point, ha, column_idx, itp_strategy, leaf_idx)
                 ρ += _density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
-                A += _quantity_accumulation(input, reference_point, ha, column_idx, itp_strategy, leaf_idx)
+                A += _quantity_interpolate_accumulation(input, reference_point, ha, column_idx, itp_strategy, leaf_idx)
                 ∇Axf += ∇AxfW
                 ∇Ayf += ∇AyfW
                 ∇Azf += ∇AzfW
@@ -1015,16 +1233,16 @@ end
     # Start traversal
     node = root
     while node != 0
-        dist2_node = _dist2_to_node_aabb(node_min, node_max, reference_point, node)
+        dist2_node = NeighborSearch._dist2_to_node_aabb(node_min, node_max, reference_point, node)
         if dist2_node <= radius2
             if LL[node]
                 @inbounds leaf_idx = L[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
                 if d2 <= radius2
                     ########### Found a neighbor, do accumulation ###########
                     ∇AxfW, ∇AyfW, ∇AzfW, ∇AxbW, ∇AybW, ∇AzbW = _gradient_quantity_accumulation(input, reference_point, ha, column_idx, itp_strategy, leaf_idx)
                     ρ += _density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
-                    A += _quantity_accumulation(input, reference_point, ha, column_idx, itp_strategy, leaf_idx)
+                    A += _quantity_interpolate_accumulation(input, reference_point, ha, column_idx, itp_strategy, leaf_idx)
                     ∇Axf += ∇AxfW
                     ∇Ayf += ∇AyfW
                     ∇Azf += ∇AzfW
@@ -1037,12 +1255,12 @@ end
             end
             if RR[node]
                 @inbounds leaf_idx = R[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
                 if d2 <= radius2
                     ########### Found a neighbor, do accumulation ###########
                     ∇AxfW, ∇AyfW, ∇AzfW, ∇AxbW, ∇AybW, ∇AzbW = _gradient_quantity_accumulation(input, reference_point, ha, column_idx, itp_strategy, leaf_idx)
                     ρ += _density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
-                    A += _quantity_accumulation(input, reference_point, ha, column_idx, itp_strategy, leaf_idx)
+                    A += _quantity_interpolate_accumulation(input, reference_point, ha, column_idx, itp_strategy, leaf_idx)
                     ∇Axf += ∇AxfW
                     ∇Ayf += ∇AyfW
                     ∇Azf += ∇AzfW
@@ -1063,9 +1281,9 @@ end
                 continue
             end
 
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         else
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         end
     end
     if iszero(ρ)
@@ -1093,41 +1311,17 @@ end
            = ∇⋅A(r)
 """
 # Single column divergence value intepolation
-@inline function _divergence_quantity_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, Ax_column_idx :: Int, Ay_column_idx :: Int, Az_column_idx :: Int, itp_strategy :: InterpolationStrategy, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _divergence_quantity_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, Ax_column_idx :: Int, Ay_column_idx :: Int, Az_column_idx :: Int, :: Type{itpGather}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     Ktyp = typeof(input.smoothed_kernel)
     mb = input.m[i]
     Axb = input.quant[Ax_column_idx][i]
     Ayb = input.quant[Ay_column_idx][i]
     Azb = input.quant[Az_column_idx][i]
     rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
-    W :: T = zero(T)
-    if itp_strategy == itpGather
-        W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
-    elseif itp_strategy == itpScatter
-        W = Smoothed_kernel_function(Ktyp, reference_point, rb, input.hs[i])
-    elseif itp_strategy == itpSymmetric
-        W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, input.hs[i]))
-    end
-    ∂xW :: T = zero(T)
-    ∂yW :: T = zero(T)
-    ∂zW :: T = zero(T)
-    if itp_strategy == itpGather
-        ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
-        ∂xW = ∇W[1]
-        ∂yW = ∇W[2]
-        ∂zW = ∇W[3]
-    elseif itp_strategy == itpScatter
-        ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.hs[i])
-        ∂xW = ∇W[1]
-        ∂yW = ∇W[2]
-        ∂zW = ∇W[3]
-    elseif itp_strategy == itpSymmetric
-        ∇Wa = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
-        ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.hs[i])
-        ∂xW = T(0.5) * (∇Wa[1] + ∇Wb[1])
-        ∂yW = T(0.5) * (∇Wa[2] + ∇Wb[2])
-        ∂zW = T(0.5) * (∇Wa[3] + ∇Wb[3])
-    end
+    ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
+    ∂xW = ∇W[1]
+    ∂yW = ∇W[2]
+    ∂zW = ∇W[3]
 
     # Gradient
     mb∂xW = mb * ∂xW
@@ -1140,7 +1334,57 @@ end
     ∇Azb = mb∂zW
     return ∇Af, ∇Axb, ∇Ayb, ∇Azb
 end
-@inline function _divergence_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, Ax_column_idx :: Int64, Ay_column_idx :: Int64, Az_column_idx :: Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+
+@inline function _divergence_quantity_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, Ax_column_idx :: Int, Ay_column_idx :: Int, Az_column_idx :: Int, :: Type{itpScatter}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    Ktyp = typeof(input.smoothed_kernel)
+    mb = input.m[i]
+    Axb = input.quant[Ax_column_idx][i]
+    Ayb = input.quant[Ay_column_idx][i]
+    Azb = input.quant[Az_column_idx][i]
+    rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
+    ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.hs[i])
+    ∂xW = ∇W[1]
+    ∂yW = ∇W[2]
+    ∂zW = ∇W[3]
+
+    # Gradient
+    mb∂xW = mb * ∂xW
+    mb∂yW = mb * ∂yW
+    mb∂zW = mb * ∂zW
+
+    ∇Af = mb∂xW * Axb + mb∂yW * Ayb + mb∂zW * Azb
+    ∇Axb = mb∂xW
+    ∇Ayb = mb∂yW
+    ∇Azb = mb∂zW
+    return ∇Af, ∇Axb, ∇Ayb, ∇Azb
+end
+
+@inline function _divergence_quantity_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, Ax_column_idx :: Int, Ay_column_idx :: Int, Az_column_idx :: Int, :: Type{itpSymmetric}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    Ktyp = typeof(input.smoothed_kernel)
+    mb = input.m[i]
+    Axb = input.quant[Ax_column_idx][i]
+    Ayb = input.quant[Ay_column_idx][i]
+    Azb = input.quant[Az_column_idx][i]
+    rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
+    ∇Wa = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
+    ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.hs[i])
+    ∂xW = T(0.5) * (∇Wa[1] + ∇Wb[1])
+    ∂yW = T(0.5) * (∇Wa[2] + ∇Wb[2])
+    ∂zW = T(0.5) * (∇Wa[3] + ∇Wb[3])
+
+    # Gradient
+    mb∂xW = mb * ∂xW
+    mb∂yW = mb * ∂yW
+    mb∂zW = mb * ∂zW
+
+    ∇Af = mb∂xW * Axb + mb∂yW * Ayb + mb∂zW * Azb
+    ∇Axb = mb∂xW
+    ∇Ayb = mb∂yW
+    ∇Azb = mb∂zW
+    return ∇Af, ∇Axb, ∇Ayb, ∇Azb
+end
+
+@inline function _divergence_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, Ax_column_idx :: Int64, Ay_column_idx :: Int64, Az_column_idx :: Int64, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, ITPSTRATEGY <: AbstractInterpolationStrategy}
     # Prepare for interpolation
     Ktyp = typeof(input.smoothed_kernel)
     Kvalid = KernelFunctionValid(Ktyp, T)
@@ -1175,17 +1419,17 @@ end
     radius2 = radius * radius
 
     # Handle empty tree
-    if root == 0
+    if iszero(root)
         nleaf = length(leaf_min[1])
         @inbounds for leaf_idx in 1:nleaf
-            d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+            d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
             if d2 <= radius2
                 ########### Found a neighbor, do accumulation ###########
                 ∇AfW, ∇AxbW, ∇AybW, ∇AzbW = _divergence_quantity_accumulation(input, reference_point, ha, Ax_column_idx, Ay_column_idx, Az_column_idx, itp_strategy, leaf_idx)
                 ρ += _density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
-                Ax += _quantity_accumulation(input, reference_point, ha, Ax_column_idx, itp_strategy, leaf_idx)
-                Ay += _quantity_accumulation(input, reference_point, ha, Ay_column_idx, itp_strategy, leaf_idx)
-                Az += _quantity_accumulation(input, reference_point, ha, Az_column_idx, itp_strategy, leaf_idx)
+                Ax += _quantity_interpolate_accumulation(input, reference_point, ha, Ax_column_idx, itp_strategy, leaf_idx)
+                Ay += _quantity_interpolate_accumulation(input, reference_point, ha, Ay_column_idx, itp_strategy, leaf_idx)
+                Az += _quantity_interpolate_accumulation(input, reference_point, ha, Az_column_idx, itp_strategy, leaf_idx)
 
                 ∇Af += ∇AfW
                 ∇Axb += ∇AxbW
@@ -1216,18 +1460,18 @@ end
     # Start traversal
     node = root
     while node != 0
-        dist2_node = _dist2_to_node_aabb(node_min, node_max, reference_point, node)
+        dist2_node = NeighborSearch._dist2_to_node_aabb(node_min, node_max, reference_point, node)
         if dist2_node <= radius2
             if LL[node]
                 @inbounds leaf_idx = L[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
                 if d2 <= radius2
                     ########### Found a neighbor, do accumulation ###########
                     ∇AfW, ∇AxbW, ∇AybW, ∇AzbW = _divergence_quantity_accumulation(input, reference_point, ha, Ax_column_idx, Ay_column_idx, Az_column_idx, itp_strategy, leaf_idx)
                     ρ += _density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
-                    Ax += _quantity_accumulation(input, reference_point, ha, Ax_column_idx, itp_strategy, leaf_idx)
-                    Ay += _quantity_accumulation(input, reference_point, ha, Ay_column_idx, itp_strategy, leaf_idx)
-                    Az += _quantity_accumulation(input, reference_point, ha, Az_column_idx, itp_strategy, leaf_idx)
+                    Ax += _quantity_interpolate_accumulation(input, reference_point, ha, Ax_column_idx, itp_strategy, leaf_idx)
+                    Ay += _quantity_interpolate_accumulation(input, reference_point, ha, Ay_column_idx, itp_strategy, leaf_idx)
+                    Az += _quantity_interpolate_accumulation(input, reference_point, ha, Az_column_idx, itp_strategy, leaf_idx)
 
                     ∇Af += ∇AfW
                     ∇Axb += ∇AxbW
@@ -1239,14 +1483,14 @@ end
             end
             if RR[node]
                 @inbounds leaf_idx = R[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
                 if d2 <= radius2
                     ########### Found a neighbor, do accumulation ###########
                     ∇AfW, ∇AxbW, ∇AybW, ∇AzbW = _divergence_quantity_accumulation(input, reference_point, ha, Ax_column_idx, Ay_column_idx, Az_column_idx, itp_strategy, leaf_idx)
                     ρ += _density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
-                    Ax += _quantity_accumulation(input, reference_point, ha, Ax_column_idx, itp_strategy, leaf_idx)
-                    Ay += _quantity_accumulation(input, reference_point, ha, Ay_column_idx, itp_strategy, leaf_idx)
-                    Az += _quantity_accumulation(input, reference_point, ha, Az_column_idx, itp_strategy, leaf_idx)
+                    Ax += _quantity_interpolate_accumulation(input, reference_point, ha, Ax_column_idx, itp_strategy, leaf_idx)
+                    Ay += _quantity_interpolate_accumulation(input, reference_point, ha, Ay_column_idx, itp_strategy, leaf_idx)
+                    Az += _quantity_interpolate_accumulation(input, reference_point, ha, Az_column_idx, itp_strategy, leaf_idx)
 
                     ∇Af += ∇AfW
                     ∇Axb += ∇AxbW
@@ -1266,9 +1510,9 @@ end
                 continue
             end
 
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         else
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         end
     end
     if iszero(ρ)
@@ -1295,43 +1539,17 @@ end
        = -(1/ρ(r))*(∇×Af - ∇×Ab)
 """
 # Single column curl value intepolation
-@inline function _curl_quantity_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, Ax_column_idx :: Int, Ay_column_idx :: Int, Az_column_idx :: Int, itp_strategy :: InterpolationStrategy, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _curl_quantity_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, Ax_column_idx :: Int, Ay_column_idx :: Int, Az_column_idx :: Int, :: Type{itpGather}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     Ktyp = typeof(input.smoothed_kernel)
     mb = input.m[i]
     Axb = input.quant[Ax_column_idx][i]
     Ayb = input.quant[Ay_column_idx][i]
     Azb = input.quant[Az_column_idx][i]
     rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
-
-    W :: T = zero(T)
-    if itp_strategy == itpGather
-        W = Smoothed_kernel_function(Ktyp, reference_point, rb, ha)
-    elseif itp_strategy == itpScatter
-        W = Smoothed_kernel_function(Ktyp, reference_point, rb, input.hs[i])
-    elseif itp_strategy == itpSymmetric
-        W = T(0.5) * (Smoothed_kernel_function(Ktyp, reference_point, rb, ha) + Smoothed_kernel_function(Ktyp, reference_point, rb, input.hs[i]))
-    end
-    
-    ∂xW :: T = zero(T)
-    ∂yW :: T = zero(T)
-    ∂zW :: T = zero(T)
-    if itp_strategy == itpGather
-        ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
-        ∂xW = ∇W[1]
-        ∂yW = ∇W[2]
-        ∂zW = ∇W[3]
-    elseif itp_strategy == itpScatter
-        ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.hs[i])
-        ∂xW = ∇W[1]
-        ∂yW = ∇W[2]
-        ∂zW = ∇W[3]
-    elseif itp_strategy == itpSymmetric
-        ∇Wa = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
-        ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.hs[i])
-        ∂xW = T(0.5) * (∇Wa[1] + ∇Wb[1])
-        ∂yW = T(0.5) * (∇Wa[2] + ∇Wb[2])
-        ∂zW = T(0.5) * (∇Wa[3] + ∇Wb[3])
-    end
+    ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
+    ∂xW = ∇W[1]
+    ∂yW = ∇W[2]
+    ∂zW = ∇W[3]
 
     # Gradient
     mb∂xW = mb * ∂xW
@@ -1346,7 +1564,60 @@ end
     m∂zW += mb∂zW
     return ∇Axf, ∇Ayf, ∇Azf, m∂xW, m∂yW, m∂zW
 end
-@inline function _curl_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, Ax_column_idx :: Int64, Ay_column_idx :: Int64, Az_column_idx :: Int64, itp_strategy :: InterpolationStrategy = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+
+@inline function _curl_quantity_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, Ax_column_idx :: Int, Ay_column_idx :: Int, Az_column_idx :: Int, :: Type{itpScatter}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    Ktyp = typeof(input.smoothed_kernel)
+    mb = input.m[i]
+    Axb = input.quant[Ax_column_idx][i]
+    Ayb = input.quant[Ay_column_idx][i]
+    Azb = input.quant[Az_column_idx][i]
+    rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
+    ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.hs[i])
+    ∂xW = ∇W[1]
+    ∂yW = ∇W[2]
+    ∂zW = ∇W[3]
+
+    # Gradient
+    mb∂xW = mb * ∂xW
+    mb∂yW = mb * ∂yW
+    mb∂zW = mb * ∂zW
+
+    ∇Axf += Ayb * mb∂zW -  Azb * mb∂yW
+    ∇Ayf += Azb * mb∂xW -  Axb * mb∂zW
+    ∇Azf += Axb * mb∂yW -  Ayb * mb∂xW
+    m∂xW += mb∂xW
+    m∂yW += mb∂yW
+    m∂zW += mb∂zW
+    return ∇Axf, ∇Ayf, ∇Azf, m∂xW, m∂yW, m∂zW
+end
+
+@inline function _curl_quantity_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, Ax_column_idx :: Int, Ay_column_idx :: Int, Az_column_idx :: Int, :: Type{itpSymmetric}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    Ktyp = typeof(input.smoothed_kernel)
+    mb = input.m[i]
+    Axb = input.quant[Ax_column_idx][i]
+    Ayb = input.quant[Ay_column_idx][i]
+    Azb = input.quant[Az_column_idx][i]
+    rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
+    ∇Wa = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
+    ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.hs[i])
+    ∂xW = T(0.5) * (∇Wa[1] + ∇Wb[1])
+    ∂yW = T(0.5) * (∇Wa[2] + ∇Wb[2])
+    ∂zW = T(0.5) * (∇Wa[3] + ∇Wb[3])
+
+    # Gradient
+    mb∂xW = mb * ∂xW
+    mb∂yW = mb * ∂yW
+    mb∂zW = mb * ∂zW
+
+    ∇Axf += Ayb * mb∂zW -  Azb * mb∂yW
+    ∇Ayf += Azb * mb∂xW -  Axb * mb∂zW
+    ∇Azf += Axb * mb∂yW -  Ayb * mb∂xW
+    m∂xW += mb∂xW
+    m∂yW += mb∂yW
+    m∂zW += mb∂zW
+    return ∇Axf, ∇Ayf, ∇Azf, m∂xW, m∂yW, m∂zW
+end
+@inline function _curl_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, Ax_column_idx :: Int64, Ay_column_idx :: Int64, Az_column_idx :: Int64, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, ITPSTRATEGY <: AbstractInterpolationStrategy}
     # Prepare for interpolation
     Ktyp = typeof(input.smoothed_kernel)
     Kvalid = KernelFunctionValid(Ktyp, T)
@@ -1388,17 +1659,17 @@ end
     radius2 = radius * radius
 
     # Handle empty tree
-    if root == 0
+    if iszero(root)
         nleaf = length(leaf_min[1])
         @inbounds for leaf_idx in 1:nleaf
-            d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+            d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
             if d2 <= radius2
                 ########### Found a neighbor, do accumulation ###########
                 ∇AxfW, ∇AyfW, ∇AzfW, m∂xWW, m∂yWW, m∂zWW = _curl_quantity_accumulation(input, reference_point, ha, Ax_column_idx, Ay_column_idx, Az_column_idx, itp_strategy, leaf_idx)
                 ρ += _density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
-                Ax += _quantity_accumulation(input, reference_point, ha, Ax_column_idx, itp_strategy, leaf_idx)
-                Ay += _quantity_accumulation(input, reference_point, ha, Ay_column_idx, itp_strategy, leaf_idx)
-                Az += _quantity_accumulation(input, reference_point, ha, Az_column_idx, itp_strategy, leaf_idx)
+                Ax += _quantity_interpolate_accumulation(input, reference_point, ha, Ax_column_idx, itp_strategy, leaf_idx)
+                Ay += _quantity_interpolate_accumulation(input, reference_point, ha, Ay_column_idx, itp_strategy, leaf_idx)
+                Az += _quantity_interpolate_accumulation(input, reference_point, ha, Az_column_idx, itp_strategy, leaf_idx)
 
                 ∇Axf += ∇AxfW
                 ∇Ayf += ∇AyfW
@@ -1435,18 +1706,18 @@ end
     # Start traversal
     node = root
     while node != 0
-        dist2_node = _dist2_to_node_aabb(node_min, node_max, reference_point, node)
+        dist2_node = NeighborSearch._dist2_to_node_aabb(node_min, node_max, reference_point, node)
         if dist2_node <= radius2
             if LL[node]
                 @inbounds leaf_idx = L[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
                 if d2 <= radius2
                     ########### Found a neighbor, do accumulation ###########
                     ∇AxfW, ∇AyfW, ∇AzfW, m∂xWW, m∂yWW, m∂zWW = _curl_quantity_accumulation(input, reference_point, ha, Ax_column_idx, Ay_column_idx, Az_column_idx, itp_strategy, leaf_idx)
                     ρ += _density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
-                    Ax += _quantity_accumulation(input, reference_point, ha, Ax_column_idx, itp_strategy, leaf_idx)
-                    Ay += _quantity_accumulation(input, reference_point, ha, Ay_column_idx, itp_strategy, leaf_idx)
-                    Az += _quantity_accumulation(input, reference_point, ha, Az_column_idx, itp_strategy, leaf_idx)
+                    Ax += _quantity_interpolate_accumulation(input, reference_point, ha, Ax_column_idx, itp_strategy, leaf_idx)
+                    Ay += _quantity_interpolate_accumulation(input, reference_point, ha, Ay_column_idx, itp_strategy, leaf_idx)
+                    Az += _quantity_interpolate_accumulation(input, reference_point, ha, Az_column_idx, itp_strategy, leaf_idx)
 
                     ∇Axf += ∇AxfW
                     ∇Ayf += ∇AyfW
@@ -1460,14 +1731,14 @@ end
             end
             if RR[node]
                 @inbounds leaf_idx = R[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
+                d2 = NeighborSearch._dist2_to_leaf_aabb(leaf_min, leaf_max, reference_point, leaf_idx)
                 if d2 <= radius2
                     ########### Found a neighbor, do accumulation ###########
                     ∇AxfW, ∇AyfW, ∇AzfW, m∂xWW, m∂yWW, m∂zWW = _curl_quantity_accumulation(input, reference_point, ha, Ax_column_idx, Ay_column_idx, Az_column_idx, itp_strategy, leaf_idx)
                     ρ += _density_accumulation(input, reference_point, ha, itp_strategy, leaf_idx)
-                    Ax += _quantity_accumulation(input, reference_point, ha, Ax_column_idx, itp_strategy, leaf_idx)
-                    Ay += _quantity_accumulation(input, reference_point, ha, Ay_column_idx, itp_strategy, leaf_idx)
-                    Az += _quantity_accumulation(input, reference_point, ha, Az_column_idx, itp_strategy, leaf_idx)
+                    Ax += _quantity_interpolate_accumulation(input, reference_point, ha, Ax_column_idx, itp_strategy, leaf_idx)
+                    Ay += _quantity_interpolate_accumulation(input, reference_point, ha, Ay_column_idx, itp_strategy, leaf_idx)
+                    Az += _quantity_interpolate_accumulation(input, reference_point, ha, Az_column_idx, itp_strategy, leaf_idx)
 
                     ∇Axf += ∇AxfW
                     ∇Ayf += ∇AyfW
@@ -1489,9 +1760,9 @@ end
                 continue
             end
 
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         else
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
+            node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         end
     end
     if iszero(ρ)

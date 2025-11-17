@@ -1,11 +1,16 @@
 module MetalExt
 using Dates
 using Metal
+using Reexport
 using PhantomRevealer
 
 # Adapt structure
 include(joinpath(@__DIR__, "MetalExt", "AdaptStructure", "AdaptStructure.jl"))
+@reexport using .AdaptStructure
 
+# Kernel interpolation
+include(joinpath(@__DIR__, "MetalExt", "KernelInterpolation", "KernelInterpolation.jl"))
+@reexport using .KernelInterpolation
 
 """
     PhantomRevealer.Greeting_Metal()
