@@ -147,3 +147,32 @@ Compute the Euclidean distance in 2D space between vectors `(x, y)` and a fixed 
     end
     return s
 end
+
+"""
+    invert_order(order)
+
+Compute the inverse permutation `invorder` such that `invorder[order[i]] = i`.
+
+Given a permutation vector `order`, this function constructs its inverse, which
+can be used to revert any array that has been reordered using `order`. If an
+array `A` was permuted into `B` via `B = A[order]`, then the original array can
+be recovered by `A = B[invorder]`.
+
+# Parameters
+- `order::AbstractVector{<:Integer}`: A permutation vector of length `n`. All
+  indices must form a valid permutation of `1:n`.
+
+# Returns
+- `invorder::AbstractVector{<:Integer}`: The inverse permutation, satisfying
+  `invorder[order[i]] = i` for all `i`.
+
+"""
+function invert_order(order :: V) where {TI <: Integer, V <: AbstractVector{TI}}
+    n = length(order)
+    invorder = similar(order)
+    @inbounds for i in 1:n
+        invorder[order[i]] = i
+    end
+    return invorder
+end
+
