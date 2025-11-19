@@ -177,9 +177,9 @@ compatibility. Shepard normalization can be toggled independently per field.
   `hₐ`, `hᵢ`, or their symmetric average.
 
 # Returns
-- `::NTuple{NCOLUMN, T}`  
-  A statically sized tuple containing the interpolated values of all fields
-  in the same order as they appear in `input.quant`.
+- `::MVector{NCOLUMN, T}`  
+  Fixed-size MVector containing the interpolated values of the requested fields,
+  in the same order as specified in `columns`.
 """
 function quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
     return _quantities_interpolate_kernel(input, reference_point, ha, LBVH, ShepardNormalization , itp_strategy)
@@ -193,7 +193,7 @@ end
                            columns::NTuple{M, Int},
                            ShepardNormalization::NTuple{M, Bool} = ntuple(_ -> true, M),
                            itp_strategy::Type{ITPSTRATEGY} = itpSymmetric)
-        -> NTuple{M, T}
+        -> MVector{M, T}
 
 Interpolate a selected subset of SPH particle scalar fields at a 3D location
 using an LBVH-accelerated neighbour search.
@@ -201,7 +201,7 @@ using an LBVH-accelerated neighbour search.
 Only the fields specified by `columns` are evaluated. The LBVH traversal
 identifies particles whose kernel support intersects the sphere of radius `ha`
 centred at `reference_point`. For each neighbour, contributions are accumulated
-into a compile-time sized `NTuple{M,T}`, ensuring full type stability and GPU
+into a compile-time sized `MVector{M,T}`, ensuring full type stability and GPU
 compatibility. Shepard normalization can be independently enabled for each
 requested field.
 
@@ -224,8 +224,8 @@ requested field.
   symmetric average.
 
 # Returns
-- `::NTuple{M, T}`  
-  Fixed-size tuple containing the interpolated values of the requested fields,
+- `::MVector{M, T}`  
+  Fixed-size MVector containing the interpolated values of the requested fields,
   in the same order as specified in `columns`.
 """
 function quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M),itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy, M}
@@ -337,29 +337,6 @@ function quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInp
     return nothing
 end
 
-function quantities_interpolate!(buffer :: NTuple{NCOLUMN, SA}, workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, SA<:AbstractArray{T, 0}, ITPSTRATEGY <: AbstractInterpolationStrategy}
-    if NCOLUMN == 0
-      return nothing
-    end
-    @assert length(workspace) == NCOLUMN "Length of `workspace` should be identical as NCOLUMN."
-    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, LBVH, ShepardNormalization, itp_strategy)
-    @inbounds for i in eachindex(buffer)
-        buffer[i][] = workspace[i]
-    end
-end
-
-function quantities_interpolate!(buffer :: NTuple{M, SA}, workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {M, NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, SA<:AbstractArray{T, 0}, ITPSTRATEGY <: AbstractInterpolationStrategy}
-    @assert length(workspace) == M "Length of `workspace` should match `columns`."
-    if M == 0
-      return nothing
-    end
-    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
-    @inbounds for i in eachindex(buffer)
-      buffer[i][] = workspace[i]
-    end
-    return nothing
-end
-
 ## LOS density interpolation (Column / Surface density)
 """
     LOS_density(input::InterpolationInput{T, V, K},
@@ -438,17 +415,12 @@ summation and optional Shepard normalization.
   Kernel interpolation strategy (`itpGather`, `itpScatter`, `itpSymmetric`).
 
 # Returns
-- `workspace::Vector{T}`  
-  A vector of length `NCOLUMN` containing LOS-projected interpolated values for
-  each field.
+- `::MVector{NCOLUMN, T}`  
+  Fixed-size MVector containing the interpolated values of the requested fields,
+  in the same order as specified in `columns`.
 """
 function LOS_quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
-    workspace = zeros(T, NCOLUMN)
-    if NCOLUMN == 0
-      return workspace
-    end
-  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, LBVH, ShepardNormalization, itp_strategy)
-    return workspace
+    return _LOS_quantities_interpolate_kernel(input, reference_point, ha, LBVH, ShepardNormalization , itp_strategy)
 end
 
 """
@@ -488,17 +460,12 @@ the LOS-aware SPH summation with optional Shepard normalization.
   Kernel interpolation strategy (`itpGather`, `itpScatter`, `itpSymmetric`).
 
 # Returns
-- `workspace::Vector{T}`  
-  Vector of length `M` containing LOS-projected interpolated values for the
-  selected fields.
+- `::MVector{M, T}`  
+  Fixed-size MVector containing the interpolated values of the requested fields,
+  in the same order as specified in `columns`.
 """
 function LOS_quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy, M}
-    workspace = zeros(T, M)
-    if M == 0
-        return workspace
-    end
-  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
-    return workspace
+    return _quantities_interpolate_kernel(input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
 end
 
 """

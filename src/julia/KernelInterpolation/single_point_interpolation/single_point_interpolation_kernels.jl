@@ -194,7 +194,7 @@ end
     neighbor_indices = neighbors.pool
     Npart :: Int64 = neighbors.count
 
-    output :: NTuple{M, T} = ntuple(_ -> zero(T), M)
+    output :: MVector{M, T} = zero(MVector{M, T})
 
     if Npart == 0 || M == 0
         return output 
@@ -232,14 +232,14 @@ end
         mWlρ += mbWlρb           # Prepare for Shapard Normalization
         
         @inbounds for j in 1:M
-            output = Base.setindex(output, output[j] + mbWlρb * vals[j][i], j)
+            output[j] += mbWlρb * vals[j][i]
         end
     end
 
     # Shapard Normalization
     @inbounds for j in eachindex(output)
         if ShepardNormalization[j]
-            output = Base.setindex(output, output[j]/mWlρ, j)
+            output[j] += output[j]/mWlρ
         end
     end
     return output
@@ -249,7 +249,7 @@ end
     val_len = Val(length(input.quant))
     columns = ntuple(identity, val_len)
     ShepardNormalization = ntuple(_ -> true, val_len)
-    return _quantities_interpolate_kernel!(input, reference_point, ha, neighbors, columns, ShepardNormalization, itp_strategy)
+    return _quantities_interpolate_kernel(input, reference_point, ha, neighbors, columns, ShepardNormalization, itp_strategy)
 end
 
 ## LOS density interpolation (Column / Surface density)

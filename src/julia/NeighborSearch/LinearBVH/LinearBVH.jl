@@ -36,6 +36,40 @@ function Adapt.adapt_structure(to, x :: LBVH) where {D, LBVH <: LinearBVH{D}}
 end
 
 ################# Constructing LBVH #################
+"""
+        LinearBVH(enc::MortonEncoding, brt::BinaryRadixTree)
+
+Assemble a linear bounding volume hierarchy from a Morton-encoded particle set
+and its matching binary radix tree. This allocates per-leaf and per-node
+axis-aligned bounding boxes, discovers the tree root, and precomputes the
+hierarchical extent data required for subsequent neighbor queries.
+
+# Parameters
+- `enc::MortonEncoding`: Morton-sorted particle coordinates and permutation.
+- `brt::BinaryRadixTree`: Connectivity generated from the same `enc` instance.
+
+# Returns
+- `LinearBVH`: Immutable hierarchy storing the encoding, tree topology, and
+    bounding volumes.
+"""
+function LinearBVH(enc::MortonEncoding{D, TF, TI, VF, VI}, brt::BinaryRadixTree{TI, VI, A, B}) where {D, TF <: AbstractFloat, TI <: Unsigned, VF <: AbstractVector{TF}, VI <: AbstractVector{TI}, A <: AbstractVector{Int}, B <: AbstractVector{Bool}}
+    nleaf = length(enc.coord[1])
+    ninternal = max(nleaf - 1, 0)
+
+    vproto = enc.coord[1]
+
+    leaf_aabb = AABB(ntuple(_ -> similar(vproto, nleaf), D),
+                     ntuple(_ -> similar(vproto, nleaf), D))
+    node_aabb = AABB(ntuple(_ -> similar(vproto, ninternal), D),
+                     ntuple(_ -> similar(vproto, ninternal), D))
+
+    root = _find_root_index(brt)
+    LBVH = LinearBVH{D, TF, TI, VF, VI, A, B}(enc, brt, leaf_aabb, node_aabb, root)
+    _build_LBVH!(LBVH)
+    return LBVH
+end
+
+# Toolbox
 @inline function _push!(stack::AbstractVector{Int}, top::Int, value::Int)
     new_top = top + 1
     @inbounds stack[new_top] = value
@@ -156,7 +190,7 @@ end
     fill!(visit, zero_visit)
     one_visit = one(eltype(visit))
 
-    stack = Vector{Int}(undef, 128)
+    stack = zero(MVector{128, Int})
     top = _push!(stack, 0, root)
 
     while top > 0
@@ -194,39 +228,6 @@ end
     _build_leaf_aabb!(LBVH)
     _build_internal_aabb!(LBVH)
     return nothing
-end
-
-"""
-        LinearBVH(enc::MortonEncoding, brt::BinaryRadixTree)
-
-Assemble a linear bounding volume hierarchy from a Morton-encoded particle set
-and its matching binary radix tree. This allocates per-leaf and per-node
-axis-aligned bounding boxes, discovers the tree root, and precomputes the
-hierarchical extent data required for subsequent neighbor queries.
-
-# Parameters
-- `enc::MortonEncoding`: Morton-sorted particle coordinates and permutation.
-- `brt::BinaryRadixTree`: Connectivity generated from the same `enc` instance.
-
-# Returns
-- `LinearBVH`: Immutable hierarchy storing the encoding, tree topology, and
-    bounding volumes.
-"""
-function LinearBVH(enc::MortonEncoding{D, TF, TI, VF, VI}, brt::BinaryRadixTree{TI, VI, A, B}) where {D, TF <: AbstractFloat, TI <: Unsigned, VF <: AbstractVector{TF}, VI <: AbstractVector{TI}, A <: AbstractVector{Int}, B <: AbstractVector{Bool}}
-    nleaf = length(enc.coord[1])
-    ninternal = max(nleaf - 1, 0)
-
-    vproto = enc.coord[1]
-
-    leaf_aabb = AABB(ntuple(_ -> similar(vproto, nleaf), D),
-                     ntuple(_ -> similar(vproto, nleaf), D))
-    node_aabb = AABB(ntuple(_ -> similar(vproto, ninternal), D),
-                     ntuple(_ -> similar(vproto, ninternal), D))
-
-    root = _find_root_index(brt)
-    LBVH = LinearBVH{D, TF, TI, VF, VI, A, B}(enc, brt, leaf_aabb, node_aabb, root)
-    _build_LBVH!(LBVH)
-    return LBVH
 end
 
 ################# Traversal and Query #################
