@@ -1,6 +1,6 @@
 
 
-@inline function _general_grid_interpolation_kernel!(grids :: NTuple{L, GeneralGrid{D}}, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {D, N, G, Div, C, L, TF <: Float32, VF <: MetalDeviceVector{TF}, ITPINPUT <: InterpolationInput{TF, VF}, ITPSTRATEGY <: AbstractInterpolationStrategy}
+@inline function _general_grid_interpolation_kernel!(grids :: NTuple{L, GeneralGrid{D}}, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {D, N, G, Div, C, L, TF <: Float32, VF <: MtlDeviceVector{TF}, ITPINPUT <: InterpolationInput{TF, VF}, ITPSTRATEGY <: AbstractInterpolationStrategy}
     tid = Int(Metal.thread_position_in_grid().x)
     stride = Int(Metal.threads_per_grid().x)
 

@@ -2,6 +2,9 @@ module KernelInterpolation
 using PhantomRevealer
 using Metal
 
+# Grid construction
+include(joinpath(@__DIR__, "grid.jl"))
+
 # Grid interpolation
 include(joinpath(@__DIR__, "grid_interpolation", "grid_interpolation.jl"))
 
