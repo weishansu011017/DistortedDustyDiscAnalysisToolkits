@@ -161,6 +161,65 @@ function restore_struct(grid::GeneralGrid{D,TF}, axes::NTuple{D,V}) where {D,TF<
     return StructuredGrid(reshape(grid.grid, size), axes, size)
 end
 
+"""
+    batch_GeneralGrid(grid::GeneralGrid{D, TF, VG, VC}, batch_size::Int)
+
+Split a `GeneralGrid` into contiguous batches, each containing at most `batch_size` points.
+The function preserves ordering of both `grid.grid` and `grid.coor`, returning a statically-sized
+NTuple where each element is a `GeneralGrid{D, TF, VG, VC}` containing a slice of the input data.
+
+Batch `i` contains points from index  
+`(i−1)·batch_size + 1` to `min(i·batch_size, N)`  
+where `N = length(grid)`.
+
+# Parameters
+- `grid::GeneralGrid{D, TF, VG, VC}`  
+  Input grid containing scalar field values and coordinate tuples.
+
+- `batch_size::Int`  
+  Maximum number of points in each batch.
+
+# Returns
+`NTuple{B, GeneralGrid{D, TF, VG, VC}}` where `B = cld(N, batch_size)`  
+and `N = length(grid)`.  
+Each returned `GeneralGrid` contains:
+- `grid.grid[start:stop]`  
+- `grid.coor[start:stop]`  
+with correct contiguous slicing.
+"""
+function batch_GeneralGrid(grid::GeneralGrid{D,TF,VG,VC}, batch_size::Int) where {D, TF<:AbstractFloat, VG<:AbstractVector{TF}, VC<:AbstractVector{NTuple{D,TF}}}
+    npoints = length(grid)
+    num_batches = cld(npoints, batch_size)
+
+    return ntuple(i -> begin
+        start = (i-1)*batch_size + 1
+        stop  = min(i*batch_size, npoints)
+        GeneralGrid{D,TF,VG,VC}(grid.grid[start:stop], grid.coor[start:stop])
+    end, num_batches)
+end
+
+"""
+    merge_GeneralGrid(grids::AbstractVector{GeneralGrid{D,TF,VG,VC}})
+
+Merge a vector of `GeneralGrid` batches back into a single `GeneralGrid`.
+The function concatenates all `grid.grid` and `grid.coor` fields in order,
+restoring the original point ordering before batching.
+
+# Parameters
+- `grids::AbstractVector{GeneralGrid{D,TF,VG,VC}}`
+  A vector of batched `GeneralGrid` objects, typically produced by
+  `batch_GeneralGrid`.
+
+# Returns
+`GeneralGrid{D,TF,VG,VC}` with all batched segments concatenated in order.
+"""
+function merge_GeneralGrid(grids :: V) where {D, TF<:AbstractFloat, VG<:AbstractVector{TF}, VC<:AbstractVector{NTuple{D,TF}}, GG <: GeneralGrid{D,TF,VG,VC}, V <: AbstractVector{GG}}
+    # Concatenate scalar values and coordinates
+    merged_grid = vcat(map(g -> g.grid, grids)...)
+    merged_coor = vcat(map(g -> g.coor, grids)...)
+
+    return GeneralGrid{D,TF,VG,VC}(merged_grid, merged_coor)
+end
 # structured grid (Cartesian/Cylindrical... etc)
 """
     StructuredGrid{D, TF<:AbstractFloat, V<:AbstractVector{TF}, A<:AbstractArray{TF,D}} <: AbstractInterpolationGrid
