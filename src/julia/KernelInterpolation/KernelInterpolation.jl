@@ -37,7 +37,11 @@ include(joinpath(@__DIR__, "single_point_interpolation", "InterpolationInput.jl"
 include(joinpath(@__DIR__, "single_point_interpolation", "single_point_interpolation_kernels.jl"))
 include(joinpath(@__DIR__, "single_point_interpolation", "single_point_interpolation.jl"))
 ### LBVH Traversal
-include(joinpath(@__DIR__, "single_point_interpolation", "single_point_traversal_interpolation_kernels.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "operations", "scalar_interpolation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "operations", "LOSscalar_interpolation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "operations", "gredient_interpolation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "operations", "divergence_interpolation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "operations", "curl_interpolation.jl"))
 include(joinpath(@__DIR__, "single_point_interpolation", "single_point_traversal_interpolation.jl"))
 
 
