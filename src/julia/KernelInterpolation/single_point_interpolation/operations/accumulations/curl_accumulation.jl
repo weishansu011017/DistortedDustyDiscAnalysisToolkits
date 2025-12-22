@@ -1,84 +1,48 @@
 """
-∇×A(r) = -(1/ρ(r))∑_b m_b*(A_b-A(r))×∇W(r-r_b)
-       = -(1/ρ(r)) * ((∑_b m_b*A_b×∇W(r-r_b)) - A(r)×(∑_b m_b*∇W(r-r_b)))
-       = -(1/ρ(r))*(∇×Af - ∇×Ab)
+∇×A(r) = -∑_b m_b/ρ_b*(A_b-A(r))×∇W(r-r_b)
+       = -(∑_b m_b/ρ_b*A_b×∇W(r-r_b)) - A(r)×(∑_b m_b/ρ_b*∇W(r-r_b))
+       = -(∇×Af - ∇×Ab)
 """
 # Single column curl value intepolation
-@inline function _curl_quantity_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, Ax_column_idx :: Int, Ay_column_idx :: Int, Az_column_idx :: Int, :: Type{itpGather}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
-    Ktyp = typeof(input.smoothed_kernel)
-    mb = input.m[i]
-    Axb = input.quant[Ax_column_idx][i]
-    Ayb = input.quant[Ay_column_idx][i]
-    Azb = input.quant[Az_column_idx][i]
-    rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
-    ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
+@inline function _curl_quantity_accumulation(ra::NTuple{3, T}, rb::NTuple{3, T}, mb :: T, ρb :: T, Axb :: T, Ayb :: T, Azb :: T, h :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
+    Ktyp = typeof(smoothed_kernel)
+    ∇W = Smoothed_gradient_kernel_function(Ktyp, ra, rb, h)
     ∂xW = ∇W[1]
     ∂yW = ∇W[2]
     ∂zW = ∇W[3]
 
-    # Gradient
-    mb∂xW = mb * ∂xW
-    mb∂yW = mb * ∂yW
-    mb∂zW = mb * ∂zW
-
-    ∇Axf += Ayb * mb∂zW -  Azb * mb∂yW
-    ∇Ayf += Azb * mb∂xW -  Axb * mb∂zW
-    ∇Azf += Axb * mb∂yW -  Ayb * mb∂xW
-    m∂xW += mb∂xW
-    m∂yW += mb∂yW
-    m∂zW += mb∂zW
-    return ∇Axf, ∇Ayf, ∇Azf, m∂xW, m∂yW, m∂zW
-end
-
-@inline function _curl_quantity_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, Ax_column_idx :: Int, Ay_column_idx :: Int, Az_column_idx :: Int, :: Type{itpScatter}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
-    Ktyp = typeof(input.smoothed_kernel)
-    mb = input.m[i]
-    Axb = input.quant[Ax_column_idx][i]
-    Ayb = input.quant[Ay_column_idx][i]
-    Azb = input.quant[Az_column_idx][i]
-    rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
-    ∇W = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.h[i])
-    ∂xW = ∇W[1]
-    ∂yW = ∇W[2]
-    ∂zW = ∇W[3]
+    invρb = inv(ρb)
 
     # Gradient
-    mb∂xW = mb * ∂xW
-    mb∂yW = mb * ∂yW
-    mb∂zW = mb * ∂zW
+    mblρb∂xW = mb * invρb * ∂xW
+    mblρb∂yW = mb * invρb * ∂yW
+    mblρb∂zW = mb * invρb * ∂zW
 
-    ∇Axf += Ayb * mb∂zW -  Azb * mb∂yW
-    ∇Ayf += Azb * mb∂xW -  Axb * mb∂zW
-    ∇Azf += Axb * mb∂yW -  Ayb * mb∂xW
-    m∂xW += mb∂xW
-    m∂yW += mb∂yW
-    m∂zW += mb∂zW
-    return ∇Axf, ∇Ayf, ∇Azf, m∂xW, m∂yW, m∂zW
+    ∇Axf = Ayb * mblρb∂zW -  Azb * mblρb∂yW
+    ∇Ayf = Azb * mblρb∂xW -  Axb * mblρb∂zW
+    ∇Azf = Axb * mblρb∂yW -  Ayb * mblρb∂xW
+
+    return ∇Axf, ∇Ayf, ∇Azf, mblρb∂xW, mblρb∂yW, mblρb∂zW
 end
 
-@inline function _curl_quantity_accumulation(input :: ITPINPUT, reference_point::NTuple{3, T}, ha :: T, Ax_column_idx :: Int, Ay_column_idx :: Int, Az_column_idx :: Int, :: Type{itpSymmetric}, i :: Int) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
-    Ktyp = typeof(input.smoothed_kernel)
-    mb = input.m[i]
-    Axb = input.quant[Ax_column_idx][i]
-    Ayb = input.quant[Ay_column_idx][i]
-    Azb = input.quant[Az_column_idx][i]
-    rb :: NTuple{3, T} = (input.x[i], input.y[i], input.z[i])
-    ∇Wa = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, ha)
-    ∇Wb = Smoothed_gradient_kernel_function(Ktyp, reference_point, rb, input.h[i])
+@inline function _curl_quantity_accumulation(ra::NTuple{3, T}, rb::NTuple{3, T}, mb :: T, ρb :: T, Axb :: T, Ayb :: T, Azb :: T, ha :: T, hb :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
+    Ktyp = typeof(smoothed_kernel)
+    ∇Wa = Smoothed_gradient_kernel_function(Ktyp, ra, rb, ha)
+    ∇Wb = Smoothed_gradient_kernel_function(Ktyp, ra, rb, hb)
     ∂xW = T(0.5) * (∇Wa[1] + ∇Wb[1])
     ∂yW = T(0.5) * (∇Wa[2] + ∇Wb[2])
     ∂zW = T(0.5) * (∇Wa[3] + ∇Wb[3])
 
-    # Gradient
-    mb∂xW = mb * ∂xW
-    mb∂yW = mb * ∂yW
-    mb∂zW = mb * ∂zW
+    invρb = inv(ρb)
 
-    ∇Axf += Ayb * mb∂zW -  Azb * mb∂yW
-    ∇Ayf += Azb * mb∂xW -  Axb * mb∂zW
-    ∇Azf += Axb * mb∂yW -  Ayb * mb∂xW
-    m∂xW += mb∂xW
-    m∂yW += mb∂yW
-    m∂zW += mb∂zW
-    return ∇Axf, ∇Ayf, ∇Azf, m∂xW, m∂yW, m∂zW
+    # Gradient
+    mblρb∂xW = mb * invρb * ∂xW
+    mblρb∂yW = mb * invρb * ∂yW
+    mblρb∂zW = mb * invρb * ∂zW
+
+    ∇Axf = Ayb * mblρb∂zW -  Azb * mblρb∂yW
+    ∇Ayf = Azb * mblρb∂xW -  Axb * mblρb∂zW
+    ∇Azf = Axb * mblρb∂yW -  Ayb * mblρb∂xW
+
+    return ∇Axf, ∇Ayf, ∇Azf, mblρb∂xW, mblρb∂yW, mblρb∂zW
 end

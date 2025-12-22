@@ -56,7 +56,7 @@ julia> KernelFunctionValid(M5_spline, Float64)
 
 julia> KernelFunctionValid(C2_Wendland, Float32)
 2.0f0
-````
+```
 """
 @inline KernelFunctionValid(::Type{C6_Wendland}, ::Type{T}) where {T<:AbstractFloat} = T(2.0)
 

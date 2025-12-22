@@ -198,7 +198,7 @@ rb = [0.1f0, 0.0f0, 0.3f0]
 h  = 0.05f0
 
 Wval = Smoothed_kernel_function(M4_spline, ra, rb, h)
-````
+```
 """
 @inline function Smoothed_kernel_function(::Type{K}, ra::AbstractVector{T}, rb::AbstractVector{T}, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
     r2 = zero(T)

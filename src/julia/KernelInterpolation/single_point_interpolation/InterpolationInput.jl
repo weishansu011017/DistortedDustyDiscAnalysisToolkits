@@ -147,7 +147,7 @@ end
 end
 
 function LinearBVH!(inp::InterpolationInput, ::Val{3}; CodeType :: Type{TI} = UInt64) where {TI<:Unsigned}
-    enc = MortonEncoding(inp.x, inp.y, inp.z, CodeType=CodeType)
+    enc = MortonEncoding(inp.x, inp.y, inp.z, inp.h, CodeType=CodeType)
     order = enc.order
 
     _apply_permutation!(inp.x, order)
@@ -166,7 +166,7 @@ function LinearBVH!(inp::InterpolationInput, ::Val{3}; CodeType :: Type{TI} = UI
 end
 
 function LinearBVH!(inp::InterpolationInput, ::Val{2}; CodeType :: Type{TI} = UInt64) where {TI<:Unsigned}
-    enc = MortonEncoding(inp.x, inp.y, CodeType=CodeType)
+    enc = MortonEncoding(inp.x, inp.y, inp.h, CodeType=CodeType)
     order = enc.order
 
     _apply_permutation!(inp.x, order)

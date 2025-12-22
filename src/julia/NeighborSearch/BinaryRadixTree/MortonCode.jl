@@ -8,56 +8,60 @@ Morton code encoding/decoding utilities for particle spatial indexing
 struct MortonEncoding{D, TF <: AbstractFloat, TI <: Unsigned, VF <: AbstractVector{TF}, VI <: AbstractVector{TI}}
     order    :: VI             # Order of corresponding particles
     codes    :: VI             # Morton code
-    coord    :: NTuple{D, VF} # Original data points
+    coord    :: NTuple{D, VF}  # Original data points
+    h        :: VF             # Smoothed length
 end
 
 function Adapt.adapt_structure(to, x :: ME) where {D, ME <: MortonEncoding{D}}
     MortonEncoding(
         Adapt.adapt(to, x.order),
         Adapt.adapt(to, x.codes),
-        ntuple(i -> Adapt.adapt(to, x.coord[i]), D)
+        ntuple(i -> Adapt.adapt(to, x.coord[i]), D),
+        Adapt.adapt(to, x.h)
     )
 end
 
 ################# Encoding Morton code #################
 """
-    MortonEncoding(x::V, y::V, z::V; CodeType::Type{TI}=UInt64)
+    MortonEncoding(x::V, y::V, z::V, h :: V; CodeType::Type{TI}=UInt64)
 
 Encode a set of 3D particle coordinates into Morton codes.
 
 # Parameters
 - `x, y, z :: AbstractVector{T}`: Particle positions along each axis (floating-point).
+- `h :: AbstractVector{T}`: The smoothed length of particles
 - `CodeType :: Type{TI}`: Unsigned integer type used for Morton encoding (`UInt32` or `UInt64`).
 
 # Returns
 - `MortonEncoding{3, T, TI, V, typeof(order)}`: Struct containing Morton codes, particle order, and coordinates, ordered by Morton codes
 """
-function MortonEncoding(x :: V, y :: V, z :: V; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, V<:AbstractVector{T}}
-    xcopy = copy(x); ycopy = copy(y); zcopy = copy(z);
+function MortonEncoding(x :: V, y :: V, z :: V, h :: V; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, V<:AbstractVector{T}}
+    xcopy = copy(x); ycopy = copy(y); zcopy = copy(z); hcopy = copy(h)
     ix, iy, iz = _quantize_coords(xcopy, ycopy, zcopy, CodeType=CodeType)
     codes, order  = _encode_morton_code3D(ix, iy, iz)
-    enc = MortonEncoding{3, T, TI, V, typeof(order)}(order, codes, (xcopy, ycopy, zcopy))
+    enc = MortonEncoding{3, T, TI, V, typeof(order)}(order, codes, (xcopy, ycopy, zcopy), hcopy)
     sort_by_morton!(enc)
     return enc
 end
 
 """
-    MortonEncoding(x::V, y::V; CodeType::Type{TI}=UInt64)
+    MortonEncoding(x::V, y::V, h:: V; CodeType::Type{TI}=UInt64)
 
 Encode a set of 2D particle coordinates into Morton codes.
 
 # Parameters
 - `x, y :: AbstractVector{T}`: Particle positions along each axis (floating-point).
+- `h :: AbstractVector{T}`: The smoothed length of particles
 - `CodeType :: Type{TI}`: Unsigned integer type used for Morton encoding (`UInt32` or `UInt64`).
 
 # Returns
 - `MortonEncoding{2, T, TI, V, typeof(order)}`: Struct containing Morton codes, particle order, and coordinates, ordered by Morton codes
 """
-function MortonEncoding(x :: V, y :: V; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, V<:AbstractVector{T}}
-    xcopy = copy(x); ycopy = copy(y)
+function MortonEncoding(x :: V, y :: V, h :: V; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, V<:AbstractVector{T}}
+    xcopy = copy(x); ycopy = copy(y); hcopy = copy(h)
     ix, iy = _quantize_coords(xcopy, ycopy, CodeType=CodeType)
     codes, order  = _encode_morton_code2D(ix, iy)
-    enc = MortonEncoding{2, T, TI, V, typeof(order)}(order, codes, (xcopy, ycopy))
+    enc = MortonEncoding{2, T, TI, V, typeof(order)}(order, codes, (xcopy, ycopy), hcopy)
     sort_by_morton!(enc)
     return enc
 end
@@ -78,6 +82,7 @@ Sort particles by Morton code in-place.
     p = sortperm(enc.codes; alg=QuickSort)
     Base.permute!(enc.codes, p)
     Base.permute!(enc.order, p)
+    Base.permute!(enc.h, p)
     for dir in enc.coord
         Base.permute!(dir, p)
     end
