@@ -47,6 +47,7 @@ function PhantomRevealer.to_CuVector(LBVH :: LinearBVH{D, TF, TI, VF, VI, A, B})
         to_CuVector(LBVH.brt),
         to_CuVector(LBVH.leaf_aabb),
         to_CuVector(LBVH.node_aabb),
+        CuVector{TF}(LBVH.node_hmax),
         LBVH.root
     )
 end

@@ -47,6 +47,7 @@ function PhantomRevealer.to_HostVector(LBVH :: LinearBVH{D, TF, TI, VF, VI, A, B
         to_HostVector(LBVH.brt),
         to_HostVector(LBVH.leaf_aabb),
         to_HostVector(LBVH.node_aabb),
+        Vector{TF}(LBVH.node_hmax),
         LBVH.root
     )
 end

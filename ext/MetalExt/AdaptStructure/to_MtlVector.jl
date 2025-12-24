@@ -47,6 +47,7 @@ function PhantomRevealer.to_MtlVector(LBVH :: LinearBVH{D, TF, TI, VF, VI, A, B}
         to_MtlVector(LBVH.brt),
         to_MtlVector(LBVH.leaf_aabb),
         to_MtlVector(LBVH.node_aabb),
+        MtlVector{Float32}(LBVH.node_hmax),
         LBVH.root
     )
 end

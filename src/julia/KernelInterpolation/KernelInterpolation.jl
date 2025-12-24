@@ -37,11 +37,16 @@ include(joinpath(@__DIR__, "single_point_interpolation", "InterpolationInput.jl"
 include(joinpath(@__DIR__, "single_point_interpolation", "single_point_interpolation_kernels.jl"))
 include(joinpath(@__DIR__, "single_point_interpolation", "single_point_interpolation.jl"))
 ### LBVH Traversal
-include(joinpath(@__DIR__, "single_point_interpolation", "operations", "scalar_interpolation.jl"))
-include(joinpath(@__DIR__, "single_point_interpolation", "operations", "LOSscalar_interpolation.jl"))
-include(joinpath(@__DIR__, "single_point_interpolation", "operations", "gredient_interpolation.jl"))
-include(joinpath(@__DIR__, "single_point_interpolation", "operations", "divergence_interpolation.jl"))
-include(joinpath(@__DIR__, "single_point_interpolation", "operations", "curl_interpolation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "operations", "accumulations", "scalar_accumulation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "operations", "accumulations", "LOSscalar_accumulation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "operations", "accumulations", "gredient_accumulation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "operations", "accumulations", "divergence_accumulation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "operations", "accumulations", "curl_accumulation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "operations", "kernels", "scalar_interpolation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "operations", "kernels", "LOSscalar_interpolation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "operations", "kernels", "gredient_interpolation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "operations", "kernels", "divergence_interpolation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "operations", "kernels", "curl_interpolation.jl"))
 include(joinpath(@__DIR__, "single_point_interpolation", "single_point_traversal_interpolation.jl"))
 
 

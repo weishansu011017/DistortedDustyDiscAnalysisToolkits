@@ -22,6 +22,7 @@ struct LinearBVH{D, TF <: AbstractFloat, TI <: Unsigned, VF <: AbstractVector{TF
     brt :: BinaryRadixTree{TI, VI, A, B}
     leaf_aabb :: AABB{D, TF, VF}
     node_aabb :: AABB{D, TF, VF}
+    node_hmax :: VF
     root :: Int
 end
 
@@ -31,6 +32,7 @@ function Adapt.adapt_structure(to, x :: LBVH) where {D, LBVH <: LinearBVH{D}}
         Adapt.adapt(to, x.brt),
         Adapt.adapt(to, x.leaf_aabb),
         Adapt.adapt(to, x.node_aabb),
+        Adapt.adapt(to, x.node_hmax),
         x.root
     )
 end
@@ -62,9 +64,10 @@ function LinearBVH(enc::MortonEncoding{D, TF, TI, VF, VI}, brt::BinaryRadixTree{
                      ntuple(_ -> similar(vproto, nleaf), D))
     node_aabb = AABB(ntuple(_ -> similar(vproto, ninternal), D),
                      ntuple(_ -> similar(vproto, ninternal), D))
+    node_hmax = similar(enc.h, ninternal)
 
     root = _find_root_index(brt)
-    LBVH = LinearBVH{D, TF, TI, VF, VI, A, B}(enc, brt, leaf_aabb, node_aabb, root)
+    LBVH = LinearBVH{D, TF, TI, VF, VI, A, B}(enc, brt, leaf_aabb, node_aabb, node_hmax, root)
     _build_LBVH!(LBVH)
     return LBVH
 end
@@ -171,8 +174,10 @@ end
     brt = LBVH.brt
     node_min = LBVH.node_aabb.min
     node_max = LBVH.node_aabb.max
+    node_hmax = LBVH.node_hmax
     leaf_min = LBVH.leaf_aabb.min
     leaf_max = LBVH.leaf_aabb.max
+    leaf_h = LBVH.enc.h
 
     L = brt.left_child
     R = brt.right_child
@@ -207,6 +212,13 @@ end
                 top = _push!(stack, top, L[i])
             end
             continue
+        end
+
+        @inbounds begin
+            l = L[i]; r = R[i]
+            hl = LL[i] ? leaf_h[l] : node_hmax[l]
+            hr = RR[i] ? leaf_h[r] : node_hmax[r]
+            node_hmax[i] = ifelse(hl > hr, hl, hr)
         end
 
         @inbounds for d in 1:D

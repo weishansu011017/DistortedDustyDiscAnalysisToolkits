@@ -18,17 +18,19 @@ end
 
 function build_encoding(::Val{2}, n::Int, offset::Int)
     coords = build_coords(2, n, offset)
-    return MortonEncoding(coords[1], coords[2])
+    h = fill(0.1, n)
+    return MortonEncoding(coords[1], coords[2], h)
 end
 
 function build_encoding(::Val{3}, n::Int, offset::Int)
     coords = build_coords(3, n, offset)
-    return MortonEncoding(coords[1], coords[2], coords[3])
+    h = fill(0.1, n)
+    return MortonEncoding(coords[1], coords[2], coords[3], h)
 end
 
-identical_encoding(::Val{2}, n::Int) = MortonEncoding(fill(0.5, n), fill(0.5, n))
+identical_encoding(::Val{2}, n::Int) = MortonEncoding(fill(0.5, n), fill(0.5, n), fill(0.5, n))
 
-identical_encoding(::Val{3}, n::Int) = MortonEncoding(fill(0.5, n), fill(0.5, n), fill(0.5, n))
+identical_encoding(::Val{3}, n::Int) = MortonEncoding(fill(0.5, n), fill(0.5, n), fill(0.5, n), fill(0.5, n))
 
 @testset "BinaryRadixTree invariants" begin
     offsets = 0:4
