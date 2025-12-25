@@ -47,7 +47,7 @@ types and high-performance SPH interpolation.
   over all LBVH-selected neighbours.
 """
 function density(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
-  return _density_kernel(input, reference_point, ha, LBVH, itp_strategy)
+    return _density_kernel(input, reference_point, ha, LBVH, itp_strategy)
 end
 
 ## Number density
@@ -90,7 +90,7 @@ and high-performance SPH interpolation.
   over all neighbours returned by the LBVH search.
 """
 function number_density(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
-  return _number_density_kernel(input, reference_point, ha, LBVH, itp_strategy)
+    return _number_density_kernel(input, reference_point, ha, LBVH, itp_strategy)
 end
 
 ## Single quantity intepolation
@@ -99,7 +99,7 @@ end
                          reference_point::NTuple{3, T},
                          ha::T,
                          LBVH::LinearBVH,
-                         column_idx::Int64,
+                         column_idx::Int,
                          ShepardNormalization::Bool = true,
                          itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> T
 
@@ -123,7 +123,7 @@ normalization can be applied to enforce partition-of-unity behaviour.
 - `LBVH::LinearBVH`  
   Linear bounding volume hierarchy built over particle positions. Determines
   candidate neighbours via AABB–kernel intersection.
-- `column_idx::Int64`  
+- `column_idx::Int`  
   Index of the particle field/column to interpolate.
 - `ShepardNormalization::Bool = true`  
   When true, apply Shepard normalization to the kernel weights.
@@ -139,8 +139,8 @@ normalization can be applied to enforce partition-of-unity behaviour.
   Interpolated SPH field value at `reference_point`, obtained from summation
   over neighbours selected via LBVH traversal.
 """
-function quantity_interpolate(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, column_idx :: Int64, ShepardNormalization :: Bool = true,itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
-  return _quantity_interpolate_kernel(input, reference_point, ha, LBVH, column_idx, ShepardNormalization, itp_strategy)
+function quantity_interpolate(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, column_idx :: Int, ShepardNormalization :: Bool = true,itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
+    return _quantity_interpolate_kernel(input, reference_point, ha, LBVH, column_idx, ShepardNormalization, itp_strategy)
 end
 
 ## Muti-columns intepolation
@@ -271,7 +271,7 @@ projection-aware SPH density summation.
   Projected SPH column density at the given 2-D reference point.
 """
 function LOS_density(input::InterpolationInput{T, V, K}, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
-  return _LOS_density_kernel(input, reference_point, ha, LBVH, itp_strategy)
+    return _LOS_density_kernel(input, reference_point, ha, LBVH, itp_strategy)
 end
 
 
@@ -315,8 +315,8 @@ summation and optional Shepard normalization.
   in the same order as specified in `columns`.
 """
 function LOS_quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
-  columns = ntuple(identity, Val(NCOLUMN))
-  return _LOS_quantities_interpolate_kernel(input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
+    columns = ntuple(identity, Val(NCOLUMN))
+    return _LOS_quantities_interpolate_kernel(input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
 end
 
 """
@@ -361,7 +361,7 @@ the LOS-aware SPH summation with optional Shepard normalization.
   in the same order as specified in `columns`.
 """
 function LOS_quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy, M}
-  return _LOS_quantities_interpolate_kernel(input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
+    return _LOS_quantities_interpolate_kernel(input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
 end
 
 # Single column gradient density intepolation
@@ -401,7 +401,7 @@ actual SPH gradient computation using the specified interpolation strategy.
   The SPH density gradient evaluated at `reference_point`.
 """
 function gradient_density(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
-  return _gradient_density_kernel(input, reference_point, ha, LBVH, itp_strategy)
+    return _gradient_density_kernel(input, reference_point, ha, LBVH, itp_strategy)
 end
 
 # Single column gradient value intepolation
@@ -410,7 +410,7 @@ end
                                   reference_point::NTuple{3, T},
                                   ha::T,
                                   LBVH::LinearBVH,
-                                  column_idx::Int64,
+                                  column_idx::Int,
                                   itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> NTuple{3, T}
 
 Compute the spatial gradient of an arbitrary SPH quantity at a 3-D reference
@@ -431,7 +431,7 @@ using the specified kernel interpolation strategy.
   Smoothing length at the evaluation point.
 - `LBVH::LinearBVH`  
   Linear bounding volume hierarchy used to identify neighbouring particles.
-- `column_idx::Int64`  
+- `column_idx::Int`  
   Index of the scalar field whose gradient is to be interpolated.
 - `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
   Kernel interpolation strategy (`itpGather`, `itpScatter`, `itpSymmetric`).
@@ -440,8 +440,8 @@ using the specified kernel interpolation strategy.
 - `∇Q::NTuple{3, T}`  
   The interpolated gradient of the selected quantity at `reference_point`.
 """
-function gradient_quantity_interpolate(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, column_idx :: Int64, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
-  return _gradient_quantity_interpolate_kernel(input, reference_point, ha, LBVH, column_idx, itp_strategy)
+function gradient_quantity_interpolate(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, column_idx :: Int, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
+    return _gradient_quantity_interpolate_kernel(input, reference_point, ha, LBVH, column_idx, itp_strategy)
 end
 
 # Single column divergence value intepolation
@@ -450,9 +450,9 @@ end
                                     reference_point::NTuple{3, T},
                                     ha::T,
                                     LBVH::LinearBVH,
-                                    Ax_column_idx::Int64,
-                                    Ay_column_idx::Int64,
-                                    Az_column_idx::Int64,
+                                    Ax_column_idx::Int,
+                                    Ay_column_idx::Int,
+                                    Az_column_idx::Int,
                                     itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> T
 
 Compute the divergence of a vector-valued SPH quantity at a 3-D reference point
@@ -474,11 +474,11 @@ The SPH divergence summation is performed by
   Smoothing length at the evaluation point.
 - `LBVH::LinearBVH`  
   Linear bounding volume hierarchy used for neighbour discovery.
-- `Ax_column_idx::Int64`  
+- `Ax_column_idx::Int`  
   Column index of the x-component of the vector field.
-- `Ay_column_idx::Int64`  
+- `Ay_column_idx::Int`  
   Column index of the y-component of the vector field.
-- `Az_column_idx::Int64`  
+- `Az_column_idx::Int`  
   Column index of the z-component of the vector field.
 - `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
   Kernel interpolation strategy (`itpGather`, `itpScatter`, `itpSymmetric`).
@@ -487,8 +487,8 @@ The SPH divergence summation is performed by
 - `∇·A::T`  
   Divergence of the vector field evaluated at `reference_point`.
 """
-function divergence_quantity_interpolate(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, Ax_column_idx :: Int64, Ay_column_idx :: Int64, Az_column_idx :: Int64, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
-  return _divergence_quantity_interpolate_kernel(input, reference_point, ha, LBVH, Ax_column_idx, Ay_column_idx, Az_column_idx, itp_strategy)
+function divergence_quantity_interpolate(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, Ax_column_idx :: Int, Ay_column_idx :: Int, Az_column_idx :: Int, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
+    return _divergence_quantity_interpolate_kernel(input, reference_point, ha, LBVH, Ax_column_idx, Ay_column_idx, Az_column_idx, itp_strategy)
 end
 
 # Single column curl value intepolation
@@ -497,9 +497,9 @@ end
                               reference_point::NTuple{3, T},
                               ha::T,
                               LBVH::LinearBVH,
-                              Ax_column_idx::Int64,
-                              Ay_column_idx::Int64,
-                              Az_column_idx::Int64,
+                              Ax_column_idx::Int,
+                              Ay_column_idx::Int,
+                              Az_column_idx::Int,
                               itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> NTuple{3, T}
 
 Compute the curl of a vector-valued SPH quantity at a 3-D reference point using
@@ -521,11 +521,11 @@ support of radius `ha`. The SPH curl summation is implemented in
   Smoothing length at the interpolation point.
 - `LBVH::LinearBVH`  
   Linear bounding volume hierarchy used for neighbour detection.
-- `Ax_column_idx::Int64`  
+- `Ax_column_idx::Int`  
   Column index of the x-component of the vector field.
-- `Ay_column_idx::Int64`  
+- `Ay_column_idx::Int`  
   Column index of the y-component of the vector field.
-- `Az_column_idx::Int64`  
+- `Az_column_idx::Int`  
   Column index of the z-component of the vector field.
 - `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
   Kernel interpolation strategy (`itpGather`, `itpScatter`, `itpSymmetric`).
@@ -534,6 +534,6 @@ support of radius `ha`. The SPH curl summation is implemented in
 - `∇×A::NTuple{3, T}`  
   The curl of the vector field evaluated at `reference_point`.
 """
-function curl_quantity_interpolate(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, Ax_column_idx :: Int64, Ay_column_idx :: Int64, Az_column_idx :: Int64, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
-  return _curl_quantity_interpolate_kernel(input, reference_point, ha, LBVH, Ax_column_idx, Ay_column_idx, Az_column_idx, itp_strategy)
+function curl_quantity_interpolate(input::InterpolationInput{T, V, K}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, Ax_column_idx :: Int, Ay_column_idx :: Int, Az_column_idx :: Int, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
+    return _curl_quantity_interpolate_kernel(input, reference_point, ha, LBVH, Ax_column_idx, Ay_column_idx, Az_column_idx, itp_strategy)
 end
