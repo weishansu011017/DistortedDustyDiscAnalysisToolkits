@@ -232,111 +232,6 @@ function quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, ref
     return _quantities_interpolate_kernel(input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
 end
 
-## Multiple-Quantity Interpolation (In-Place)
-"""
-    quantities_interpolate!(workspace::Vector{T},
-                            input::InterpolationInput{T, V, K, NCOLUMN},
-                            reference_point::NTuple{3, T},
-                            ha::T,
-                            LBVH::LinearBVH,
-                            ShepardNormalization::NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN),
-                            itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> Nothing
-
-In-place SPH interpolation of all particle fields stored in an
-`InterpolationInput`, using LBVH-based neighbour search.
-
-This routine computes interpolated values for **all `NCOLUMN` scalar fields**
-and writes them directly into the provided `workspace` array. Neighbours are
-selected by intersecting LBVH leaf AABBs with the kernel support region of
-radius `ha` around `reference_point`. No memory allocation occurs except for
-caller-provided buffers. The core computation is delegated to the in-place
-`_quantities_interpolate_kernel!`.
-
-# Parameters
-- `workspace::Vector{T}`  
-  Preallocated output buffer of length `NCOLUMN`. Filled with interpolated
-  values.
-- `input::InterpolationInput{T, V, K, NCOLUMN}`  
-  Preprocessed SPH particle data with `NCOLUMN` scalar fields.
-- `reference_point::NTuple{3, T}`  
-  Evaluation position (x, y, z).
-- `ha::T`  
-  Target smoothing length at the interpolation location.
-- `LBVH::LinearBVH`  
-  Linear bounding volume hierarchy for neighbour selection.
-- `ShepardNormalization::NTuple{NCOLUMN, Bool}`  
-  Per-field Shepard normalization flags. Defaults to all `true`.
-- `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
-  Kernel interpolation strategy specifying how `h_a` and `h_b` are combined:  
-  - `itpGather`: use only `h_a`.  
-  - `itpScatter`: use only `h_b`.  
-  - `itpSymmetric`: average kernel value `0.5*(W(h_a)+W(h_b))`.
-
-# Returns
-`nothing`. The results are written directly into `workspace`.
-"""
-function quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
-    if NCOLUMN == 0
-        return nothing
-    end  
-    @assert length(workspace) == NCOLUMN "Length of `workspace` should be identical as NCOLUMN."
-    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, LBVH, ShepardNormalization, itp_strategy)
-end
-
-"""
-    quantities_interpolate!(workspace::Vector{T},
-                            input::InterpolationInput{T, V, K, NCOLUMN},
-                            reference_point::NTuple{3, T},
-                            ha::T,
-                            LBVH::LinearBVH,
-                            columns::NTuple{M, Int},
-                            ShepardNormalization::NTuple{M, Bool} = ntuple(_ -> true, M),
-                            itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> Nothing
-
-In-place interpolation of a **selected subset** of particle fields using an
-LBVH-based neighbour search.
-
-This variant of `quantities_interpolate!` computes interpolated values for only
-the fields specified by `columns`. It writes the results into the provided
-`workspace`, whose length must match the number of selected fields `M`. The
-LBVH is used to select neighbouring particles whose bounding boxes intersect
-the smoothing sphere of radius `ha` centred at `reference_point`. The
-in-place `_quantities_interpolate_kernel!` performs the SPH summation and (if
-enabled) Shepard normalization.
-
-# Parameters
-- `workspace::Vector{T}`  
-  Preallocated output buffer of length `M`. Filled with interpolated values.
-- `input::InterpolationInput{T, V, K, NCOLUMN}`  
-  Preprocessed SPH particle dataset containing `NCOLUMN` scalar fields.
-- `reference_point::NTuple{3, T}`  
-  Spatial coordinates (x, y, z) for interpolation.
-- `ha::T`  
-  Target smoothing length at the interpolation point.
-- `LBVH::LinearBVH`  
-  Linear bounding volume hierarchy used to identify candidate neighbours.
-- `columns::NTuple{M, Int}`  
-  Indices of the particle fields to interpolate.
-- `ShepardNormalization::NTuple{M, Bool} = ntuple(_ -> true, M)`  
-  Per-field Shepard normalization flags corresponding to `columns`.
-- `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
-  Kernel interpolation strategy controlling how `h_a` and `h_b` are combined:  
-  - `itpGather`: use only `h_a`.  
-  - `itpScatter`: use only `h_b`.  
-  - `itpSymmetric`: average kernel `0.5*(W(h_a) + W(h_b))`.
-
-# Returns
-`nothing`. Results are written directly into `workspace`.
-"""
-function quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy, M}
-    @assert length(workspace) == M "Length of `workspace` should match `columns`."
-    if M == 0
-        return nothing
-    end
-    _quantities_interpolate_kernel!(workspace, input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
-    return nothing
-end
-
 ## LOS density interpolation (Column / Surface density)
 """
     LOS_density(input::InterpolationInput{T, V, K},
@@ -396,7 +291,7 @@ This routine computes LOS-projected interpolated values for all `NCOLUMN` scalar
 fields. Candidate neighbours are obtained by intersecting LBVH leaf AABBs with
 the circular kernel support of radius `ha` centred at the 2-D projection
 `reference_point`. The resulting particle subset is passed into
-`_LOS_quantities_interpolate_kernel!`, which performs projection-aware SPH
+`_LOS_quantities_interpolate_kernel`, which performs projection-aware SPH
 summation and optional Shepard normalization.
 
 # Parameters
@@ -441,7 +336,7 @@ This variant computes LOS-projected interpolated values only for the fields
 listed in `columns`. An output workspace of size `M` is allocated. Neighbours
 are identified through LBVH intersection tests between particle AABBs and the
 circular kernel support of radius `ha` centered at the 2-D `reference_point`.
-Computation is handled by `_LOS_quantities_interpolate_kernel!`, which performs
+Computation is handled by `_LOS_quantities_interpolate_kernel`, which performs
 the LOS-aware SPH summation with optional Shepard normalization.
 
 # Parameters
@@ -468,130 +363,6 @@ the LOS-aware SPH summation with optional Shepard normalization.
 function LOS_quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy, M}
   return _LOS_quantities_interpolate_kernel(input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
 end
-
-"""
-    LOS_quantities_interpolate!(workspace::Vector{T},
-                                input::InterpolationInput{T, V, K, NCOLUMN},
-                                reference_point::NTuple{2, T},
-                                ha::T,
-                                LBVH::LinearBVH,
-                                ShepardNormalization::NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN),
-                                itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> Nothing
-
-In-place interpolation of all SPH particle fields in projected (2-D) space
-using LBVH-based neighbour search, producing line-of-sight (LOS) weighted
-quantities.
-
-This function computes LOS-projected interpolated values for all `NCOLUMN`
-fields and writes the results directly into the user-provided `workspace`
-buffer. Neighbours are selected by intersecting LBVH leaf AABBs with the
-circular kernel support of radius `ha` centred at the 2-D projected position
-`reference_point`. The core computation is performed by
-`_LOS_quantities_interpolate_kernel!`, which evaluates LOS-weighted SPH
-summations with optional Shepard normalization.
-
-# Parameters
-- `workspace::Vector{T}`  
-  Preallocated buffer of length `NCOLUMN`. Filled with LOS-projected
-  interpolated values.
-- `input::InterpolationInput{T, V, K, NCOLUMN}`  
-  Preprocessed SPH dataset containing `NCOLUMN` scalar particle fields.
-- `reference_point::NTuple{2, T}`  
-  Evaluation point in 2-D projected space.
-- `ha::T`  
-  Smoothing length associated with the projected kernel.
-- `LBVH::LinearBVH`  
-  Linear bounding volume hierarchy used to identify neighbour candidates.
-- `ShepardNormalization::NTuple{NCOLUMN, Bool}`  
-  Per-field Shepard normalization flags. Must match the number of fields.
-- `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
-  Kernel interpolation mode (`itpGather`, `itpScatter`, `itpSymmetric`).
-
-# Returns
-`nothing`. Results are written directly into `workspace`.
-"""
-function LOS_quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, M), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
-    if NCOLUMN == 0
-      return nothing
-    end
-    @assert length(workspace) == NCOLUMN "Length of `workspace` should be identical as NCOLUMN."
-  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, LBVH, ShepardNormalization, itp_strategy)
-end
-
-"""
-    LOS_quantities_interpolate!(workspace::Vector{T},
-                                input::InterpolationInput{T, V, K, NCOLUMN},
-                                reference_point::NTuple{2, T},
-                                ha::T,
-                                LBVH::LinearBVH,
-                                columns::NTuple{M, Int},
-                                ShepardNormalization::NTuple{M, Bool} = ntuple(_ -> true, M),
-                                itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) -> Nothing
-
-In-place interpolation of a selected subset of SPH particle fields in projected
-(2-D) space using LBVH-based neighbour search, producing line-of-sight (LOS)
-weighted quantities.
-
-This method computes LOS-projected SPH interpolated values only for the fields
-listed in `columns`. The caller-provided `workspace` must have length `M`,
-matching the number of selected fields. Neighbouring particles are determined
-via LBVH intersection between leaf AABBs and the projected kernel support
-(circle of radius `ha`). The computation is performed by
-`_LOS_quantities_interpolate_kernel!`, which applies LOS-weighted SPH summation
-and optional Shepard normalization.
-
-# Parameters
-- `workspace::Vector{T}`  
-  Output buffer of length `M` to be filled in-place.
-- `input::InterpolationInput{T, V, K, NCOLUMN}`  
-  Preprocessed SPH particle data.
-- `reference_point::NTuple{2, T}`  
-  2-D projected evaluation location.
-- `ha::T`  
-  Smoothing length for the projected kernel.
-- `LBVH::LinearBVH`  
-  LBVH used for neighbour identification in projected space.
-- `columns::NTuple{M, Int}`  
-  Indices of scalar fields to interpolate.
-- `ShepardNormalization::NTuple{M, Bool} = ntuple(_ -> true, M)`  
-  Shepard normalization flags corresponding to the selected fields.
-- `itp_strategy::Type{ITPSTRATEGY} = itpSymmetric`  
-  Kernel interpolation strategy (`itpGather`, `itpScatter`, `itpSymmetric`).
-
-# Returns
-`nothing`. All results are written directly into `workspace`.
-"""
-function LOS_quantities_interpolate!(workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy, M}
-    @assert length(workspace) == M "Length of `workspace` should match `columns`."
-    if M == 0
-        return nothing
-    end
-  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
-  return nothing
-end
-
-function LOS_quantities_interpolate!(buffer :: NTuple{NCOLUMN, SA}, workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH,ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, SA<:AbstractArray{T, 0}, ITPSTRATEGY <: AbstractInterpolationStrategy}
-    if NCOLUMN == 0
-      return nothing
-    end
-    @assert length(workspace) == NCOLUMN "Length of `workspace` should be identical as NCOLUMN."
-  _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, LBVH, ShepardNormalization, itp_strategy)
-    @inbounds for i in eachindex(buffer)
-        buffer[i][] = workspace[i]
-    end
-end
-
-  function LOS_quantities_interpolate!(buffer :: NTuple{M, SA}, workspace :: Vector{T}, input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {M, NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, SA<:AbstractArray{T, 0}, ITPSTRATEGY <: AbstractInterpolationStrategy}
-    @assert length(workspace) == M "Length of `workspace` should match `columns`."
-    if M == 0
-      return nothing
-    end
-    _LOS_quantities_interpolate_kernel!(workspace, input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
-    @inbounds for i in eachindex(buffer)
-      buffer[i][] = workspace[i]
-    end
-    return nothing
-  end
 
 # Single column gradient density intepolation
 """

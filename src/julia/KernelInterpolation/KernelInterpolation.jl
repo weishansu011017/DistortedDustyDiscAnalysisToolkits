@@ -33,9 +33,7 @@ include(joinpath(@__DIR__, "kernel_function", "losintegrated_kernel.jl"))
 include(joinpath(@__DIR__, "InterpolationStrategy.jl"))
 include(joinpath(@__DIR__, "single_point_interpolation", "InterpolationCatalog.jl"))
 include(joinpath(@__DIR__, "single_point_interpolation", "InterpolationInput.jl"))
-### Neighbor Selection
-include(joinpath(@__DIR__, "single_point_interpolation", "single_point_interpolation_kernels.jl"))
-include(joinpath(@__DIR__, "single_point_interpolation", "single_point_interpolation.jl"))
+
 ### LBVH Traversal
 include(joinpath(@__DIR__, "single_point_interpolation", "operations", "accumulations", "scalar_accumulation.jl"))
 include(joinpath(@__DIR__, "single_point_interpolation", "operations", "accumulations", "LOSscalar_accumulation.jl"))
