@@ -1,6 +1,6 @@
 """
 ∇×A(r) = -∑_b m_b/ρ_b*(A_b-A(r))×∇W(r-r_b)
-       = -(∑_b m_b/ρ_b*A_b×∇W(r-r_b)) - A(r)×(∑_b m_b/ρ_b*∇W(r-r_b))
+       = -(∑_b m_b/ρ_b*A_b×∇W(r-r_b)) + A(r)×(∑_b m_b/ρ_b*∇W(r-r_b))
        = -(∇×Af - ∇×Ab)
 """
 # Single column curl value intepolation

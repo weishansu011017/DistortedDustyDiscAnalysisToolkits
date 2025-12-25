@@ -1,6 +1,7 @@
 @inline function _density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, :: Type{itpGather}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Prepare for interpolation
-    Ktyp = typeof(input.smoothed_kernel)
+    K = input.smoothed_kernel
+    Ktyp = typeof(K)
     Kvalid = KernelFunctionValid(Ktyp, T)
 
     # Initialize counter
@@ -33,7 +34,6 @@
                 @inbounds begin
                     rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                     mb = input.m[leaf_idx]
-                    K = input.smoothed_kernel
                     rho += _density_accumulation(reference_point, rb, mb, ha, K)
                 end
                 #########################################################
@@ -55,7 +55,6 @@
                     @inbounds begin
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
-                        K = input.smoothed_kernel
                         rho += _density_accumulation(reference_point, rb, mb, ha, K)
                     end
                     #########################################################
@@ -69,7 +68,6 @@
                     @inbounds begin
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
-                        K = input.smoothed_kernel
                         rho += _density_accumulation(reference_point, rb, mb, ha, K)
                     end
                     #########################################################
@@ -95,7 +93,8 @@ end
 
 @inline function _density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Prepare for interpolation
-    Ktyp = typeof(input.smoothed_kernel)
+    K = input.smoothed_kernel
+    Ktyp = typeof(K)
     Kvalid = KernelFunctionValid(Ktyp, T)
 
     # Initialize counter
@@ -128,7 +127,6 @@ end
                 @inbounds begin
                     rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                     mb = input.m[leaf_idx]
-                    K = input.smoothed_kernel
                     rho += _density_accumulation(reference_point, rb, mb, hb, K)
                 end
                 #########################################################
@@ -155,7 +153,6 @@ end
                     @inbounds begin
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
-                        K = input.smoothed_kernel
                         rho += _density_accumulation(reference_point, rb, mb, hb, K)
                     end
                     #########################################################
@@ -172,7 +169,6 @@ end
                     @inbounds begin
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
-                        K = input.smoothed_kernel
                         rho += _density_accumulation(reference_point, rb, mb, hb, K)
                     end
                     #########################################################
@@ -198,7 +194,8 @@ end
 
 @inline function _density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, :: Type{itpSymmetric}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Prepare for interpolation
-    Ktyp = typeof(input.smoothed_kernel)
+    K = input.smoothed_kernel
+    Ktyp = typeof(K)
     Kvalid = KernelFunctionValid(Ktyp, T)
 
     # Initialize counter
@@ -231,7 +228,6 @@ end
                 @inbounds begin
                     rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                     mb = input.m[leaf_idx]
-                    K = input.smoothed_kernel
                     rho += _density_accumulation(reference_point, rb, mb, ha, hb, K)
                 end
                 #########################################################
@@ -258,7 +254,6 @@ end
                     @inbounds begin
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
-                        K = input.smoothed_kernel
                         rho += _density_accumulation(reference_point, rb, mb, ha, hb, K)
                     end
                     #########################################################
@@ -275,7 +270,6 @@ end
                     @inbounds begin
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
-                        K = input.smoothed_kernel
                         rho += _density_accumulation(reference_point, rb, mb, ha, hb, K)
                     end
                     #########################################################
@@ -299,9 +293,10 @@ end
     return rho
 end
 
-@inline function _number_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: Type{itpGather} = itpGather) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _number_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, :: Type{itpGather}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Prepare for interpolation
-    Ktyp = typeof(input.smoothed_kernel)
+    K = input.smoothed_kernel
+    Ktyp = typeof(K)
     Kvalid = KernelFunctionValid(Ktyp, T)
 
     # Initialize counter
@@ -333,7 +328,6 @@ end
                 ########### Found a neighbor, do accumulation ###########
                 @inbounds begin
                     rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
-                    K = input.smoothed_kernel
                     n += _number_density_accumulation(reference_point, rb, ha, K)
                 end
                 #########################################################
@@ -354,7 +348,6 @@ end
                     ########### Found a neighbor, do accumulation ###########
                     @inbounds begin
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
-                        K = input.smoothed_kernel
                         n += _number_density_accumulation(reference_point, rb, ha, K)
                     end
                     #########################################################
@@ -367,7 +360,6 @@ end
                     ########### Found a neighbor, do accumulation ###########
                     @inbounds begin
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
-                        K = input.smoothed_kernel
                         n += _number_density_accumulation(reference_point, rb, ha, K)
                     end
                     #########################################################
@@ -391,9 +383,10 @@ end
     return n
 end
 
-@inline function _number_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _number_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Prepare for interpolation
-    Ktyp = typeof(input.smoothed_kernel)
+    K = input.smoothed_kernel
+    Ktyp = typeof(K)
     Kvalid = KernelFunctionValid(Ktyp, T)
 
     # Initialize counter
@@ -425,7 +418,6 @@ end
                 ########### Found a neighbor, do accumulation ###########
                 @inbounds begin
                     rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
-                    K = input.smoothed_kernel
                     n += _number_density_accumulation(reference_point, rb, hb, K)
                 end
                 #########################################################
@@ -451,7 +443,6 @@ end
                     ########### Found a neighbor, do accumulation ###########
                     @inbounds begin
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
-                        K = input.smoothed_kernel
                         n += _number_density_accumulation(reference_point, rb, hb, K)
                     end
                     #########################################################
@@ -467,7 +458,6 @@ end
                     ########### Found a neighbor, do accumulation ###########
                     @inbounds begin
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
-                        K = input.smoothed_kernel
                         n += _number_density_accumulation(reference_point, rb, hb, K)
                     end
                     #########################################################
@@ -491,9 +481,10 @@ end
     return n
 end
 
-@inline function _number_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: Type{itpSymmetric}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _number_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, :: Type{itpSymmetric}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Prepare for interpolation
-    Ktyp = typeof(input.smoothed_kernel)
+    K = input.smoothed_kernel
+    Ktyp = typeof(K)
     Kvalid = KernelFunctionValid(Ktyp, T)
 
     # Initialize counter
@@ -526,7 +517,6 @@ end
                 ########### Found a neighbor, do accumulation ###########
                 @inbounds begin
                     rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
-                    K = input.smoothed_kernel
                     n += _number_density_accumulation(reference_point, rb, ha, hb, K)
                 end
                 #########################################################
@@ -551,7 +541,6 @@ end
                     ########### Found a neighbor, do accumulation ###########
                     @inbounds begin
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
-                        K = input.smoothed_kernel
                         n += _number_density_accumulation(reference_point, rb, ha, hb, K)
                     end
                     #########################################################
@@ -567,7 +556,6 @@ end
                     ########### Found a neighbor, do accumulation ###########
                     @inbounds begin
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
-                        K = input.smoothed_kernel
                         n += _number_density_accumulation(reference_point, rb, ha, hb, K)
                     end
                     #########################################################
@@ -591,9 +579,10 @@ end
     return n
 end
 
-@inline function _quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, column_idx :: Int64, ShepardNormalization :: Bool, itp_strategy :: Type{itpGather} = itpGather) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, column_idx :: Int, ShepardNormalization :: Bool, :: Type{itpGather} = itpGather) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Prepare for interpolation
-    Ktyp = typeof(input.smoothed_kernel)
+    K = input.smoothed_kernel
+    Ktyp = typeof(K)
     Kvalid = KernelFunctionValid(Ktyp, T)
 
     # Initialize counter
@@ -629,7 +618,6 @@ end
                     mb = input.m[leaf_idx]
                     ρb = input.ρ[leaf_idx]
                     Ab = input.quant[column_idx][leaf_idx]
-                    K = input.smoothed_kernel
                     A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, K)
                     mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                 end
@@ -658,7 +646,6 @@ end
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
                         Ab = input.quant[column_idx][leaf_idx]
-                        K = input.smoothed_kernel
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, K)
                         mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                     end
@@ -675,7 +662,6 @@ end
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
                         Ab = input.quant[column_idx][leaf_idx]
-                        K = input.smoothed_kernel
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, K)
                         mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                     end
@@ -704,8 +690,9 @@ end
     return A
 end
 
-@inline function _quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, column_idx :: Int64, ShepardNormalization :: Bool, itp_strategy :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
-    Ktyp = typeof(input.smoothed_kernel)
+@inline function _quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, column_idx :: Int, ShepardNormalization :: Bool, :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    K = input.smoothed_kernel
+    Ktyp = typeof(K)
     Kvalid = KernelFunctionValid(Ktyp, T)
 
     A :: T = zero(T)
@@ -737,7 +724,6 @@ end
                     mb = input.m[leaf_idx]
                     ρb = input.ρ[leaf_idx]
                     Ab = input.quant[column_idx][leaf_idx]
-                    K = input.smoothed_kernel
                     A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, hb, K)
                     mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                 end
@@ -767,7 +753,6 @@ end
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
                         Ab = input.quant[column_idx][leaf_idx]
-                        K = input.smoothed_kernel
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, hb, K)
                         mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                     end
@@ -785,7 +770,6 @@ end
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
                         Ab = input.quant[column_idx][leaf_idx]
-                        K = input.smoothed_kernel
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, hb, K)
                         mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                     end
@@ -809,8 +793,9 @@ end
     return A
 end
 
-@inline function _quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, column_idx :: Int64, ShepardNormalization :: Bool, itp_strategy :: Type{itpSymmetric}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
-    Ktyp = typeof(input.smoothed_kernel)
+@inline function _quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, column_idx :: Int, ShepardNormalization :: Bool, :: Type{itpSymmetric}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+    K = input.smoothed_kernel
+    Ktyp = typeof(K)
     Kvalid = KernelFunctionValid(Ktyp, T)
 
     A :: T = zero(T)
@@ -842,7 +827,6 @@ end
                     mb = input.m[leaf_idx]
                     ρb = input.ρ[leaf_idx]
                     Ab = input.quant[column_idx][leaf_idx]
-                    K = input.smoothed_kernel
                     A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, hb, K)
                     mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                 end
@@ -872,7 +856,6 @@ end
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
                         Ab = input.quant[column_idx][leaf_idx]
-                        K = input.smoothed_kernel
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, hb, K)
                         mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                     end
@@ -890,7 +873,6 @@ end
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
                         Ab = input.quant[column_idx][leaf_idx]
-                        K = input.smoothed_kernel
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, hb, K)
                         mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                     end
@@ -915,10 +897,11 @@ end
 end
 
 ## Muti-columns intepolation
-@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, itp_strategy :: Type{itpGather} = itpGather) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
+@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, :: Type{itpGather} = itpGather) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
     @assert length(output) == M "Length of `output` must match the requested columns."
     # Prepare for interpolation
-    Ktyp = typeof(input.smoothed_kernel)
+    K = input.smoothed_kernel
+    Ktyp = typeof(K)
     Kvalid = KernelFunctionValid(Ktyp, T)
 
     # Initialize counter
@@ -953,7 +936,6 @@ end
                     rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                     mb = input.m[leaf_idx]
                     ρb = input.ρ[leaf_idx]
-                    K = input.smoothed_kernel
                     mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                     @inbounds for j in 1:M
                         column_idx = columns[j]
@@ -987,7 +969,6 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
-                        K = input.smoothed_kernel
                         mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                         @inbounds for j in 1:M
                             column_idx = columns[j]
@@ -1007,7 +988,6 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
-                        K = input.smoothed_kernel
                         mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                         @inbounds for j in 1:M
                             column_idx = columns[j]
@@ -1042,9 +1022,10 @@ end
     return nothing
 end
 
-@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, itp_strategy :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
+@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
     @assert length(output) == M
-    Ktyp = typeof(input.smoothed_kernel)
+    K = input.smoothed_kernel
+    Ktyp = typeof(K)
     Kvalid = KernelFunctionValid(Ktyp, T)
 
     mWlρ :: T = zero(T)
@@ -1075,7 +1056,6 @@ end
                     rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                     mb = input.m[leaf_idx]
                     ρb = input.ρ[leaf_idx]
-                    K = input.smoothed_kernel
                     mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                     @inbounds for j in 1:M
                         column_idx = columns[j]
@@ -1110,7 +1090,6 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
-                        K = input.smoothed_kernel
                         mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                         @inbounds for j in 1:M
                             column_idx = columns[j]
@@ -1131,7 +1110,6 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
-                        K = input.smoothed_kernel
                         mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                         @inbounds for j in 1:M
                             column_idx = columns[j]
@@ -1161,9 +1139,10 @@ end
     return nothing
 end
 
-@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, itp_strategy :: Type{itpSymmetric}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
+@inline function _quantities_interpolate_kernel!(output :: O, input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, :: Type{itpSymmetric}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, O<:AbstractVector{T}, M}
     @assert length(output) == M
-    Ktyp = typeof(input.smoothed_kernel)
+    K = input.smoothed_kernel
+    Ktyp = typeof(K)
     Kvalid = KernelFunctionValid(Ktyp, T)
 
     mWlρ :: T = zero(T)
@@ -1194,7 +1173,6 @@ end
                     rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                     mb = input.m[leaf_idx]
                     ρb = input.ρ[leaf_idx]
-                    K = input.smoothed_kernel
                     mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                     @inbounds for j in 1:M
                         column_idx = columns[j]
@@ -1229,7 +1207,6 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
-                        K = input.smoothed_kernel
                         mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                         @inbounds for j in 1:M
                             column_idx = columns[j]
@@ -1250,7 +1227,6 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
-                        K = input.smoothed_kernel
                         mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                         @inbounds for j in 1:M
                             column_idx = columns[j]
@@ -1289,9 +1265,10 @@ end
     return nothing
 end
 
-@inline function _quantities_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, itp_strategy :: Type{itpGather} = itpGather) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, M}
+@inline function _quantities_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, :: Type{itpGather} = itpGather) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, M}
     # Prepare for interpolation
-    Ktyp = typeof(input.smoothed_kernel)
+    K = input.smoothed_kernel
+    Ktyp = typeof(K)
     Kvalid = KernelFunctionValid(Ktyp, T)
 
     # Initialize counter
@@ -1326,7 +1303,6 @@ end
                     rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                     mb = input.m[leaf_idx]
                     ρb = input.ρ[leaf_idx]
-                    K = input.smoothed_kernel
                     mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                     @inbounds for j in 1:M
                         column_idx = columns[j]
@@ -1360,7 +1336,6 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
-                        K = input.smoothed_kernel
                         mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                         @inbounds for j in 1:M
                             column_idx = columns[j]
@@ -1380,7 +1355,6 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
-                        K = input.smoothed_kernel
                         mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                         @inbounds for j in 1:M
                             column_idx = columns[j]
@@ -1415,8 +1389,9 @@ end
     return output
 end
 
-@inline function _quantities_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, itp_strategy :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, M}
-    Ktyp = typeof(input.smoothed_kernel)
+@inline function _quantities_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, M}
+    K = input.smoothed_kernel
+    Ktyp = typeof(K)
     Kvalid = KernelFunctionValid(Ktyp, T)
 
     mWlρ :: T = zero(T)
@@ -1447,7 +1422,6 @@ end
                     rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                     mb = input.m[leaf_idx]
                     ρb = input.ρ[leaf_idx]
-                    K = input.smoothed_kernel
                     mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                     @inbounds for j in 1:M
                         column_idx = columns[j]
@@ -1482,7 +1456,6 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
-                        K = input.smoothed_kernel
                         mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                         @inbounds for j in 1:M
                             column_idx = columns[j]
@@ -1503,7 +1476,6 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
-                        K = input.smoothed_kernel
                         mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                         @inbounds for j in 1:M
                             column_idx = columns[j]
@@ -1533,8 +1505,9 @@ end
     return output
 end
 
-@inline function _quantities_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, itp_strategy :: Type{itpSymmetric}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, M}
-    Ktyp = typeof(input.smoothed_kernel)
+@inline function _quantities_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, :: Type{itpSymmetric}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, M}
+    K = input.smoothed_kernel
+    Ktyp = typeof(K)
     Kvalid = KernelFunctionValid(Ktyp, T)
 
     mWlρ :: T = zero(T)
@@ -1565,7 +1538,6 @@ end
                     rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                     mb = input.m[leaf_idx]
                     ρb = input.ρ[leaf_idx]
-                    K = input.smoothed_kernel
                     mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                     @inbounds for j in 1:M
                         column_idx = columns[j]
@@ -1600,7 +1572,6 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
-                        K = input.smoothed_kernel
                         mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                         @inbounds for j in 1:M
                             column_idx = columns[j]
@@ -1621,7 +1592,6 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
-                        K = input.smoothed_kernel
                         mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                         @inbounds for j in 1:M
                             column_idx = columns[j]

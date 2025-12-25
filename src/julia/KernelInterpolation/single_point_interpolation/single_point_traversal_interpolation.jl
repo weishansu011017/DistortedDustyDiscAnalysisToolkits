@@ -420,7 +420,8 @@ summation and optional Shepard normalization.
   in the same order as specified in `columns`.
 """
 function LOS_quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, ShepardNormalization :: NTuple{NCOLUMN, Bool} = ntuple(_ -> true, NCOLUMN), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy}
-    return _LOS_quantities_interpolate_kernel(input, reference_point, ha, LBVH, ShepardNormalization , itp_strategy)
+  columns = ntuple(identity, Val(NCOLUMN))
+  return _LOS_quantities_interpolate_kernel(input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
 end
 
 """
@@ -465,7 +466,7 @@ the LOS-aware SPH summation with optional Shepard normalization.
   in the same order as specified in `columns`.
 """
 function LOS_quantities_interpolate(input::InterpolationInput{T, V, K, NCOLUMN}, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool} = ntuple(_ -> true, M), itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel, ITPSTRATEGY <: AbstractInterpolationStrategy, M}
-    return _quantities_interpolate_kernel(input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
+  return _LOS_quantities_interpolate_kernel(input, reference_point, ha, LBVH, columns, ShepardNormalization, itp_strategy)
 end
 
 """
