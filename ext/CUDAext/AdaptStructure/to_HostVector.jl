@@ -18,6 +18,7 @@ function PhantomRevealer.to_HostVector(enc :: MortonEncoding{D, TF, TI, VF, VI})
         Vector{TI}(enc.order),
         Vector{TI}(enc.codes),
         ntuple(i -> Vector{TF}(enc.coord[i]), D),
+        Vector{TF}(enc.h)
     )
 end
 

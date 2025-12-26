@@ -447,6 +447,115 @@ A 2-tuple `(best_idx, best_dist2)`:
     return best_idx, best_dist2
 end
 
+"""
+    LBVH_find_nearest_h(LBVH::LinearBVH{D,T}, point::NTuple{D,T}) where {D,T<:AbstractFloat}
+
+Return the smoothing length `h` of the nearest particle (leaf) to `point` in a
+`LinearBVH`.
+
+This routine traverses the BVH using point-to-AABB squared distances for pruning.
+With the current LBVH construction where each leaf AABB is degenerate
+(`leaf_min == leaf_max == particle_position`), the leaf distance reduces to the
+squared Euclidean distance between `point` and the particle position. The
+returned value is `LBVH.enc.h[best_idx]`, where `best_idx` is the closest leaf.
+
+# Parameters
+- `LBVH::LinearBVH{D,T}`  
+  Bounding volume hierarchy built from Morton-sorted particle coordinates and
+  associated per-particle smoothing lengths `LBVH.enc.h`.
+- `point::NTuple{D,T}`  
+  Query point in the same coordinate space as the particles.
+
+# Keyword Arguments
+- None.
+
+# Returns
+- `h::T`  
+  Smoothing length of the nearest particle (leaf) to `point`.
+
+"""
+@inline function LBVH_find_nearest_h(LBVH::LinearBVH{D,T}, point::NTuple{D,T}) where {D,T<:AbstractFloat}
+    # AABB references
+    node_min = LBVH.node_aabb.min
+    node_max = LBVH.node_aabb.max
+    leaf_min = LBVH.leaf_aabb.min
+    leaf_max = LBVH.leaf_aabb.max
+
+    # BVH tree topology
+    L  = LBVH.brt.left_child
+    R  = LBVH.brt.right_child
+    LL = LBVH.brt.is_leaf_left
+    RR = LBVH.brt.is_leaf_right
+    parent = LBVH.brt.node_parent
+    root = LBVH.root
+
+    # Smoothed radius
+    smoothed_radius = LBVH.enc.h
+
+    # If degenerate (no internal nodes)
+    if root == 0
+        nleaf = length(leaf_min[1])
+        best_idx = 0
+        best_dist2 = typemax(T)
+        @inbounds for leaf_idx in 1:nleaf
+            d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, point, leaf_idx)
+            if d2 < best_dist2
+                best_dist2 = d2
+                best_idx = leaf_idx
+            end
+        end
+        best_h = smoothed_radius[best_idx]
+        return best_h
+    end
+
+    # Initial best distance set to +∞
+    best_idx = 0
+    best_dist2 = typemax(T)
+
+    # Traverse with "manual stackless BVH" (your existing mechanism)
+    node = root
+    while node != 0
+        # Bounding box distance test
+        d2 = _dist2_to_node_aabb(node_min, node_max, point, node)
+
+        if d2 > best_dist2
+            # Too far → prune subtree
+            node = _next_internal_node(node, L, R, LL, RR, parent)
+            continue
+        end
+
+        @inbounds if LL[node]
+            leaf_idx = L[node]
+            d2leaf = _dist2_to_leaf_aabb(leaf_min, leaf_max, point, leaf_idx)
+            if d2leaf < best_dist2
+                best_dist2 = d2leaf
+                best_idx = leaf_idx
+            end
+        elseif L[node] != 0
+            # recurse into left node
+            node = L[node]
+            continue
+        end
+
+        @inbounds if RR[node]
+            leaf_idx = R[node]
+            d2leaf = _dist2_to_leaf_aabb(leaf_min, leaf_max, point, leaf_idx)
+            if d2leaf < best_dist2
+                best_dist2 = d2leaf
+                best_idx = leaf_idx
+            end
+        elseif R[node] != 0
+            node = R[node]
+            continue
+        end
+
+        # Finished both children, climb back
+        node = _next_internal_node(node, L, R, LL, RR, parent)
+    end
+
+    best_h = smoothed_radius[best_idx]
+    return best_h
+end
 
 """
     LBVH_query!(pool, lbvh, point, radius)

@@ -18,6 +18,7 @@ function PhantomRevealer.to_MtlVector(enc :: MortonEncoding{D, TF, TI, VF, VI}) 
         MtlVector{TI}(enc.order),
         MtlVector{TI}(enc.codes),
         ntuple(i -> MtlVector{Float32}(enc.coord[i]), D),
+        MtlVector{Float32}(enc.h)
     )
 end
 

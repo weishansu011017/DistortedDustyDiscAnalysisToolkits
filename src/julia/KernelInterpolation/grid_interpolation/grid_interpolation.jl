@@ -68,8 +68,7 @@ end
     point = grids[1].coor[i]
     
     # Particles searching
-    ha_nearest_idx, _ = LBVH_find_nearest(LBVH, point)
-    ha = input.h[ha_nearest_idx]
+    ha = LBVH_find_nearest_h(LBVH, point)
 
     # Interpolation
     out_idx = 1        

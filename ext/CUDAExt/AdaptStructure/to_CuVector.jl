@@ -18,6 +18,7 @@ function PhantomRevealer.to_CuVector(enc :: MortonEncoding{D, TF, TI, VF, VI}) w
         CuVector{TI}(enc.order),
         CuVector{TI}(enc.codes),
         ntuple(i -> CuVector{TF}(enc.coord[i]), D),
+        CuVector{Float32}(enc.h)
     )
 end
 
