@@ -271,7 +271,6 @@ end
 end
 
 ## Multi-column LOS interpolation
-
 @inline function _LOS_quantities_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, :: Type{itpGather} = itpGather) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, M}
     # Prepare for interpolation
     K = input.smoothed_kernel
@@ -279,8 +278,9 @@ end
     Kvalid = KernelFunctionValid(Ktyp, T)
 
     # Initialize counter
-    mWlρ :: T = zero(T)
     output :: MVector{M, T} = zero(MVector{M, T})
+    S1 :: T = zero(T)
+    S2 :: T = zero(T)
 
     # LBVH data
     node_min = LBVH.node_aabb.min
@@ -309,7 +309,9 @@ end
                     rb = (input.x[leaf_idx], input.y[leaf_idx])
                     mb = input.m[leaf_idx]
                     ρb = input.ρ[leaf_idx]
-                    mWlρ += _LOS_ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                    S1b = _LOS_ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                    S1 += S1b
+                    S2 += S1b * S1b
                     @inbounds for j in 1:M
                         column_idx = columns[j]
                         Ab = input.quant[column_idx][leaf_idx]
@@ -322,7 +324,7 @@ end
         # Shepard normalization
         @inbounds for j in 1:M
             if ShepardNormalization[j]
-                output[j] /= mWlρ
+                output[j] /= S1
             end
         end
         return output
@@ -342,7 +344,9 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
-                        mWlρ += _LOS_ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                        S1b = _LOS_ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                        S1 += S1b
+                        S2 += S1b * S1b
                         @inbounds for j in 1:M
                             column_idx = columns[j]
                             Ab = input.quant[column_idx][leaf_idx]
@@ -361,7 +365,9 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
-                        mWlρ += _LOS_ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                        S1b = _LOS_ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                        S1 += S1b
+                        S2 += S1b * S1b
                         @inbounds for j in 1:M
                             column_idx = columns[j]
                             Ab = input.quant[column_idx][leaf_idx]
@@ -389,7 +395,7 @@ end
     # Shepard normalization
     @inbounds for j in 1:M
         if ShepardNormalization[j]
-            output[j] /= mWlρ
+            output[j] /= S1
         end
     end
     return output
@@ -400,8 +406,9 @@ end
     Ktyp = typeof(K)
     Kvalid = KernelFunctionValid(Ktyp, T)
 
-    mWlρ :: T = zero(T)
     output :: MVector{M, T} = zero(MVector{M, T})
+    S1 :: T = zero(T)
+    S2 :: T = zero(T)
 
     node_min = LBVH.node_aabb.min
     node_max = LBVH.node_aabb.max
@@ -428,7 +435,9 @@ end
                     rb = (input.x[leaf_idx], input.y[leaf_idx])
                     mb = input.m[leaf_idx]
                     ρb = input.ρ[leaf_idx]
-                    mWlρ += _LOS_ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
+                    S1b = _LOS_ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
+                    S1 += S1b
+                    S2 += S1b * S1b
                     @inbounds for j in 1:M
                         column_idx = columns[j]
                         Ab = input.quant[column_idx][leaf_idx]
@@ -439,7 +448,7 @@ end
         end
         @inbounds for j in 1:M
             if ShepardNormalization[j]
-                output[j] /= mWlρ
+                output[j] /= S1
             end
         end
         return output
@@ -462,7 +471,9 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
-                        mWlρ += _LOS_ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
+                        S1b = _LOS_ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
+                        S1 += S1b
+                        S2 += S1b * S1b
                         @inbounds for j in 1:M
                             column_idx = columns[j]
                             Ab = input.quant[column_idx][leaf_idx]
@@ -482,7 +493,9 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
-                        mWlρ += _LOS_ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
+                        S1b = _LOS_ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
+                        S1 += S1b
+                        S2 += S1b * S1b
                         @inbounds for j in 1:M
                             column_idx = columns[j]
                             Ab = input.quant[column_idx][leaf_idx]
@@ -509,7 +522,7 @@ end
 
     @inbounds for j in 1:M
         if ShepardNormalization[j]
-            output[j] /= mWlρ
+            output[j] /= S1
         end
     end
     return output
@@ -520,8 +533,9 @@ end
     Ktyp = typeof(K)
     Kvalid = KernelFunctionValid(Ktyp, T)
 
-    mWlρ :: T = zero(T)
     output :: MVector{M, T} = zero(MVector{M, T})
+    S1 :: T = zero(T)
+    S2 :: T = zero(T)
 
     node_min = LBVH.node_aabb.min
     node_max = LBVH.node_aabb.max
@@ -549,7 +563,9 @@ end
                     rb = (input.x[leaf_idx], input.y[leaf_idx])
                     mb = input.m[leaf_idx]
                     ρb = input.ρ[leaf_idx]
-                    mWlρ += _LOS_ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
+                    S1b = _LOS_ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
+                    S1 += S1b
+                    S2 += S1b * S1b
                     @inbounds for j in 1:M
                         column_idx = columns[j]
                         Ab = input.quant[column_idx][leaf_idx]
@@ -560,7 +576,7 @@ end
         end
         @inbounds for j in 1:M
             if ShepardNormalization[j]
-                output[j] /= mWlρ
+                output[j] /= S1
             end
         end
         return output
@@ -584,7 +600,9 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
-                        mWlρ += _LOS_ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
+                        S1b = _LOS_ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
+                        S1 += S1b
+                        S2 += S1b * S1b
                         @inbounds for j in 1:M
                             column_idx = columns[j]
                             Ab = input.quant[column_idx][leaf_idx]
@@ -605,7 +623,9 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
-                        mWlρ += _LOS_ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
+                        S1b = _LOS_ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
+                        S1 += S1b
+                        S2 += S1b * S1b
                         @inbounds for j in 1:M
                             column_idx = columns[j]
                             Ab = input.quant[column_idx][leaf_idx]
@@ -632,7 +652,7 @@ end
 
     @inbounds for j in 1:M
         if ShepardNormalization[j]
-            output[j] /= mWlρ
+            output[j] /= S1
         end
     end
     return output

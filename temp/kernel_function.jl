@@ -761,7 +761,7 @@ Return the **dimension-less line-of-sight integral**
 
     I(q_xy) = ∫_{-R}^{R} Ẇ( √(q_xy² + q_z²) ) dq_z        (1)
 
-already multiplied by the normalisation constant **Cᴰ** that belongs to
+already multiplied by the normalization constant **Cᴰ** that belongs to
 the *original* spatial dimension **D**.
 
 * `D` is the kernel’s original dimension (before the LOS integration).  

@@ -41,7 +41,7 @@ A tuple with:
    The ordered list of output quantity names.
 
 4. `catalog_consice::InterpolationCatalogConcise`  
-   A compact version of the catalog containing only slot and normalisation
+   A compact version of the catalog containing only slot and normalization
    information and suitable for efficient CPU/GPU execution.
 
 """
@@ -74,7 +74,7 @@ end
     out_idx = 1        
     ## Scalar interpolation
     if N > 0
-        scalars = quantities_interpolate(input, point, ha, LBVH, catalog_consice.scalar_slots, catalog_consice.scalar_snormalization, itp_strategy)
+        scalars = _quantities_interpolate_kernel(input, point, ha, LBVH, catalog_consice.scalar_slots, catalog_consice.scalar_snormalization, itp_strategy)
         @inbounds for j in 1:N
             grids[out_idx].grid[i] = scalars[j]
             out_idx += 1
@@ -84,7 +84,7 @@ end
     ## Gradients interpolation
     for j in 1:G
         slot = catalog_consice.grad_slots[j]
-        grad_quant = slot == 0 ? gradient_density(input, point, ha, LBVH, itp_strategy) : gradient_quantity_interpolate(input, point, ha, LBVH, slot, itp_strategy)
+        grad_quant = slot == 0 ? _gradient_density_kernel(input, point, ha, LBVH, itp_strategy) : _gradient_quantity_interpolate_kernel(input, point, ha, LBVH, slot, itp_strategy)
         @inbounds for d in 1:D
             grids[out_idx].grid[i] = grad_quant[d]
             out_idx += 1
@@ -95,7 +95,7 @@ end
     for j in 1:Div
         slot = catalog_consice.div_slots[j]
         ax, ay, az = slot
-        div_quant = divergence_quantity_interpolate(input, point, ha, LBVH, ax, ay, az, itp_strategy)
+        div_quant = _divergence_quantity_interpolate_kernel(input, point, ha, LBVH, ax, ay, az, itp_strategy)
         grids[out_idx].grid[i] = div_quant
         out_idx += 1
     end
@@ -104,7 +104,7 @@ end
     for j in 1:C
         slot = catalog_consice.curl_slots[j]
         ax, ay, az = slot
-        curl_quant = curl_quantity_interpolate(input, point, ha, LBVH, ax, ay, az, itp_strategy)
+        curl_quant = _curl_quantity_interpolate_kernel(input, point, ha, LBVH, ax, ay, az, itp_strategy)
         @inbounds for d in 1:D
             grids[out_idx].grid[i] = curl_quant[d]
             out_idx += 1

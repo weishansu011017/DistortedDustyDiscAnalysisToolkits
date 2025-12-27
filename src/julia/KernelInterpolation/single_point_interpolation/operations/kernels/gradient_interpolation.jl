@@ -487,8 +487,9 @@ end
     ∇Ayb :: T = zero(T)
     ∇Azb :: T = zero(T)
 
-    mWlρ :: T = zero(T)
     A :: T = zero(T)
+    S1 :: T = zero(T)
+    S2 :: T = zero(T)
 
     # LBVH data
     node_min = LBVH.node_aabb.min
@@ -528,17 +529,19 @@ end
                     ∇Ayb += ∇AybW
                     ∇Azb += ∇AzbW
                     A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, K)
-                    mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                    S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                    S1 += S1b
+                    S2 += S1b * S1b
                 end
                 #########################################################
             end
         end
-        if iszero(mWlρ)
+        if iszero(S1)
             return (T(NaN), T(NaN), T(NaN))
         end
 
         # Shepard normalization
-        A /= mWlρ
+        A /= S1
 
         # Construct gradient
         ∇Axb *= A
@@ -576,7 +579,9 @@ end
                         ∇Ayb += ∇AybW
                         ∇Azb += ∇AzbW
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, K)
-                        mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                        S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                        S1 += S1b
+                        S2 += S1b * S1b
                     end
                     #########################################################
                 end
@@ -600,7 +605,9 @@ end
                         ∇Ayb += ∇AybW
                         ∇Azb += ∇AzbW
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, K)
-                        mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                        S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                        S1 += S1b
+                        S2 += S1b * S1b
                     end
                     #########################################################
                 end
@@ -620,12 +627,12 @@ end
             node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         end
     end
-    if iszero(mWlρ)
+    if iszero(S1)
         return (T(NaN), T(NaN), T(NaN))
     end
 
     # Shepard normalization
-    A /= mWlρ
+    A /= S1
 
     # Construct gradient
     ∇Axb *= A
@@ -653,8 +660,9 @@ end
     ∇Ayb :: T = zero(T)
     ∇Azb :: T = zero(T)
 
-    mWlρ :: T = zero(T)
     A :: T = zero(T)
+    S1 :: T = zero(T)
+    S2 :: T = zero(T)
 
     # LBVH data
     node_min = LBVH.node_aabb.min
@@ -694,17 +702,19 @@ end
                     ∇Ayb += ∇AybW
                     ∇Azb += ∇AzbW
                     A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, hb, K)
-                    mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
+                    S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
+                    S1 += S1b
+                    S2 += S1b * S1b
                 end
                 #########################################################
             end
         end
-        if iszero(mWlρ)
+        if iszero(S1)
             return (T(NaN), T(NaN), T(NaN))
         end
 
         # Shepard normalization
-        A /= mWlρ
+        A /= S1
 
         # Construct gradient
         ∇Axb *= A
@@ -747,7 +757,9 @@ end
                         ∇Ayb += ∇AybW
                         ∇Azb += ∇AzbW
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, hb, K)
-                        mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
+                        S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
+                        S1 += S1b
+                        S2 += S1b * S1b
                     end
                     #########################################################
                 end
@@ -774,7 +786,9 @@ end
                         ∇Ayb += ∇AybW
                         ∇Azb += ∇AzbW
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, hb, K)
-                        mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
+                        S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
+                        S1 += S1b
+                        S2 += S1b * S1b
                     end
                     #########################################################
                 end
@@ -794,12 +808,12 @@ end
             node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         end
     end
-    if iszero(mWlρ)
+    if iszero(S1)
         return (T(NaN), T(NaN), T(NaN))
     end
 
     # Shepard normalization
-    A /= mWlρ
+    A /= S1
 
     # Construct gradient
     ∇Axb *= A
@@ -827,8 +841,9 @@ end
     ∇Ayb :: T = zero(T)
     ∇Azb :: T = zero(T)
 
-    mWlρ :: T = zero(T)
     A :: T = zero(T)
+    S1 :: T = zero(T)
+    S2 :: T = zero(T)
 
     # LBVH data
     node_min = LBVH.node_aabb.min
@@ -868,17 +883,19 @@ end
                     ∇Ayb += ∇AybW
                     ∇Azb += ∇AzbW
                     A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, hb, K)
-                    mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
+                    S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
+                    S1 += S1b
+                    S2 += S1b * S1b
                 end
                 #########################################################
             end
         end
-        if iszero(mWlρ)
+        if iszero(S1)
             return (T(NaN), T(NaN), T(NaN))
         end
 
         # Shepard normalization
-        A /= mWlρ
+        A /= S1
 
         # Construct gradient
         ∇Axb *= A
@@ -921,7 +938,9 @@ end
                         ∇Ayb += ∇AybW
                         ∇Azb += ∇AzbW
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, hb, K)
-                        mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
+                        S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
+                        S1 += S1b
+                        S2 += S1b * S1b
                     end
                     #########################################################
                 end
@@ -948,7 +967,9 @@ end
                         ∇Ayb += ∇AybW
                         ∇Azb += ∇AzbW
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, hb, K)
-                        mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
+                        S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
+                        S1 += S1b
+                        S2 += S1b * S1b
                     end
                     #########################################################
                 end
@@ -968,12 +989,12 @@ end
             node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         end
     end
-    if iszero(mWlρ)
+    if iszero(S1)
         return (T(NaN), T(NaN), T(NaN))
     end
 
     # Shepard normalization
-    A /= mWlρ
+    A /= S1
 
     # Construct gradient
     ∇Axb *= A

@@ -1,15 +1,42 @@
 @inline function _general_quantity_interpolate(
-                        input::InterpolationInput{T, V, Ktyp, NCOLUMN},
+                        input::InterpolationInput{T, V, Ktyp},
                         reference_point::NTuple{3,T},
                         ha::T,
                         LBVH::LinearBVH,
                         catalog::InterpolationCatalogConcise{N,G,D,C},
-                        ::Type{itpGather}) where {N, G, D, C, NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, Ktype<:AbstractSPHKernel, ITPSTRATEGY<:AbstractInterpolationStrategy}
+                        ::Type{itpGather}) where {N, G, D, C, T<:AbstractFloat, V<:AbstractVector{T}, Ktype<:AbstractSPHKernel}
     # Prepare for interpolation
     K = input.smoothed_kernel
     Kvalid = KernelFunctionValid(Ktyp, T)
 
     # Initialize counter
+    ## Shepard Normalization
+    S1 :: T = zero(T)
+
+    ## Scalars
+    @static if N > 0
+        scalars :: MVector{N, T} = zero(MVector{N, T})
+    end
+
+    ## Gradients
+    @static if G > 0
+        gradients_f :: MVector{G, SVector{3,T}} = MVector{G, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), G))
+        gradients_b :: MVector{G, SVector{3,T}} = MVector{G, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), G))
+        gradients_scalars :: MVector{G, T} = zero(MVector{G, T})                                                # Scalars that is used for estimating gradients
+    end
+
+    ## Divergences
+    @static if D > 0
+        divergences :: MVector{D, T} = zero(MVector{D, T})     
+        divergences_scalars :: MVector{D, T} = zero(MVector{D, T})                                              # Scalars that is used for estimating divergnece
+    end
+
+    ## Curls
+    @static if C > 0
+        curls :: MVector{C, SVector{3,T}} = MVector{C, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), C))
+        curls_scalars :: MVector{C, T} = zero(MVector{C, T})                                                   # Scalars that is used for estimating curls
+    end
+
     ∇Axf :: T = zero(T)
     ∇Ayf :: T = zero(T)
     ∇Azf :: T = zero(T)
@@ -22,7 +49,7 @@
     ∇Ayb :: T = zero(T)
     ∇Azb :: T = zero(T)
 
-    mWlρ :: T = zero(T)
+    
     Ax :: T = zero(T)
     Ay :: T = zero(T)
     Az :: T = zero(T)
@@ -69,19 +96,21 @@
                     mlρ∂xW += mblρb∂xW
                     mlρ∂yW += mblρb∂yW
                     mlρ∂zW += mblρb∂zW
-                    mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                    S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                    S1 += S1b
+                    S2 += S1b * S1b
                 end
                 #########################################################
             end
         end
-        if iszero(mWlρ)
+        if iszero(S1)
             return (T(NaN), T(NaN), T(NaN))
         end
 
         # Shepard normalization
-        Ax /= mWlρ
-        Ay /= mWlρ
-        Az /= mWlρ
+        Ax /= S1
+        Ay /= S1
+        Az /= S1
 
         # Construct curl
         ∇Axb = Ay * mlρ∂zW - Az * mlρ∂yW
@@ -124,7 +153,9 @@
                         mlρ∂xW += mblρb∂xW
                         mlρ∂yW += mblρb∂yW
                         mlρ∂zW += mblρb∂zW
-                        mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                        S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                        S1 += S1b
+                        S2 += S1b * S1b
                     end
                     #########################################################
                 end
@@ -152,7 +183,9 @@
                         mlρ∂xW += mblρb∂xW
                         mlρ∂yW += mblρb∂yW
                         mlρ∂zW += mblρb∂zW
-                        mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                        S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                        S1 += S1b
+                        S2 += S1b * S1b
                     end
                     #########################################################
                 end
@@ -172,14 +205,14 @@
             node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         end
     end
-    if iszero(mWlρ)
+    if iszero(S1)
         return (T(NaN), T(NaN), T(NaN))
     end
 
     # Shepard normalization
-    Ax /= mWlρ
-    Ay /= mWlρ
-    Az /= mWlρ
+    Ax /= S1
+    Ay /= S1
+    Az /= S1
 
     # Construct curl
     ∇Axb = Ay * mlρ∂zW - Az * mlρ∂yW

@@ -54,10 +54,10 @@ end
 end
 
 """
-InterpolationCatalog(scalar_names, scalar_slots,
-                     grad_names,   grad_slots,
-                     div_names,    div_slots,
-                     curl_names,   curl_slots)
+    InterpolationCatalog(scalar_names, scalar_slots,
+                        grad_names,   grad_slots,
+                        div_names,    div_slots,
+                        curl_names,   curl_slots)
 
 Structured registry describing which physical quantities an interpolation
 routine should compute, together with their column locations in the underlying

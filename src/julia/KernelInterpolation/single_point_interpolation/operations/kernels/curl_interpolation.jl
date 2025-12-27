@@ -17,10 +17,11 @@
     ∇Ayb :: T = zero(T)
     ∇Azb :: T = zero(T)
 
-    mWlρ :: T = zero(T)
     Ax :: T = zero(T)
     Ay :: T = zero(T)
     Az :: T = zero(T)
+    S1 :: T = zero(T)
+    S2 :: T = zero(T)
 
     # LBVH data
     node_min = LBVH.node_aabb.min
@@ -64,19 +65,21 @@
                     mlρ∂xW += mblρb∂xW
                     mlρ∂yW += mblρb∂yW
                     mlρ∂zW += mblρb∂zW
-                    mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                    S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                    S1 += S1b
+                    S2 += S1b * S1b
                 end
                 #########################################################
             end
         end
-        if iszero(mWlρ)
+        if iszero(S1)
             return (T(NaN), T(NaN), T(NaN))
         end
 
         # Shepard normalization
-        Ax /= mWlρ
-        Ay /= mWlρ
-        Az /= mWlρ
+        Ax /= S1
+        Ay /= S1
+        Az /= S1
 
         # Construct curl
         ∇Axb = Ay * mlρ∂zW - Az * mlρ∂yW
@@ -119,7 +122,9 @@
                         mlρ∂xW += mblρb∂xW
                         mlρ∂yW += mblρb∂yW
                         mlρ∂zW += mblρb∂zW
-                        mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                        S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                        S1 += S1b
+                        S2 += S1b * S1b
                     end
                     #########################################################
                 end
@@ -147,7 +152,9 @@
                         mlρ∂xW += mblρb∂xW
                         mlρ∂yW += mblρb∂yW
                         mlρ∂zW += mblρb∂zW
-                        mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                        S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+                        S1 += S1b
+                        S2 += S1b * S1b
                     end
                     #########################################################
                 end
@@ -167,14 +174,14 @@
             node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         end
     end
-    if iszero(mWlρ)
+    if iszero(S1)
         return (T(NaN), T(NaN), T(NaN))
     end
 
     # Shepard normalization
-    Ax /= mWlρ
-    Ay /= mWlρ
-    Az /= mWlρ
+    Ax /= S1
+    Ay /= S1
+    Az /= S1
 
     # Construct curl
     ∇Axb = Ay * mlρ∂zW - Az * mlρ∂yW
@@ -208,11 +215,11 @@ end
     ∇Ayb :: T = zero(T)
     ∇Azb :: T = zero(T)
 
-    mWlρ :: T = zero(T)
     Ax :: T = zero(T)
     Ay :: T = zero(T)
     Az :: T = zero(T)
-
+    S1 :: T = zero(T)
+    S2 :: T = zero(T)
 
     # LBVH data
     node_min = LBVH.node_aabb.min
@@ -257,19 +264,21 @@ end
                     mlρ∂xW += mblρb∂xW
                     mlρ∂yW += mblρb∂yW
                     mlρ∂zW += mblρb∂zW
-                    mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
+                    S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
+                    S1 += S1b
+                    S2 += S1b * S1b
                 end
                 #########################################################
             end
         end
-        if iszero(mWlρ)
+        if iszero(S1)
             return (T(NaN), T(NaN), T(NaN))
         end
 
         # Shepard normalization
-        Ax /= mWlρ
-        Ay /= mWlρ
-        Az /= mWlρ
+        Ax /= S1
+        Ay /= S1
+        Az /= S1
 
         # Construct curl
         ∇Axb = Ay * mlρ∂zW - Az * mlρ∂yW
@@ -316,7 +325,9 @@ end
                         mlρ∂xW += mblρb∂xW
                         mlρ∂yW += mblρb∂yW
                         mlρ∂zW += mblρb∂zW
-                        mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
+                        S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
+                        S1 += S1b
+                        S2 += S1b * S1b
                     end
                     #########################################################
                 end
@@ -347,7 +358,9 @@ end
                         mlρ∂xW += mblρb∂xW
                         mlρ∂yW += mblρb∂yW
                         mlρ∂zW += mblρb∂zW
-                        mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
+                        S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
+                        S1 += S1b
+                        S2 += S1b * S1b
                     end
                     #########################################################
                 end
@@ -367,14 +380,14 @@ end
             node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         end
     end
-    if iszero(mWlρ)
+    if iszero(S1)
         return (T(NaN), T(NaN), T(NaN))
     end
 
     # Shepard normalization
-    Ax /= mWlρ
-    Ay /= mWlρ
-    Az /= mWlρ
+    Ax /= S1
+    Ay /= S1
+    Az /= S1
 
     # Construct curl
     ∇Axb = Ay * mlρ∂zW - Az * mlρ∂yW
@@ -407,11 +420,11 @@ end
     ∇Ayb :: T = zero(T)
     ∇Azb :: T = zero(T)
 
-    mWlρ :: T = zero(T)
     Ax :: T = zero(T)
     Ay :: T = zero(T)
     Az :: T = zero(T)
-
+    S1 :: T = zero(T)
+    S2 :: T = zero(T)
 
     # LBVH data
     node_min = LBVH.node_aabb.min
@@ -456,19 +469,21 @@ end
                     mlρ∂xW += mblρb∂xW
                     mlρ∂yW += mblρb∂yW
                     mlρ∂zW += mblρb∂zW
-                    mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
+                    S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
+                    S1 += S1b
+                    S2 += S1b * S1b
                 end
                 #########################################################
             end
         end
-        if iszero(mWlρ)
+        if iszero(S1)
             return (T(NaN), T(NaN), T(NaN))
         end
 
         # Shepard normalization
-        Ax /= mWlρ
-        Ay /= mWlρ
-        Az /= mWlρ
+        Ax /= S1
+        Ay /= S1
+        Az /= S1
 
         # Construct curl
         ∇Axb = Ay * mlρ∂zW - Az * mlρ∂yW
@@ -515,7 +530,9 @@ end
                         mlρ∂xW += mblρb∂xW
                         mlρ∂yW += mblρb∂yW
                         mlρ∂zW += mblρb∂zW
-                        mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
+                        S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
+                        S1 += S1b
+                        S2 += S1b * S1b
                     end
                     #########################################################
                 end
@@ -546,7 +563,9 @@ end
                         mlρ∂xW += mblρb∂xW
                         mlρ∂yW += mblρb∂yW
                         mlρ∂zW += mblρb∂zW
-                        mWlρ += _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
+                        S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
+                        S1 += S1b
+                        S2 += S1b * S1b
                     end
                     #########################################################
                 end
@@ -566,14 +585,14 @@ end
             node = NeighborSearch._next_internal_node(node, L, R, LL, RR, node_parent)
         end
     end
-    if iszero(mWlρ)
+    if iszero(S1)
         return (T(NaN), T(NaN), T(NaN))
     end
 
     # Shepard normalization
-    Ax /= mWlρ
-    Ay /= mWlρ
-    Az /= mWlρ
+    Ax /= S1
+    Ay /= S1
+    Az /= S1
 
     # Construct curl
     ∇Axb = Ay * mlρ∂zW - Az * mlρ∂yW
