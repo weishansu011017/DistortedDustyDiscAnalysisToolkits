@@ -21,7 +21,7 @@
     Ay :: T = zero(T)
     Az :: T = zero(T)
     S1 :: T = zero(T)
-    S2 :: T = zero(T)
+     
 
     # LBVH data
     node_min = LBVH.node_aabb.min
@@ -65,15 +65,16 @@
                     mlρ∂xW += mblρb∂xW
                     mlρ∂yW += mblρb∂yW
                     mlρ∂zW += mblρb∂zW
+                    
                     S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                     S1 += S1b
-                    S2 += S1b * S1b
+                     
                 end
                 #########################################################
             end
         end
         if iszero(S1)
-            return (T(NaN), T(NaN), T(NaN))
+            return (T(NaN), T(NaN), T(NaN)), NaN32
         end
 
         # Shepard normalization
@@ -91,7 +92,8 @@
         ∇Ay = -(∇Ayf - ∇Ayb)
         ∇Az = -(∇Azf - ∇Azb)
 
-        return (∇Ax, ∇Ay, ∇Az)
+         
+        return (∇Ax, ∇Ay, ∇Az) 
     end
 
     # Start traversal
@@ -122,9 +124,10 @@
                         mlρ∂xW += mblρb∂xW
                         mlρ∂yW += mblρb∂yW
                         mlρ∂zW += mblρb∂zW
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                     end
                     #########################################################
                 end
@@ -152,9 +155,10 @@
                         mlρ∂xW += mblρb∂xW
                         mlρ∂yW += mblρb∂yW
                         mlρ∂zW += mblρb∂zW
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                     end
                     #########################################################
                 end
@@ -175,7 +179,7 @@
         end
     end
     if iszero(S1)
-        return (T(NaN), T(NaN), T(NaN))
+        return (T(NaN), T(NaN), T(NaN)), NaN32
     end
 
     # Shepard normalization
@@ -193,10 +197,11 @@
     ∇Ay = -(∇Ayf - ∇Ayb)
     ∇Az = -(∇Azf - ∇Azb)
 
-    return (∇Ax, ∇Ay, ∇Az)
+     
+    return (∇Ax, ∇Ay, ∇Az) 
 end
 
-@inline function _curl_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, Ax_column_idx :: Int, Ay_column_idx :: Int, Az_column_idx :: Int, :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _curl_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, LBVH :: LinearBVH, Ax_column_idx :: Int, Ay_column_idx :: Int, Az_column_idx :: Int, :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Prepare for interpolation
     K = input.smoothed_kernel
     Ktyp = typeof(K)
@@ -219,7 +224,7 @@ end
     Ay :: T = zero(T)
     Az :: T = zero(T)
     S1 :: T = zero(T)
-    S2 :: T = zero(T)
+     
 
     # LBVH data
     node_min = LBVH.node_aabb.min
@@ -264,15 +269,16 @@ end
                     mlρ∂xW += mblρb∂xW
                     mlρ∂yW += mblρb∂yW
                     mlρ∂zW += mblρb∂zW
+                    
                     S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                     S1 += S1b
-                    S2 += S1b * S1b
+                     
                 end
                 #########################################################
             end
         end
         if iszero(S1)
-            return (T(NaN), T(NaN), T(NaN))
+            return (T(NaN), T(NaN), T(NaN)), NaN32
         end
 
         # Shepard normalization
@@ -289,7 +295,9 @@ end
         ∇Ax = -(∇Axf - ∇Axb)
         ∇Ay = -(∇Ayf - ∇Ayb)
         ∇Az = -(∇Azf - ∇Azb)
-        return (∇Ax, ∇Ay, ∇Az)
+
+         
+        return (∇Ax, ∇Ay, ∇Az) 
     end
 
     # Start traversal
@@ -325,9 +333,10 @@ end
                         mlρ∂xW += mblρb∂xW
                         mlρ∂yW += mblρb∂yW
                         mlρ∂zW += mblρb∂zW
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                     end
                     #########################################################
                 end
@@ -358,9 +367,10 @@ end
                         mlρ∂xW += mblρb∂xW
                         mlρ∂yW += mblρb∂yW
                         mlρ∂zW += mblρb∂zW
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                     end
                     #########################################################
                 end
@@ -381,7 +391,7 @@ end
         end
     end
     if iszero(S1)
-        return (T(NaN), T(NaN), T(NaN))
+        return (T(NaN), T(NaN), T(NaN)), NaN32
     end
 
     # Shepard normalization
@@ -398,7 +408,9 @@ end
     ∇Ax = -(∇Axf - ∇Axb)
     ∇Ay = -(∇Ayf - ∇Ayb)
     ∇Az = -(∇Azf - ∇Azb)
-    return (∇Ax, ∇Ay, ∇Az)
+    
+     
+    return (∇Ax, ∇Ay, ∇Az) 
 end
 
 @inline function _curl_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, Ax_column_idx :: Int, Ay_column_idx :: Int, Az_column_idx :: Int, :: Type{itpSymmetric}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
@@ -424,7 +436,7 @@ end
     Ay :: T = zero(T)
     Az :: T = zero(T)
     S1 :: T = zero(T)
-    S2 :: T = zero(T)
+     
 
     # LBVH data
     node_min = LBVH.node_aabb.min
@@ -469,15 +481,16 @@ end
                     mlρ∂xW += mblρb∂xW
                     mlρ∂yW += mblρb∂yW
                     mlρ∂zW += mblρb∂zW
+                    
                     S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                     S1 += S1b
-                    S2 += S1b * S1b
+                     
                 end
                 #########################################################
             end
         end
         if iszero(S1)
-            return (T(NaN), T(NaN), T(NaN))
+            return (T(NaN), T(NaN), T(NaN)), NaN32
         end
 
         # Shepard normalization
@@ -494,7 +507,9 @@ end
         ∇Ax = -(∇Axf - ∇Axb)
         ∇Ay = -(∇Ayf - ∇Ayb)
         ∇Az = -(∇Azf - ∇Azb)
-        return (∇Ax, ∇Ay, ∇Az)
+
+         
+        return (∇Ax, ∇Ay, ∇Az) 
     end
 
     # Start traversal
@@ -530,9 +545,10 @@ end
                         mlρ∂xW += mblρb∂xW
                         mlρ∂yW += mblρb∂yW
                         mlρ∂zW += mblρb∂zW
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                     end
                     #########################################################
                 end
@@ -563,9 +579,10 @@ end
                         mlρ∂xW += mblρb∂xW
                         mlρ∂yW += mblρb∂yW
                         mlρ∂zW += mblρb∂zW
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                     end
                     #########################################################
                 end
@@ -586,7 +603,7 @@ end
         end
     end
     if iszero(S1)
-        return (T(NaN), T(NaN), T(NaN))
+        return (T(NaN), T(NaN), T(NaN)), NaN32
     end
 
     # Shepard normalization
@@ -603,5 +620,7 @@ end
     ∇Ax = -(∇Axf - ∇Axb)
     ∇Ay = -(∇Ayf - ∇Ayb)
     ∇Az = -(∇Azf - ∇Azb)
-    return (∇Ax, ∇Ay, ∇Az)
+
+     
+    return (∇Ax, ∇Ay, ∇Az) 
 end

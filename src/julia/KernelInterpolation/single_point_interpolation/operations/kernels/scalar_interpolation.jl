@@ -91,7 +91,7 @@
     return rho
 end
 
-@inline function _density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, LBVH :: LinearBVH, :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Prepare for interpolation
     K = input.smoothed_kernel
     Ktyp = typeof(K)
@@ -383,7 +383,7 @@ end
     return n
 end
 
-@inline function _number_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _number_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, LBVH :: LinearBVH, :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Prepare for interpolation
     K = input.smoothed_kernel
     Ktyp = typeof(K)
@@ -588,7 +588,7 @@ end
     # Initialize counter
     A :: T = zero(T)
     S1 :: T = zero(T)
-    S2 :: T = zero(T)
+     
 
     # LBVH data
     node_min = LBVH.node_aabb.min
@@ -620,9 +620,10 @@ end
                     ρb = input.ρ[leaf_idx]
                     Ab = input.quant[column_idx][leaf_idx]
                     A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, K)
+                    
                     S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                     S1 += S1b
-                    S2 += S1b * S1b
+                     
                 end
                 #########################################################
             end
@@ -634,8 +635,8 @@ end
         if ShepardNormalization
             A /= S1
         end
-        R1 = Float32(S1 * S1 / S2)
-        return A, R1
+         
+        return A 
     end
 
     # Start traversal
@@ -654,9 +655,10 @@ end
                         ρb = input.ρ[leaf_idx]
                         Ab = input.quant[column_idx][leaf_idx]
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, K)
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                     end
                     #########################################################
                 end
@@ -672,9 +674,10 @@ end
                         ρb = input.ρ[leaf_idx]
                         Ab = input.quant[column_idx][leaf_idx]
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, K)
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                     end
                     #########################################################
                 end
@@ -701,18 +704,18 @@ end
     if ShepardNormalization
         A /= S1
     end
-    R1 = Float32(S1 * S1 / S2)
-    return A, R1
+     
+    return A 
 end
 
-@inline function _quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, column_idx :: Int, ShepardNormalization :: Bool, :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, LBVH :: LinearBVH, column_idx :: Int, ShepardNormalization :: Bool, :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     K = input.smoothed_kernel
     Ktyp = typeof(K)
     Kvalid = KernelFunctionValid(Ktyp, T)
 
     A :: T = zero(T)
     S1 :: T = zero(T)
-    S2 :: T = zero(T)
+     
 
     node_min = LBVH.node_aabb.min
     node_max = LBVH.node_aabb.max
@@ -741,9 +744,10 @@ end
                     ρb = input.ρ[leaf_idx]
                     Ab = input.quant[column_idx][leaf_idx]
                     A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, hb, K)
+                    
                     S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                     S1 += S1b
-                    S2 += S1b * S1b
+                     
                 end
             end
         end
@@ -754,8 +758,8 @@ end
         if ShepardNormalization
             A /= S1
         end
-        R1 = Float32(S1 * S1 / S2)
-        return A, R1
+         
+        return A 
     end
 
     node = root
@@ -777,9 +781,10 @@ end
                         ρb = input.ρ[leaf_idx]
                         Ab = input.quant[column_idx][leaf_idx]
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, hb, K)
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                     end
                 end
             end
@@ -796,9 +801,10 @@ end
                         ρb = input.ρ[leaf_idx]
                         Ab = input.quant[column_idx][leaf_idx]
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, hb, K)
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                     end
                 end
             end
@@ -821,8 +827,8 @@ end
     if ShepardNormalization
         A /= S1
     end
-    R1 = Float32(S1 * S1 / S2)
-    return A, R1
+     
+    return A 
 end
 
 @inline function _quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, column_idx :: Int, ShepardNormalization :: Bool, :: Type{itpSymmetric}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
@@ -832,7 +838,7 @@ end
 
     A :: T = zero(T)
     S1 :: T = zero(T)
-    S2 :: T = zero(T)
+     
 
     node_min = LBVH.node_aabb.min
     node_max = LBVH.node_aabb.max
@@ -861,9 +867,10 @@ end
                     ρb = input.ρ[leaf_idx]
                     Ab = input.quant[column_idx][leaf_idx]
                     A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, hb, K)
+                    
                     S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                     S1 += S1b
-                    S2 += S1b * S1b
+                     
                 end
             end
         end
@@ -874,8 +881,8 @@ end
         if ShepardNormalization
             A /= S1
         end
-        R1 = Float32(S1 * S1 / S2)
-        return A, R1
+         
+        return A 
     end
 
     node = root
@@ -897,9 +904,10 @@ end
                         ρb = input.ρ[leaf_idx]
                         Ab = input.quant[column_idx][leaf_idx]
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, hb, K)
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                     end
                 end
             end
@@ -916,9 +924,10 @@ end
                         ρb = input.ρ[leaf_idx]
                         Ab = input.quant[column_idx][leaf_idx]
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, hb, K)
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                     end
                 end
             end
@@ -941,8 +950,8 @@ end
     if ShepardNormalization
         A /= S1
     end
-    R1 = Float32(S1 * S1 / S2)
-    return A, R1
+     
+    return A 
 end
 
 ## Multi-column interpolation
@@ -955,7 +964,7 @@ end
     # Initialize counter
     output :: MVector{M, T} = zero(MVector{M, T})
     S1 :: T = zero(T)
-    S2 :: T = zero(T)
+     
     
     # LBVH data
     node_min = LBVH.node_aabb.min
@@ -985,9 +994,10 @@ end
                     rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                     mb = input.m[leaf_idx]
                     ρb = input.ρ[leaf_idx]
+                    
                     S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                     S1 += S1b
-                    S2 += S1b * S1b
+                     
                     @inbounds for j in 1:M
                         column_idx = columns[j]
                         Ab = input.quant[column_idx][leaf_idx]
@@ -1001,13 +1011,15 @@ end
         if iszero(S1)
             return ntuple(_ -> T(NaN), Val(M)), NaN32
         end
+
+        invS1 = inv(S1)
         @inbounds for j in 1:M
             if ShepardNormalization[j]
-                output[j] /= S1
+                output[j] *= invS1
             end
         end
-        R1 = Float32(S1 * S1 / S2)
-        return NTuple{M, T}(output), R1
+         
+        return NTuple{M, T}(output) 
     end
 
     # Start traversal
@@ -1024,9 +1036,10 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                         @inbounds for j in 1:M
                             column_idx = columns[j]
                             Ab = input.quant[column_idx][leaf_idx]
@@ -1045,9 +1058,10 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                         @inbounds for j in 1:M
                             column_idx = columns[j]
                             Ab = input.quant[column_idx][leaf_idx]
@@ -1076,23 +1090,25 @@ end
     if iszero(S1)
         return ntuple(_ -> T(NaN), Val(M)), NaN32
     end
+
+    invS1 = inv(S1)
     @inbounds for j in 1:M
         if ShepardNormalization[j]
-            output[j] /= S1
+            output[j] *= invS1
         end
     end
-    R1 = Float32(S1 * S1 / S2)
-    return NTuple{M, T}(output), R1
+     
+    return NTuple{M, T}(output) 
 end
 
-@inline function _quantities_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, M}
+@inline function _quantities_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, M}
     K = input.smoothed_kernel
     Ktyp = typeof(K)
     Kvalid = KernelFunctionValid(Ktyp, T)
 
     output :: MVector{M, T} = zero(MVector{M, T})
     S1 :: T = zero(T)
-    S2 :: T = zero(T)
+     
     
 
     node_min = LBVH.node_aabb.min
@@ -1120,9 +1136,10 @@ end
                     rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                     mb = input.m[leaf_idx]
                     ρb = input.ρ[leaf_idx]
+                    
                     S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                     S1 += S1b
-                    S2 += S1b * S1b
+                     
                     @inbounds for j in 1:M
                         column_idx = columns[j]
                         Ab = input.quant[column_idx][leaf_idx]
@@ -1135,13 +1152,15 @@ end
         if iszero(S1)
             return ntuple(_ -> T(NaN), Val(M)), NaN32
         end
+
+        invS1 = inv(S1)
         @inbounds for j in 1:M
             if ShepardNormalization[j]
-                output[j] /= S1
+                output[j] *= invS1
             end
         end
-        R1 = Float32(S1 * S1 / S2)
-        return NTuple{M, T}(output), R1
+         
+        return NTuple{M, T}(output) 
     end
 
     node = root
@@ -1161,9 +1180,10 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                         @inbounds for j in 1:M
                             column_idx = columns[j]
                             Ab = input.quant[column_idx][leaf_idx]
@@ -1183,9 +1203,10 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                         @inbounds for j in 1:M
                             column_idx = columns[j]
                             Ab = input.quant[column_idx][leaf_idx]
@@ -1210,13 +1231,15 @@ end
     if iszero(S1)
         return ntuple(_ -> T(NaN), Val(M)), NaN32
     end
+
+   invS1 = inv(S1)
     @inbounds for j in 1:M
         if ShepardNormalization[j]
-            output[j] /= S1
+            output[j] *= invS1
         end
     end
-    R1 = Float32(S1 * S1 / S2)
-    return NTuple{M, T}(output), R1
+     
+    return NTuple{M, T}(output) 
 end
 
 @inline function _quantities_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, columns::NTuple{M,Int}, ShepardNormalization :: NTuple{M, Bool}, :: Type{itpSymmetric}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, M}
@@ -1226,7 +1249,7 @@ end
 
     output :: MVector{M, T} = zero(MVector{M, T})
     S1 :: T = zero(T)
-    S2 :: T = zero(T)
+     
 
     node_min = LBVH.node_aabb.min
     node_max = LBVH.node_aabb.max
@@ -1253,9 +1276,10 @@ end
                     rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                     mb = input.m[leaf_idx]
                     ρb = input.ρ[leaf_idx]
+                    
                     S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                     S1 += S1b
-                    S2 += S1b * S1b
+                     
                     @inbounds for j in 1:M
                         column_idx = columns[j]
                         Ab = input.quant[column_idx][leaf_idx]
@@ -1268,13 +1292,15 @@ end
         if iszero(S1)
             return ntuple(_ -> T(NaN), Val(M)), NaN32
         end
+
+        invS1 = inv(S1)
         @inbounds for j in 1:M
             if ShepardNormalization[j]
-                output[j] /= S1
+                output[j] *= invS1
             end
         end
-        R1 = Float32(S1 * S1 / S2)
-        return NTuple{M, T}(output), R1
+         
+        return NTuple{M, T}(output) 
     end
 
     node = root
@@ -1294,9 +1320,10 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                         @inbounds for j in 1:M
                             column_idx = columns[j]
                             Ab = input.quant[column_idx][leaf_idx]
@@ -1316,9 +1343,10 @@ end
                         rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
                         mb = input.m[leaf_idx]
                         ρb = input.ρ[leaf_idx]
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                         @inbounds for j in 1:M
                             column_idx = columns[j]
                             Ab = input.quant[column_idx][leaf_idx]
@@ -1343,13 +1371,15 @@ end
     if iszero(S1)
         return ntuple(_ -> T(NaN), Val(M)), NaN32
     end
+
+    invS1 = inv(S1)
     @inbounds for j in 1:M
         if ShepardNormalization[j]
-            output[j] /= S1
+            output[j] *= invS1
         end
     end
-    R1 = Float32(S1 * S1 / S2)
-    return NTuple{M, T}(output), R1
+     
+    return NTuple{M, T}(output) 
 end
 
 @inline function _quantities_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, itp_strategy :: Type{ITPSTRATEGY} = itpSymmetric) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat, ITPSTRATEGY <: AbstractInterpolationStrategy}

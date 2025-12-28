@@ -45,6 +45,7 @@ include(joinpath(@__DIR__, "single_point_interpolation", "operations", "kernels"
 include(joinpath(@__DIR__, "single_point_interpolation", "operations", "kernels", "gradient_interpolation.jl"))
 include(joinpath(@__DIR__, "single_point_interpolation", "operations", "kernels", "divergence_interpolation.jl"))
 include(joinpath(@__DIR__, "single_point_interpolation", "operations", "kernels", "curl_interpolation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "operations", "kernels", "general_interpolation.jl"))
 include(joinpath(@__DIR__, "single_point_interpolation", "single_point_traversal_interpolation.jl"))
 
 

@@ -46,9 +46,22 @@ A tuple with:
 
 """
 function initialize_interpolation(:: CPUComputeBackend, grid_template::GeneralGrid{D}, input::ITPINPUT, catalog::InterpolationCatalog{N, G, Div, C, L}) where {D, N, G, Div, C, L, T <: AbstractFloat, ITPINPUT <: InterpolationInput{T}}
+    # Reorder grid template according to Morton code order
+    @info "Reordering grid template according to Morton code order..."
+    @time begin
+    enc = MortonEncoding(grid_template.coor, CodeType = UInt64)
+    p = sortperm(enc.codes; alg=QuickSort)
+    Base.permute!(grid_template.coor, p)
+    end
+    @info "End reordering grid template..."
+
     # Generate a grid array for result
+    @info "Allocating output grids..."
+    @time begin
     order = catalog.ordered_names
     grids = ntuple(_ -> similar(grid_template), Val(L))
+    end
+    @info "End allocating output grids..."
 
     # Generate a Linear BVH structure for neighborhood searching
     @info "Building LBVH..."
@@ -60,7 +73,7 @@ function initialize_interpolation(:: CPUComputeBackend, grid_template::GeneralGr
     # Consice catalog 
     catalog_consice = to_concise_catalog(catalog)
 
-    return grids, LBVH, order, catalog_consice
+    return grids, LBVH, order, catalog_consice, p
 end
 
 @inline function _general_grid_interpolation_kernel!(:: CPUComputeBackend, grids :: NTuple{L, GeneralGrid{D}}, i :: Int, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {D, N, G, Div, C, L, TF <: AbstractFloat, ITPINPUT <: InterpolationInput{TF}, ITPSTRATEGY <: AbstractInterpolationStrategy}
@@ -71,45 +84,113 @@ end
     ha = LBVH_find_nearest_h(LBVH, point)
 
     # Interpolation
-    out_idx = 1        
-    ## Scalar interpolation
+    itpresult :: Tuple{NTuple{N,TF}, NTuple{G,NTuple{3,TF}}, NTuple{Div,TF}, NTuple{C,NTuple{3,TF}}} = _general_quantity_interpolate_kernel(input, point, ha, LBVH, catalog_consice, itp_strategy)
+
+    scalars :: NTuple{N,TF} = itpresult[1]
+    gradients :: NTuple{G,NTuple{3,TF}} = itpresult[2]
+    divergences :: NTuple{Div,TF} = itpresult[3]
+    curls :: NTuple{C,NTuple{3,TF}} = itpresult[4]
+
+    # Store results
+    out_idx = 1
+
+    ## Scalars
     if N > 0
-        scalars = _quantities_interpolate_kernel(input, point, ha, LBVH, catalog_consice.scalar_slots, catalog_consice.scalar_snormalization, itp_strategy)
         @inbounds for j in 1:N
             grids[out_idx].grid[i] = scalars[j]
             out_idx += 1
         end
     end
 
-    ## Gradients interpolation
-    for j in 1:G
-        slot = catalog_consice.grad_slots[j]
-        grad_quant = slot == 0 ? _gradient_density_kernel(input, point, ha, LBVH, itp_strategy) : _gradient_quantity_interpolate_kernel(input, point, ha, LBVH, slot, itp_strategy)
-        @inbounds for d in 1:D
-            grids[out_idx].grid[i] = grad_quant[d]
+    ## Gradients
+    if G > 0
+        @inbounds for j in 1:G
+            grad_quant = gradients[j]
+            @inbounds for d in 1:D
+                grids[out_idx].grid[i] = grad_quant[d]
+                out_idx += 1
+            end
+        end
+    end
+
+    ## Divergences
+    if Div > 0
+        @inbounds for j in 1:Div
+            div_quant = divergences[j]
+            grids[out_idx].grid[i] = div_quant
             out_idx += 1
         end
     end
 
-    ## Divergences interpolation
-    for j in 1:Div
-        slot = catalog_consice.div_slots[j]
-        ax, ay, az = slot
-        div_quant = _divergence_quantity_interpolate_kernel(input, point, ha, LBVH, ax, ay, az, itp_strategy)
-        grids[out_idx].grid[i] = div_quant
-        out_idx += 1
+    ## Curls
+    if C > 0
+        @inbounds for j in 1:C
+            curl_quant = curls[j]
+            @inbounds for d in 1:D
+                grids[out_idx].grid[i] = curl_quant[d]
+                out_idx += 1
+            end
+        end
     end
 
-    ## Curls interpolation
-    for j in 1:C
-        slot = catalog_consice.curl_slots[j]
-        ax, ay, az = slot
-        curl_quant = _curl_quantity_interpolate_kernel(input, point, ha, LBVH, ax, ay, az, itp_strategy)
-        @inbounds for d in 1:D
-            grids[out_idx].grid[i] = curl_quant[d]
+    @assert out_idx == L + 1 "InterpolationCatalog ordering mismatch: expected $L values, stored $(out_idx - 1)"
+    return nothing
+end
+
+@inline function _general_grid_interpolation_kernel!(:: CPUComputeBackend, grids :: NTuple{L, GeneralGrid{D}}, i :: Int, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, ::Type{itpScatter}) where {D, N, G, Div, C, L, TF <: AbstractFloat, ITPINPUT <: InterpolationInput{TF}}
+    # Get point
+    point = grids[1].coor[i]
+
+    # Interpolation
+    itpresult :: Tuple{NTuple{N,TF}, NTuple{G,NTuple{3,TF}}, NTuple{Div,TF}, NTuple{C,NTuple{3,TF}}} = _general_quantity_interpolate_kernel(input, point, LBVH, catalog_consice, itp_strategy)
+
+    scalars :: NTuple{N,TF} = itpresult[1]
+    gradients :: NTuple{G,NTuple{3,TF}} = itpresult[2]
+    divergences :: NTuple{Div,TF} = itpresult[3]
+    curls :: NTuple{C,NTuple{3,TF}} = itpresult[4]
+
+    # Store results
+    out_idx = 1
+
+    ## Scalars
+    if N > 0
+        @inbounds for j in 1:N
+            grids[out_idx].grid[i] = scalars[j]
             out_idx += 1
         end
     end
+
+    ## Gradients
+    if G > 0
+        @inbounds for j in 1:G
+            grad_quant = gradients[j]
+            @inbounds for d in 1:D
+                grids[out_idx].grid[i] = grad_quant[d]
+                out_idx += 1
+            end
+        end
+    end
+
+    ## Divergences
+    if Div > 0
+        @inbounds for j in 1:Div
+            div_quant = divergences[j]
+            grids[out_idx].grid[i] = div_quant
+            out_idx += 1
+        end
+    end
+
+    ## Curls
+    if C > 0
+        @inbounds for j in 1:C
+            curl_quant = curls[j]
+            @inbounds for d in 1:D
+                grids[out_idx].grid[i] = curl_quant[d]
+                out_idx += 1
+            end
+        end
+    end
+
     @assert out_idx == L + 1 "InterpolationCatalog ordering mismatch: expected $L values, stored $(out_idx - 1)"
     return nothing
 end
@@ -148,7 +229,7 @@ and evaluates each grid point in parallel using threaded execution.
 - `order` — Ordered list of all output quantity names, matching the grid tuple order.
 """
 function GeneralGrid_interpolation(backend :: CPUComputeBackend, grid_template::GeneralGrid{D}, input::ITPINPUT, catalog::InterpolationCatalog{N, G, Div, C, L}, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {D, N, G, Div, C, L, T <: AbstractFloat, ITPINPUT <: InterpolationInput{T}, ITPSTRATEGY <: AbstractInterpolationStrategy}
-    grids, LBVH, order, catalog_consice = initialize_interpolation(backend, grid_template, input, catalog)
+    grids, LBVH, order, catalog_consice, p = initialize_interpolation(backend, grid_template, input, catalog)
     npoints = length(grid_template)
     @info"Start interpolation..."
     @time @inbounds @threads for i in 1:npoints
@@ -157,6 +238,19 @@ function GeneralGrid_interpolation(backend :: CPUComputeBackend, grid_template::
 
     end
     @info "End interpolation..."
+
+    # Reorder grids back to original order
+    @info "Reordering output grids back to original order..."
+    @time begin
+    # Reorder coor (Represent bu grid template since they share the same coor array)
+    Base.invpermute!(grid_template.coor, p)
+
+    # Reorder each grid
+    for grid in grids
+        Base.invpermute!(grid.grid, p)
+    end
+    end
+    @info "End reordering output grids..."
 
     return GridInterpolationResult{L}(grids, order)
 end

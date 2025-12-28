@@ -151,7 +151,7 @@
     return (∇ρx, ∇ρy, ∇ρz)
 end
 
-@inline function _gradient_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _gradient_density_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, LBVH :: LinearBVH, :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Prepare for interpolation
     K = input.smoothed_kernel
     Ktyp = typeof(K)
@@ -489,7 +489,7 @@ end
 
     A :: T = zero(T)
     S1 :: T = zero(T)
-    S2 :: T = zero(T)
+     
 
     # LBVH data
     node_min = LBVH.node_aabb.min
@@ -529,15 +529,16 @@ end
                     ∇Ayb += ∇AybW
                     ∇Azb += ∇AzbW
                     A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, K)
+                    
                     S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                     S1 += S1b
-                    S2 += S1b * S1b
+                     
                 end
                 #########################################################
             end
         end
         if iszero(S1)
-            return (T(NaN), T(NaN), T(NaN))
+            return (T(NaN), T(NaN), T(NaN)), NaN32
         end
 
         # Shepard normalization
@@ -552,7 +553,9 @@ end
         ∇Ax = (∇Axf - ∇Axb)
         ∇Ay = (∇Ayf - ∇Ayb)
         ∇Az = (∇Azf - ∇Azb)
-        return (∇Ax, ∇Ay, ∇Az)
+
+         
+        return (∇Ax, ∇Ay, ∇Az) 
     end
 
     # Start traversal
@@ -579,9 +582,10 @@ end
                         ∇Ayb += ∇AybW
                         ∇Azb += ∇AzbW
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, K)
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                     end
                     #########################################################
                 end
@@ -605,9 +609,10 @@ end
                         ∇Ayb += ∇AybW
                         ∇Azb += ∇AzbW
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, K)
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                     end
                     #########################################################
                 end
@@ -628,7 +633,7 @@ end
         end
     end
     if iszero(S1)
-        return (T(NaN), T(NaN), T(NaN))
+        return (T(NaN), T(NaN), T(NaN)), NaN32
     end
 
     # Shepard normalization
@@ -643,10 +648,12 @@ end
     ∇Ax = (∇Axf - ∇Axb)
     ∇Ay = (∇Ayf - ∇Ayb)
     ∇Az = (∇Azf - ∇Azb)
-    return (∇Ax, ∇Ay, ∇Az)
+
+     
+    return (∇Ax, ∇Ay, ∇Az) 
 end
 
-@inline function _gradient_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, column_idx :: Int, :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _gradient_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, LBVH :: LinearBVH, column_idx :: Int, :: Type{itpScatter}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Prepare for interpolation
     K = input.smoothed_kernel
     Ktyp = typeof(K)
@@ -662,7 +669,7 @@ end
 
     A :: T = zero(T)
     S1 :: T = zero(T)
-    S2 :: T = zero(T)
+     
 
     # LBVH data
     node_min = LBVH.node_aabb.min
@@ -702,15 +709,16 @@ end
                     ∇Ayb += ∇AybW
                     ∇Azb += ∇AzbW
                     A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, hb, K)
+                    
                     S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                     S1 += S1b
-                    S2 += S1b * S1b
+                     
                 end
                 #########################################################
             end
         end
         if iszero(S1)
-            return (T(NaN), T(NaN), T(NaN))
+            return (T(NaN), T(NaN), T(NaN)), NaN32
         end
 
         # Shepard normalization
@@ -725,7 +733,9 @@ end
         ∇Ax = (∇Axf - ∇Axb)
         ∇Ay = (∇Ayf - ∇Ayb)
         ∇Az = (∇Azf - ∇Azb)
-        return (∇Ax, ∇Ay, ∇Az)
+
+         
+        return (∇Ax, ∇Ay, ∇Az) 
     end
 
     # Start traversal
@@ -757,9 +767,10 @@ end
                         ∇Ayb += ∇AybW
                         ∇Azb += ∇AzbW
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, hb, K)
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                     end
                     #########################################################
                 end
@@ -786,9 +797,10 @@ end
                         ∇Ayb += ∇AybW
                         ∇Azb += ∇AzbW
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, hb, K)
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                     end
                     #########################################################
                 end
@@ -809,7 +821,7 @@ end
         end
     end
     if iszero(S1)
-        return (T(NaN), T(NaN), T(NaN))
+        return (T(NaN), T(NaN), T(NaN)), NaN32
     end
 
     # Shepard normalization
@@ -824,7 +836,9 @@ end
     ∇Ax = (∇Axf - ∇Axb)
     ∇Ay = (∇Ayf - ∇Ayb)
     ∇Az = (∇Azf - ∇Azb)
-    return (∇Ax, ∇Ay, ∇Az)
+
+     
+    return (∇Ax, ∇Ay, ∇Az) 
 end
 
 @inline function _gradient_quantity_interpolate_kernel(input::ITPINPUT, reference_point::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, column_idx :: Int, :: Type{itpSymmetric}) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
@@ -843,7 +857,7 @@ end
 
     A :: T = zero(T)
     S1 :: T = zero(T)
-    S2 :: T = zero(T)
+     
 
     # LBVH data
     node_min = LBVH.node_aabb.min
@@ -883,15 +897,16 @@ end
                     ∇Ayb += ∇AybW
                     ∇Azb += ∇AzbW
                     A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, hb, K)
+                    
                     S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                     S1 += S1b
-                    S2 += S1b * S1b
+                     
                 end
                 #########################################################
             end
         end
         if iszero(S1)
-            return (T(NaN), T(NaN), T(NaN))
+            return (T(NaN), T(NaN), T(NaN)), NaN32
         end
 
         # Shepard normalization
@@ -906,7 +921,9 @@ end
         ∇Ax = (∇Axf - ∇Axb)
         ∇Ay = (∇Ayf - ∇Ayb)
         ∇Az = (∇Azf - ∇Azb)
-        return (∇Ax, ∇Ay, ∇Az)
+
+         
+        return (∇Ax, ∇Ay, ∇Az) 
     end
 
     # Start traversal
@@ -938,9 +955,10 @@ end
                         ∇Ayb += ∇AybW
                         ∇Azb += ∇AzbW
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, hb, K)
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                     end
                     #########################################################
                 end
@@ -967,9 +985,10 @@ end
                         ∇Ayb += ∇AybW
                         ∇Azb += ∇AzbW
                         A += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, hb, K)
+                        
                         S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
                         S1 += S1b
-                        S2 += S1b * S1b
+                         
                     end
                     #########################################################
                 end
@@ -990,7 +1009,7 @@ end
         end
     end
     if iszero(S1)
-        return (T(NaN), T(NaN), T(NaN))
+        return (T(NaN), T(NaN), T(NaN)), NaN32
     end
 
     # Shepard normalization
@@ -1005,5 +1024,7 @@ end
     ∇Ax = (∇Axf - ∇Axb)
     ∇Ay = (∇Ayf - ∇Ayb)
     ∇Az = (∇Azf - ∇Azb)
-    return (∇Ax, ∇Ay, ∇Az)
+
+     
+    return (∇Ax, ∇Ay, ∇Az) 
 end

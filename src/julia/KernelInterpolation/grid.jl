@@ -36,7 +36,7 @@ y = (0.0f0, 2.0f0, 128)  # AxisParam{Float32}
 const AxisParam{TF} = Tuple{TF, TF, Int}
 
 # General Grid definition
-abstract type AbstractInterpolationGrid end
+abstract type AbstractInterpolationGrid{TF} end
 
 """
     Base.length(grid::GRID) where {GRID <: AbstractInterpolationGrid}
@@ -71,7 +71,7 @@ their corresponding coordinates.
 - `grid :: VG` : Vector containing the grid values.
 - `coor :: VC` : Vector containing the coordinates of each grid point.
 """
-struct GeneralGrid{D, TF <: AbstractFloat, VG <: AbstractVector{TF}, VC <: AbstractVector{NTuple{D, TF}}} <: AbstractInterpolationGrid
+struct GeneralGrid{D, TF <: AbstractFloat, VG <: AbstractVector{TF}, VC <: AbstractVector{NTuple{D, TF}}} <: AbstractInterpolationGrid{TF}
     grid :: VG
     coor :: VC
 end
@@ -98,6 +98,33 @@ the same coordinate container as the input grid.
 """
 function Base.similar(grid::GeneralGrid)
     return GeneralGrid(similar(grid.grid), grid.coor)
+end
+
+@inline _convert_coor_tuple(c::NTuple{D,TF}, ::Type{T}) where {D,TF,T} = ntuple(d -> T(c[d]), Val(D))
+"""
+    similar(grid::GeneralGrid, itype :: Type{T}) where {T}
+
+Construct a new `GeneralGrid` with fresh storage for values but sharing
+the same coordinate container as the input grid and with values of type `T`.
+
+Note that the coordinate type also changes accordingly.
+
+# Parameters
+- `grid::GeneralGrid` : Template grid to copy structure from.
+- `itype::Type{T}` : Desired element type for the new grid's values.
+
+# Returns
+- `GeneralGrid` : A grid with independent value storage (`grid.grid`) of type `T`
+  and shared coordinates (`grid.coor`) of type `NTuple{D, T}`.
+"""
+function Base.similar(grid::GeneralGrid{D,TF}, ::Type{T}) where {D,TF<:AbstractFloat,T<:AbstractFloat}
+
+    new_grid = similar(grid.grid, T)
+    new_coor = similar(grid.coor, NTuple{D,T}) 
+
+    new_coor .= _convert_coor_tuple.(grid.coor, Ref(T))
+
+    return GeneralGrid(new_grid, new_coor)
 end
 
 """
@@ -135,6 +162,18 @@ function Base.isapprox(grid::GeneralGrid{D,TF}, axes::NTuple{D,<:AbstractVector}
         end
     end
     return true
+end
+
+function Base.permute!(grid::GeneralGrid{D,TF}, p :: AbstractVector{TI}) where {D,TF<:AbstractFloat, TI<:Integer}
+    Base.permute!(grid.grid, p)
+    Base.permute!(grid.coor, p)
+    return nothing
+end
+
+function Base.invpermute!(grid::GeneralGrid{D,TF}, p :: AbstractVector{TI}) where {D,TF<:AbstractFloat, TI<:Integer}
+    Base.invpermute!(grid.grid, p)
+    Base.invpermute!(grid.coor, p)
+    return nothing
 end
 
 """
@@ -220,9 +259,10 @@ function merge_GeneralGrid(grids :: V) where {D, TF<:AbstractFloat, VG<:Abstract
 
     return GeneralGrid{D,TF,VG,VC}(merged_grid, merged_coor)
 end
+
 # structured grid (Cartesian/Cylindrical... etc)
 """
-    StructuredGrid{D, TF<:AbstractFloat, V<:AbstractVector{TF}, A<:AbstractArray{TF,D}} <: AbstractInterpolationGrid
+    StructuredGrid{D, TF<:AbstractFloat, V<:AbstractVector{TF}, A<:AbstractArray{TF,D}} <: AbstractInterpolationGrid{TF}
 
 A structured grid container, storing values in an N-dimensional array
 together with coordinate axes for each dimension.
@@ -238,7 +278,7 @@ together with coordinate axes for each dimension.
 - `axes :: NTuple{D,V}` : Tuple of coordinate vectors, one per dimension.
 - `size :: NTuple{D,Int}` : Logical size of the grid (cached from axes).
 """
-struct StructuredGrid{D, TF <: AbstractFloat, V <: AbstractVector{TF}, A <: AbstractArray{TF, D}} <: AbstractInterpolationGrid 
+struct StructuredGrid{D, TF <: AbstractFloat, V <: AbstractVector{TF}, A <: AbstractArray{TF, D}} <: AbstractInterpolationGrid{TF}
     grid :: A
     axes :: NTuple{D, V}
     size :: NTuple{D, Int}

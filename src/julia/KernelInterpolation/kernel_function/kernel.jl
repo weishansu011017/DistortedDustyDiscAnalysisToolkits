@@ -45,7 +45,7 @@ To implement a new kernel type, define the following components:
    KernelFunctionnorm(::Type{MyKernel}, ::Val{D}, ::Type{T}) where {T<:AbstractFloat} = ...
    ```
 
-4. *(Optional)* **Typical neighbor count**
+4. **Typical neighbor count**
    ```julia
    KernelFunctionNneigh(::Type{MyKernel}) = ...
    ```
