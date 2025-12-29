@@ -175,9 +175,13 @@ launches the interpolation kernel, and copies results back to host memory.
 function PhantomRevealer.GeneralGrid_interpolation(:: CUDAComputeBackend, grid_template::GeneralGrid{D}, input::ITPINPUT, catalog::InterpolationCatalog{N, G, Div, C, L}, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {D, N, G, Div, C, L, T <: AbstractFloat, ITPINPUT <: InterpolationInput{T}, ITPSTRATEGY <: AbstractInterpolationStrategy}
     grids, LBVH, order, catalog_consice, p = PhantomRevealer.initialize_interpolation(PhantomRevealer.CPUComputeBackend(), grid_template, input, catalog)
     # To CuVector
+    @info "Copying interpolated grids to device memory..."
+    @time begin
     input_Cu = to_CuVector(input)
     grids_Cu = ntuple(i -> to_CuVector(grids[i]), Val(L))
     LBVH_Cu = to_CuVector(LBVH)
+    end
+    @info "End copying interpolated grids to device memory."
 
     npoints = length(grid_template)
     @info"Start interpolation..."
