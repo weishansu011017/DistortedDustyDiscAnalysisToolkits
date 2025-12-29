@@ -10,15 +10,6 @@ using Reexport
 include(joinpath(@__DIR__, "julia", "Tools", "Tools.jl"))
 @reexport using .Tools
 
-# include(joinpath(@__DIR__, "julia", "Tools", "eos_properties.jl"))
-# include(joinpath(@__DIR__, "julia", "Tools", "logging.jl"))
-# include(joinpath(@__DIR__, "julia", "Tools", "coordinate_transformations.jl"))
-# include(joinpath(@__DIR__, "julia", "Tools", "array_operations.jl"))
-
-## IO & data structure
-include(joinpath(@__DIR__, "julia", "IO", "IO.jl"))
-@reexport using .IO
-
 ## NeighborSearch 
 include(joinpath(@__DIR__, "julia", "NeighborSearch", "NeighborSearch.jl"))
 @reexport using .NeighborSearch
@@ -26,19 +17,17 @@ include(joinpath(@__DIR__, "julia", "NeighborSearch", "NeighborSearch.jl"))
 ## KernelInterpolation
 include(joinpath(@__DIR__, "julia", "KernelInterpolation", "KernelInterpolation.jl"))
 @reexport using .KernelInterpolation
-# include(joinpath(@__DIR__, "julia", "KernelInterpolation", "table", "los_tables.jl"))
-# include(joinpath(@__DIR__, "julia", "KernelInterpolation", "kernel_function.jl"))
-# include(joinpath(@__DIR__, "julia", "KernelInterpolation", "grid.jl"))
 
+## IO & data structure
+include(joinpath(@__DIR__, "julia", "IO", "IO.jl"))
+@reexport using .IO
 
 ### Constructors of the `InterpolationInput` from `ParticlesDataFrame`
 include(joinpath(@__DIR__, "julia", "KernelInterpolation", "single_point_interpolation", "constructor.jl"))
 
-
 ## StreamingInstability
 include(joinpath(@__DIR__, "julia", "StreamingInstability", "StreamingInstability.jl"))
 @reexport using .StreamingInstability
-# include(joinpath(@__DIR__, "julia", "StreamingInstability", "growth_rate.jl"))
 
 ##################### CUDA Extension #####################
 # Dummy file (similar to a C/C++ header) used to declare the module interface.

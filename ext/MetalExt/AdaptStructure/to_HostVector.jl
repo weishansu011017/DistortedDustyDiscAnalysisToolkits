@@ -53,10 +53,10 @@ function PhantomRevealer.to_HostVector(LBVH :: LinearBVH{D, TF, TI, VF, VI, A, B
     )
 end
 
-function PhantomRevealer.to_HostVector(grid :: GeneralGrid{D, TF, VG, VC}) where {D, TF <: Float32, VG <: MtlVector{TF}, VC <: MtlVector{NTuple{D, TF}}}
-    return GeneralGrid{D, Float32, Vector{Float32}, Vector{NTuple{D, Float32}}}(
+function PhantomRevealer.to_HostVector(grid :: GeneralGrid{D, TF, VG, VC}) where {D, TF <: Float32, VG <: MtlVector{TF}, VC <: NTuple{D, MtlVector{TF}}}
+    return GeneralGrid{D, Float32, Vector{Float32}, NTuple{D, Vector{Float32}}}(
         Vector{Float32}(grid.grid),
-        Vector{NTuple{D, Float32}}(grid.coor)
+        ntuple(i -> Vector{Float32}(grid.coor[i]), D)
     )
 end
 

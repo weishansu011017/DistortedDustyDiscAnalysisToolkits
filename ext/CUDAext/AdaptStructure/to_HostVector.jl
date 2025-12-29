@@ -53,10 +53,10 @@ function PhantomRevealer.to_HostVector(LBVH :: LinearBVH{D, TF, TI, VF, VI, A, B
     )
 end
 
-function PhantomRevealer.to_HostVector(grid :: GeneralGrid{D, TF, VG, VC}) where {D, TF <: AbstractFloat, VG <: CuVector{TF}, VC <: CuVector{NTuple{D, TF}}}
-    return GeneralGrid{D, TF, Vector{TF}, Vector{NTuple{D, TF}}}(
+function PhantomRevealer.to_HostVector(grid :: GeneralGrid{D, TF, VG, VC}) where {D, TF <: AbstractFloat, VG <: CuVector{TF}, VC <: NTuple{D, CuVector{TF}}}
+    return GeneralGrid{D, TF, Vector{TF}, NTuple{D, Vector{TF}}}(
         Vector{TF}(grid.grid),
-        Vector{NTuple{D, TF}}(grid.coor)
+        ntuple(i -> Vector{TF}(grid.coor[i]), D)
     )
 end
 

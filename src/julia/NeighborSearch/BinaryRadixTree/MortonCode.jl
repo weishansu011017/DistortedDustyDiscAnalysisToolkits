@@ -45,83 +45,53 @@ function MortonEncoding(x :: V, y :: V, z :: V, h :: V; CodeType :: Type{TI} = U
 end
 
 """
-    MortonEncoding(points::VP, h::V; CodeType::Type{TI}=UInt64) where {TI<:Unsigned, T<:AbstractFloat,
-                                                                     V<:AbstractVector{T},
-                                                                     VP<:AbstractVector{NTuple{3,T}}}
+    MortonEncoding(points::NTuple{3,V}, h::V; CodeType::Type{TI}=UInt64) where {TI<:Unsigned, T<:AbstractFloat, V<:AbstractVector{T}}
 
 Encode a set of 3D particle coordinates into Morton codes.
 
-This overload accepts particle positions as an AoS container (`points[i] = (x, y, z)`), then
-extracts `x`, `y`, `z` into SoA vectors on the same storage/backend as `h` (via `similar(h)`).
-The resulting Morton codes are used to compute a permutation that orders particles by Morton
-order, and the returned encoding is sorted accordingly.
+This overload accepts particle positions in a structure-of-arrays (SoA) layout, where
+`points = (x, y, z)` and each component vector has the same storage type/back-end as `h`.
+It forwards to `MortonEncoding(x, y, z, h; CodeType=CodeType)`.
 
 # Parameters
-- `points::AbstractVector{NTuple{3,T}}`: Particle coordinates in 3D, stored as tuples `(x, y, z)`.
-- `h :: AbstractVector{T}`: The smoothed length of particles
-- `CodeType :: Type{TI}`: Unsigned integer type used for Morton encoding (`UInt32` or `UInt64`).
+- `points::NTuple{3,V}` :
+  Particle coordinates in 3D, stored as `(x, y, z)`, where each vector has length `N`.
+- `h::V` :
+  Smoothing length vector of length `N`.
+- `CodeType::Type{TI}=UInt64` :
+  Unsigned integer type used for Morton encoding (typically `UInt32` or `UInt64`).
 
 # Returns
-- `MortonEncoding{3, T, TI, V, typeof(order)}`: Struct containing Morton codes, particle order, and coordinates, ordered by Morton codes
+The same return value as `MortonEncoding(x, y, z, h; CodeType=CodeType)`.
 """
-
-function MortonEncoding(points :: VP, h :: V; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, V<:AbstractVector{T}, VP <: AbstractVector{NTuple{3, T}}}
-    # Extract x, y, z
-    x = similar(h)
-    y = similar(h)
-    z = similar(h)
-    @inbounds @simd for i in eachindex(points)
-        xi, yi, zi = points[i]
-        x[i] = xi
-        y[i] = yi
-        z[i] = zi
-    end
-
-    hcopy = copy(h)
-    ix, iy, iz = _quantize_coords(x, y, z, CodeType=CodeType)
-    codes, order  = _encode_morton_code3D(ix, iy, iz)
-    enc = MortonEncoding{3, T, TI, V, typeof(order)}(order, codes, (x, y, z), hcopy)
-    sort_by_morton!(enc)
-    return enc
+function MortonEncoding(points :: NTuple{3, V}, h :: V; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, V<:AbstractVector{T}}
+    x = points[1]; y = points[2]; z = points[3]
+    return MortonEncoding(x, y, z, h, CodeType = CodeType)
 end
 
 """
-    MortonEncoding(points::VP; CodeType::Type{TI}=UInt64) where {TI<:Unsigned, T<:AbstractFloat,
-                                                                     V<:AbstractVector{T},
-                                                                     VP<:AbstractVector{NTuple{3,T}}}
+    MortonEncoding(points::NTuple{3,V}; CodeType::Type{TI}=UInt64) where {TI<:Unsigned, T<:AbstractFloat, V<:AbstractVector{T}}
 
 Encode a set of 3D particle coordinates into Morton codes.
 
-This overload accepts particle positions as an AoS container (`points[i] = (x, y, z)`), then
-extracts `x`, `y`, `z` into SoA vectors.
-The resulting Morton codes are used to compute a permutation that orders particles by Morton
-order, and the returned encoding is sorted accordingly.
+This overload accepts particle positions in a structure-of-arrays (SoA) layout, where
+`points = (x, y, z)`. Since no smoothing-length vector is provided, it internally creates a
+dummy `h` (all zeros) and forwards to `MortonEncoding(x, y, z, h; CodeType=CodeType)`.
 
 # Parameters
-- `points::AbstractVector{NTuple{3,T}}`: Particle coordinates in 3D, stored as tuples `(x, y, z)`.
-- `CodeType :: Type{TI}`: Unsigned integer type used for Morton encoding (`UInt32` or `UInt64`).
+- `points::NTuple{3,V}` :
+  Particle coordinates in 3D, stored as `(x, y, z)`, where each vector has length `N`.
+- `CodeType::Type{TI}=UInt64` :
+  Unsigned integer type used for Morton encoding (typically `UInt32` or `UInt64`).
 
 # Returns
-- `MortonEncoding{3, T, TI, V, typeof(order)}`: Struct containing Morton codes, particle order, and coordinates, ordered by Morton codes
+The same return value as `MortonEncoding(x, y, z, h; CodeType=CodeType)` with the internally
+constructed dummy `h`.
 """
-function MortonEncoding(points :: VP; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, VP <: AbstractVector{NTuple{3, T}}}
-    # Extract x, y, z
-    fake_h = zeros(T, length(points))
-    x = similar(fake_h)
-    y = similar(fake_h)
-    z = similar(fake_h)
-    @inbounds @simd for i in eachindex(points)
-        xi, yi, zi = points[i]
-        x[i] = xi
-        y[i] = yi
-        z[i] = zi
-    end
-
-    ix, iy, iz = _quantize_coords(x, y, z, CodeType=CodeType)
-    codes, order  = _encode_morton_code3D(ix, iy, iz)
-    enc = MortonEncoding{3, T, TI, typeof(fake_h), typeof(order)}(order, codes, (x, y, z), fake_h)
-    sort_by_morton!(enc)
-    return enc
+function MortonEncoding(points :: NTuple{3, V}; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, V <: AbstractVector{T}}
+    fake_h = similar(points[1])
+    x = points[1]; y = points[2]; z = points[3]
+    return MortonEncoding(x, y, z, fake_h, CodeType = CodeType)
 end
 
 """
@@ -147,80 +117,54 @@ function MortonEncoding(x :: V, y :: V, h :: V; CodeType :: Type{TI} = UInt64) w
 end
 
 """
-    MortonEncoding(points::VP, h::V; CodeType::Type{TI}=UInt64) where {TI<:Unsigned, T<:AbstractFloat,
-                                                                     V<:AbstractVector{T},
-                                                                     VP<:AbstractVector{NTuple{2,T}}}
+    MortonEncoding(points::NTuple{3,V}, h::V; CodeType::Type{TI}=UInt64) where {TI<:Unsigned, T<:AbstractFloat, V<:AbstractVector{T}}
 
 Encode a set of 2D particle coordinates into Morton codes.
 
-This overload accepts particle positions as an AoS container (`points[i] = (x, y)`), then
-extracts `x`, `y` into SoA vectors on the same storage/backend as `h` (via `similar(h)`).
-The resulting Morton codes are used to compute a permutation that orders particles by Morton
-order, and the returned encoding is sorted accordingly.
+This overload accepts particle positions in a structure-of-arrays (SoA) layout, where
+`points = (x, y)` and each component vector has the same storage type/back-end as `h`.
+It forwards to `MortonEncoding(x, y, h; CodeType=CodeType)`.
 
 # Parameters
-- `points::AbstractVector{NTuple{2,T}}`: Particle coordinates in 2D, stored as tuples `(x, y)`.
-- `h :: AbstractVector{T}`: The smoothed length of particles
-- `CodeType :: Type{TI}`: Unsigned integer type used for Morton encoding (`UInt32` or `UInt64`).
+- `points::NTuple{3,V}` :
+  Particle coordinates in 2D, stored as `(x, y)`, where each vector has length `N`.
+- `h::V` :
+  Smoothing length vector of length `N`.
+- `CodeType::Type{TI}=UInt64` :
+  Unsigned integer type used for Morton encoding (typically `UInt32` or `UInt64`).
 
 # Returns
-- `MortonEncoding{2, T, TI, V, typeof(order)}`: Struct containing Morton codes, particle order, and coordinates, ordered by Morton codes
+The same return value as `MortonEncoding(x, y, h; CodeType=CodeType)`.
 """
-function MortonEncoding(points :: VP, h :: V; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, V<:AbstractVector{T}, VP <: AbstractVector{NTuple{2, T}}}
-    # Extract x, y
-    x = similar(h)
-    y = similar(h)
-    @inbounds @simd for i in eachindex(points)
-        xi, yi = points[i]
-        x[i] = xi
-        y[i] = yi
-    end
-
-    hcopy = copy(h)
-    ix, iy = _quantize_coords(x, y, CodeType=CodeType)
-    codes, order  = _encode_morton_code2D(ix, iy)
-    enc = MortonEncoding{2, T, TI, V, typeof(order)}(order, codes, (x, y), hcopy)
-    sort_by_morton!(enc)
-    return enc
+function MortonEncoding(points :: NTuple{2, V}, h :: V; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, V<:AbstractVector{T}}
+    x = points[1]; y = points[2]
+    return MortonEncoding(x, y, h, CodeType = CodeType)
 end
 
 """
-    MortonEncoding(points::VP; CodeType::Type{TI}=UInt64) where {TI<:Unsigned, T<:AbstractFloat,
-                                                                     V<:AbstractVector{T},
-                                                                     VP<:AbstractVector{NTuple{2,T}}}
+    MortonEncoding(points::NTuple{2,V}; CodeType::Type{TI}=UInt64) where {TI<:Unsigned, T<:AbstractFloat, V<:AbstractVector{T}}
 
 Encode a set of 2D particle coordinates into Morton codes.
 
-This overload accepts particle positions as an AoS container (`points[i] = (x, y)`), then
-extracts `x`, `y` into SoA vectors.
-The resulting Morton codes are used to compute a permutation that orders particles by Morton
-order, and the returned encoding is sorted accordingly.
+This overload accepts particle positions in a structure-of-arrays (SoA) layout, where
+`points = (x, y)`. Since no smoothing-length vector is provided, it internally creates a
+dummy `h` (all zeros) and forwards to `MortonEncoding(x, y, h; CodeType=CodeType)`.
 
 # Parameters
-- `points::AbstractVector{NTuple{2,T}}`: Particle coordinates in 2D, stored as tuples `(x, y)`.
-- `CodeType :: Type{TI}`: Unsigned integer type used for Morton encoding (`UInt32` or `UInt64`).
+- `points::NTuple{2,V}` :
+  Particle coordinates in 3D, stored as `(x, y)`, where each vector has length `N`.
+- `CodeType::Type{TI}=UInt64` :
+  Unsigned integer type used for Morton encoding (typically `UInt32` or `UInt64`).
 
 # Returns
-- `MortonEncoding{2, T, TI, V, typeof(order)}`: Struct containing Morton codes, particle order, and coordinates, ordered by Morton codes
+The same return value as `MortonEncoding(x, y, h; CodeType=CodeType)` with the internally
+constructed dummy `h`.
 """
-function MortonEncoding(points :: VP; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, VP <: AbstractVector{NTuple{2, T}}}
-    # Extract x, y
-    fake_h = zeros(T, length(points))
-    x = similar(fake_h)
-    y = similar(fake_h)
-    @inbounds @simd for i in eachindex(points)
-        xi, yi = points[i]
-        x[i] = xi
-        y[i] = yi
-    end
-
-    ix, iy = _quantize_coords(x, y, CodeType=CodeType)
-    codes, order  = _encode_morton_code2D(ix, iy)
-    enc = MortonEncoding{2, T, TI, typeof(fake_h), typeof(order)}(order, codes, (x, y), fake_h)
-    sort_by_morton!(enc)
-    return enc
+function MortonEncoding(points :: NTuple{2, V}; CodeType :: Type{TI} = UInt64) where {TI <: Unsigned, T<:AbstractFloat, V <: AbstractVector{T}}
+    fake_h = similar(points[1])
+    x = points[1]; y = points[2]
+    return MortonEncoding(x, y, fake_h, CodeType = CodeType)
 end
-
 
 # Toolbox
 """

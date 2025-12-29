@@ -53,10 +53,10 @@ function PhantomRevealer.to_CuVector(LBVH :: LinearBVH{D, TF, TI, VF, VI, A, B})
     )
 end
 
-function PhantomRevealer.to_CuVector(grid :: GeneralGrid{D, TF, VG, VC}) where {D, TF <: AbstractFloat, VG <: AbstractVector{TF}, VC <: AbstractVector{NTuple{D, TF}}}
-    return GeneralGrid{D, TF, CuVector{TF}, CuVector{NTuple{D, TF}}}(
+function PhantomRevealer.to_CuVector(grid :: GeneralGrid{D, TF, VG, VC}) where {D, TF <: AbstractFloat, VG <: AbstractVector{TF}, VC <: NTuple{D, Vector{TF}}}
+    return GeneralGrid{D, TF, CuVector{TF}, NTuple{D, CuVector{TF}}}(
         CuVector{TF}(grid.grid),
-        CuVector{NTuple{D, TF}}(grid.coor)
+        ntuple(i -> CuVector{TF}(grid.coor[i]), D)
     )
 end
 

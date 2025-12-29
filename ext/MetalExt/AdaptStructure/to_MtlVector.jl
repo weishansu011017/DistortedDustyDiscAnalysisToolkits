@@ -53,10 +53,10 @@ function PhantomRevealer.to_MtlVector(LBVH :: LinearBVH{D, TF, TI, VF, VI, A, B}
     )
 end
 
-function PhantomRevealer.to_MtlVector(grid :: GeneralGrid{D, TF, VG, VC}) where {D, TF <: AbstractFloat, VG <: AbstractVector{TF}, VC <: AbstractVector{NTuple{D, TF}}}
-    return GeneralGrid{D, Float32, MtlVector{Float32}, MtlVector{NTuple{D, Float32}}}(
+function PhantomRevealer.to_MtlVector(grid :: GeneralGrid{D, TF, VG, VC}) where {D, TF <: AbstractFloat, VG <: AbstractVector{TF}, VC <: NTuple{D, Vector{TF}}}
+    return GeneralGrid{D, Float32, MtlVector{Float32}, NTuple{D, MtlVector{Float32}}}(
         MtlVector{Float32}(grid.grid),
-        MtlVector{NTuple{D, Float32}}(grid.coor)
+        ntuple(i -> MtlVector{Float32}(grid.coor[i]), D)
     )
 end
 

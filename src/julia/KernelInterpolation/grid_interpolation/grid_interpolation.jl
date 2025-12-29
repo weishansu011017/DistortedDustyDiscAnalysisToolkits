@@ -51,7 +51,9 @@ function initialize_interpolation(:: CPUComputeBackend, grid_template::GeneralGr
     @time begin
     enc = MortonEncoding(grid_template.coor, CodeType = UInt64)
     p = sortperm(enc.codes; alg=QuickSort)
-    Base.permute!(grid_template.coor, p)
+    @inbounds for i in 1:D
+        Base.permute!(grid_template.coor[i], p)
+    end
     end
     @info "End reordering grid template..."
 
@@ -76,9 +78,14 @@ function initialize_interpolation(:: CPUComputeBackend, grid_template::GeneralGr
     return grids, LBVH, order, catalog_consice, p
 end
 
-@inline function _general_grid_interpolation_kernel!(:: CPUComputeBackend, grids :: NTuple{L, GeneralGrid{D}}, i :: Int, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {D, N, G, Div, C, L, TF <: AbstractFloat, ITPINPUT <: InterpolationInput{TF}, ITPSTRATEGY <: AbstractInterpolationStrategy}
+@inline function _general_grid_interpolation_kernel!(:: CPUComputeBackend, grids :: NTuple{L, GeneralGrid{3}}, i :: Int, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {N, G, Div, C, L, TF <: AbstractFloat, ITPINPUT <: InterpolationInput{TF}, ITPSTRATEGY <: AbstractInterpolationStrategy}
     # Get point
-    point = grids[1].coor[i]
+    @inbounds begin
+        xa = grids[1].coor[1][i]
+        ya = grids[1].coor[2][i]
+        za = grids[1].coor[3][i]
+        point :: NTuple{3, TF} = (xa, ya, za)
+    end
     
     # Particles searching
     ha = LBVH_find_nearest_h(LBVH, point)
@@ -106,7 +113,7 @@ end
     if G > 0
         @inbounds for j in 1:G
             grad_quant = gradients[j]
-            @inbounds for d in 1:D
+            @inbounds for d in 1:3
                 grids[out_idx].grid[i] = grad_quant[d]
                 out_idx += 1
             end
@@ -126,7 +133,7 @@ end
     if C > 0
         @inbounds for j in 1:C
             curl_quant = curls[j]
-            @inbounds for d in 1:D
+            @inbounds for d in 1:3
                 grids[out_idx].grid[i] = curl_quant[d]
                 out_idx += 1
             end
@@ -137,9 +144,14 @@ end
     return nothing
 end
 
-@inline function _general_grid_interpolation_kernel!(:: CPUComputeBackend, grids :: NTuple{L, GeneralGrid{D}}, i :: Int, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, ::Type{itpScatter}) where {D, N, G, Div, C, L, TF <: AbstractFloat, ITPINPUT <: InterpolationInput{TF}}
+@inline function _general_grid_interpolation_kernel!(:: CPUComputeBackend, grids :: NTuple{L, GeneralGrid{3}}, i :: Int, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, ::Type{itpScatter}) where {N, G, Div, C, L, TF <: AbstractFloat, ITPINPUT <: InterpolationInput{TF}}
     # Get point
-    point = grids[1].coor[i]
+    @inbounds begin
+        xa = grids[1].coor[1][i]
+        ya = grids[1].coor[2][i]
+        za = grids[1].coor[3][i]
+        point :: NTuple{3, TF} = (xa, ya, za)
+    end
 
     # Interpolation
     itpresult :: Tuple{NTuple{N,TF}, NTuple{G,NTuple{3,TF}}, NTuple{Div,TF}, NTuple{C,NTuple{3,TF}}} = _general_quantity_interpolate_kernel(input, point, LBVH, catalog_consice, itpScatter)
@@ -164,7 +176,7 @@ end
     if G > 0
         @inbounds for j in 1:G
             grad_quant = gradients[j]
-            @inbounds for d in 1:D
+            @inbounds for d in 1:3
                 grids[out_idx].grid[i] = grad_quant[d]
                 out_idx += 1
             end
@@ -184,7 +196,7 @@ end
     if C > 0
         @inbounds for j in 1:C
             curl_quant = curls[j]
-            @inbounds for d in 1:D
+            @inbounds for d in 1:3
                 grids[out_idx].grid[i] = curl_quant[d]
                 out_idx += 1
             end
@@ -243,7 +255,9 @@ function GeneralGrid_interpolation(backend :: CPUComputeBackend, grid_template::
     @info "Reordering output grids back to original order..."
     @time begin
     # Reorder coor (Represent bu grid template since they share the same coor array)
-    Base.invpermute!(grid_template.coor, p)
+    @inbounds for i in 1:D
+        Base.invpermute!(grid_template.coor[i], p)
+    end
 
     # Reorder each grid
     for grid in grids

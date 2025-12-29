@@ -55,31 +55,38 @@ storage vector for grid values.
 @inline Base.length(grid :: GRID) where {GRID <: AbstractInterpolationGrid} = length(grid.grid)
 
 """
-    GeneralGrid{D, TF <: AbstractFloat, VG <: AbstractVector{TF}, VC <: AbstractVector{NTuple{D, TF}}}  <: AbstractInterpolationGrid
+    GeneralGrid{D, TF<:AbstractFloat, VG<:AbstractVector{TF}, VC<:NTuple{D, VG}} <: AbstractInterpolationGrid{TF}
 
-A generic grid container for interpolation, storing both grid values and 
-their corresponding coordinates.
-`coor` is intended to be immutable and can be shared across grids.
+A generic *unstructured* grid container for interpolation, storing grid values together with
+their coordinates.
+
+Coordinates are stored as a `D`-tuple of vectors, where each vector contains the coordinates
+for one dimension. The tuple itself is immutable, so the coordinate container can be shared
+across multiple grids without changing its structure.
 
 # Type Parameters
 - `D` : Dimensionality of the grid.
 - `TF <: AbstractFloat` : Floating-point element type.
 - `VG <: AbstractVector{TF}` : Storage type for grid values.
-- `VC <: AbstractVector{NTuple{D, TF}}` : Storage type for grid coordinates.
+- `VC <: NTuple{D, VG}` : Storage type for coordinates (a `D`-tuple of vectors, each of type `VG`).
 
 # Fields
-- `grid :: VG` : Vector containing the grid values.
-- `coor :: VC` : Vector containing the coordinates of each grid point.
+- `grid :: VG` :
+    Vector of grid values of length `N`.
+- `coor :: VC` :
+    Coordinates in SoA form. For each dimension `d ∈ 1:D`, `coor[d]` is a vector of length `N`,
+    and `coor[d][i]` is the coordinate of the `i`-th grid point along dimension `d`.
+
 """
-struct GeneralGrid{D, TF <: AbstractFloat, VG <: AbstractVector{TF}, VC <: AbstractVector{NTuple{D, TF}}} <: AbstractInterpolationGrid{TF}
+struct GeneralGrid{D, TF <: AbstractFloat, VG <: AbstractVector{TF}, VC <: NTuple{D, VG}} <: AbstractInterpolationGrid{TF}
     grid :: VG
     coor :: VC
 end
 
-function Adapt.adapt_structure(to, x :: GeneralGrid)
+function Adapt.adapt_structure(to, x :: GeneralGrid{D}) where {D}
     GeneralGrid(
         Adapt.adapt(to, x.grid),
-        Adapt.adapt(to, x.coor)
+        ntuple(i -> Adapt.adapt(to, x.coor[i]), D)
     )
 end
 
@@ -100,7 +107,6 @@ function Base.similar(grid::GeneralGrid)
     return GeneralGrid(similar(grid.grid), grid.coor)
 end
 
-@inline _convert_coor_tuple(c::NTuple{D,TF}, ::Type{T}) where {D,TF,T} = ntuple(d -> T(c[d]), Val(D))
 """
     similar(grid::GeneralGrid, itype :: Type{T}) where {T}
 
@@ -117,13 +123,53 @@ Note that the coordinate type also changes accordingly.
 - `GeneralGrid` : A grid with independent value storage (`grid.grid`) of type `T`
   and shared coordinates (`grid.coor`) of type `NTuple{D, T}`.
 """
-function Base.similar(grid::GeneralGrid{D,TF}, ::Type{T}) where {D,TF<:AbstractFloat,T<:AbstractFloat}
-
+function Base.similar(grid::GeneralGrid{3,TF}, ::Type{T}) where {TF<:AbstractFloat,T<:AbstractFloat}
     new_grid = similar(grid.grid, T)
-    new_coor = similar(grid.coor, NTuple{D,T}) 
+    new_coor = ntuple(i -> similar(grid.coor[i]), 3)
 
-    new_coor .= _convert_coor_tuple.(grid.coor, Ref(T))
+    @inbounds @simd for i in eachindex(new_grid)
+        @inbounds begin
+            xi = grid.coor[1][i]
+            yi = grid.coor[2][i]
+            zi = grid.coor[3][i]
 
+            new_coor[1][i] = xi
+            new_coor[2][i] = yi
+            new_coor[3][i] = zi
+        end 
+    end
+    return GeneralGrid(new_grid, new_coor)
+end
+
+"""
+    similar(grid::GeneralGrid, itype :: Type{T}) where {T}
+
+Construct a new `GeneralGrid` with fresh storage for values but sharing
+the same coordinate container as the input grid and with values of type `T`.
+
+Note that the coordinate type also changes accordingly.
+
+# Parameters
+- `grid::GeneralGrid` : Template grid to copy structure from.
+- `itype::Type{T}` : Desired element type for the new grid's values.
+
+# Returns
+- `GeneralGrid` : A grid with independent value storage (`grid.grid`) of type `T`
+  and shared coordinates (`grid.coor`) of type `NTuple{D, T}`.
+"""
+function Base.similar(grid::GeneralGrid{2,TF}, ::Type{T}) where {TF<:AbstractFloat,T<:AbstractFloat}
+    new_grid = similar(grid.grid, T)
+    new_coor = ntuple(i -> similar(grid.coor[i]), 2)
+
+    @inbounds @simd for i in eachindex(new_grid)
+        @inbounds begin
+            xi = grid.coor[1][i]
+            yi = grid.coor[2][i]
+
+            new_coor[1][i] = xi
+            new_coor[2][i] = yi
+        end 
+    end
     return GeneralGrid(new_grid, new_coor)
 end
 
@@ -147,32 +193,45 @@ Check whether the coordinates stored in a `GeneralGrid` match the given `axes`
 - `Bool` : `true` if all coordinates match within tolerance, otherwise `false`.
 """
 function Base.isapprox(grid::GeneralGrid{D,TF}, axes::NTuple{D,<:AbstractVector}; atol :: Real = 1.0e-8, rtol :: Real = 1.0e-8) :: Bool where {D,TF <: AbstractFloat}
-    size_expected = ntuple(i -> length(axes[i]), D)
-    rscoor = reshape(grid.coor, size_expected)
+    size_expected = ntuple(d -> length(axes[d]), D)
+    N = prod(size_expected)
+
+    length(grid) == N || return false
+    @inbounds for d in 1:D
+        length(grid.coor[d]) == N || return false
+    end
 
     inds = CartesianIndices(size_expected)
+    L = LinearIndices(size_expected)
+
     @inbounds for I in inds
-        coor_tuple = rscoor[I]
+        i = L[I]
+
         @inbounds @simd for d in 1:D
             val_expected = axes[d][I[d]]
-            val_actual   = coor_tuple[d]
+            val_actual   = grid.coor[d][i]
             if !isapprox(val_actual, val_expected; atol=atol, rtol=rtol)
                 return false
             end
         end
     end
+
     return true
 end
 
 function Base.permute!(grid::GeneralGrid{D,TF}, p :: AbstractVector{TI}) where {D,TF<:AbstractFloat, TI<:Integer}
     Base.permute!(grid.grid, p)
-    Base.permute!(grid.coor, p)
+    @inbounds for i in 1:D
+        Base.permute!(grid.coor[i], p)
+    end
     return nothing
 end
 
 function Base.invpermute!(grid::GeneralGrid{D,TF}, p :: AbstractVector{TI}) where {D,TF<:AbstractFloat, TI<:Integer}
     Base.invpermute!(grid.grid, p)
-    Base.invpermute!(grid.coor, p)
+    @inbounds for i in 1:D
+        Base.invpermute!(grid.coor[i], p)
+    end
     return nothing
 end
 
@@ -204,60 +263,66 @@ end
     batch_GeneralGrid(grid::GeneralGrid{D, TF, VG, VC}, batch_size::Int)
 
 Split a `GeneralGrid` into contiguous batches, each containing at most `batch_size` points.
-The function preserves ordering of both `grid.grid` and `grid.coor`, returning a statically-sized
-NTuple where each element is a `GeneralGrid{D, TF, VG, VC}` containing a slice of the input data.
+The function preserves the ordering of both `grid.grid` and coordinates `grid.coor`, returning
+a statically-sized `NTuple` of `GeneralGrid`s.
 
-Batch `i` contains points from index  
-`(i−1)·batch_size + 1` to `min(i·batch_size, N)`  
+Batch `b` contains points from index
+`start = (b - 1) * batch_size + 1` to `stop = min(b * batch_size, N)`,
 where `N = length(grid)`.
 
 # Parameters
-- `grid::GeneralGrid{D, TF, VG, VC}`  
-  Input grid containing scalar field values and coordinate tuples.
-
-- `batch_size::Int`  
+- `grid::GeneralGrid{D, TF, VG, VC}` :
+  Input grid containing values `grid.grid` and coordinates `grid.coor` in SoA layout
+  (`grid.coor[d][i]` is the `d`-th coordinate of the `i`-th point).
+- `batch_size::Int` :
   Maximum number of points in each batch.
 
 # Returns
-`NTuple{B, GeneralGrid{D, TF, VG, VC}}` where `B = cld(N, batch_size)`  
-and `N = length(grid)`.  
+`NTuple{B, GeneralGrid{D, TF, VG, VC}}` where `B = cld(N, batch_size)` and `N = length(grid)`.
+
 Each returned `GeneralGrid` contains:
-- `grid.grid[start:stop]`  
-- `grid.coor[start:stop]`  
-with correct contiguous slicing.
+- `grid.grid[start:stop]`
+- `ntuple(d -> grid.coor[d][start:stop], D)`
+
+with `start:stop` defined by the batch index `b`.
 """
 function batch_GeneralGrid(grid::GeneralGrid{D,TF,VG,VC}, batch_size::Int) where {D, TF<:AbstractFloat, VG<:AbstractVector{TF}, VC<:AbstractVector{NTuple{D,TF}}}
     npoints = length(grid)
     num_batches = cld(npoints, batch_size)
 
-    return ntuple(i -> begin
-        start = (i-1)*batch_size + 1
-        stop  = min(i*batch_size, npoints)
-        GeneralGrid{D,TF,VG,VC}(grid.grid[start:stop], grid.coor[start:stop])
+    return ntuple(b -> begin
+        start = (b - 1) * batch_size + 1
+        stop  = min(b * batch_size, npoints)
+
+        grid_b = grid.grid[start:stop]
+        coor_b = ntuple(d -> grid.coor[d][start:stop], D)
+
+        GeneralGrid(grid_b, coor_b)
     end, num_batches)
 end
 
 """
-    merge_GeneralGrid(grids::AbstractVector{GeneralGrid{D,TF,VG,VC}})
+    merge_GeneralGrid(grids::AbstractVector{<:GeneralGrid{D,TF,VG,VC}})
 
-Merge a vector of `GeneralGrid` batches back into a single `GeneralGrid`.
-The function concatenates all `grid.grid` and `grid.coor` fields in order,
-restoring the original point ordering before batching.
+Merge a collection of `GeneralGrid` batches into a single `GeneralGrid`.
+
+The function concatenates all scalar values `g.grid` in order, and concatenates
+coordinates in SoA form per dimension: for each `d = 1:D`, the merged coordinate
+vector is `vcat(g.coor[d] for g in grids...)`. This restores the original point
+ordering when `grids` is produced by `batch_GeneralGrid` without reordering.
 
 # Parameters
-- `grids::AbstractVector{GeneralGrid{D,TF,VG,VC}}`
-  A vector of batched `GeneralGrid` objects, typically produced by
-  `batch_GeneralGrid`.
+- `grids::AbstractVector{<:GeneralGrid{D,TF,VG,VC}}` :
+  A vector of batched `GeneralGrid` objects.
 
 # Returns
-`GeneralGrid{D,TF,VG,VC}` with all batched segments concatenated in order.
+`GeneralGrid{D,TF,VG,VC}` containing the concatenated values and coordinates.
 """
-function merge_GeneralGrid(grids :: V) where {D, TF<:AbstractFloat, VG<:AbstractVector{TF}, VC<:AbstractVector{NTuple{D,TF}}, GG <: GeneralGrid{D,TF,VG,VC}, V <: AbstractVector{GG}}
-    # Concatenate scalar values and coordinates
-    merged_grid = vcat(map(g -> g.grid, grids)...)
-    merged_coor = vcat(map(g -> g.coor, grids)...)
+function merge_GeneralGrid(grids::V) where {D, TF<:AbstractFloat, VG<:AbstractVector{TF}, VC<:NTuple{D,VG}, GG<:GeneralGrid{D,TF,VG,VC}, V<:AbstractVector{GG}}
+    merged_grid = vcat((g.grid for g in grids)...)
+    merged_coor = ntuple(d -> vcat((g.coor[d] for g in grids)...), D)
 
-    return GeneralGrid{D,TF,VG,VC}(merged_grid, merged_coor)
+    return GeneralGrid(merged_grid, merged_coor)
 end
 
 # structured grid (Cartesian/Cylindrical... etc)
@@ -288,7 +353,7 @@ function Adapt.adapt_structure(to, x :: SG) where {D, TF <: AbstractFloat, V <: 
     StructuredGrid(
         Adapt.adapt(to, x.grid),
         ntuple(i -> Adapt.adapt(to, x.axes[i]), D),
-        Adapt.adapt(to, x.coor)
+        x.size
     )
 end
 
@@ -344,24 +409,37 @@ end
 """
     coordinate_grid(grid::StructuredGrid{D, TF}) where {D, TF<:AbstractFloat}
 
-Generate a full coordinate grid from the `StructuredGrid` definition.
+Generate coordinates for all grid points defined by a `StructuredGrid`.
 
-For each logical index `(i, j, ...)`, returns the physical coordinate
-`(x, y, ...)` using `grid.axes`.
+Coordinates are returned in a structure-of-arrays (SoA) layout compatible with `GeneralGrid`.
+For each dimension `d = 1:D`, the returned vector `coor[d]` has length `N = prod(grid.size)`,
+and `coor[d][i]` is the `d`-th coordinate of the `i`-th grid point, where `i` follows Julia's
+column-major linear indexing of `grid.size`.
 
 # Parameters
-- `grid::StructuredGrid{D,TF}` : The structured grid container.
+- `grid::StructuredGrid{D,TF}` :
+  The structured grid container.
 
 # Returns
-- `Array{NTuple{D,TF}, D}` : Same shape as `grid.grid`, each element is the
-  coordinate tuple at that grid point.
+`NTuple{D, AbstractVector{TF}}`:
+- For each `d = 1:D`, `coor[d]` is a vector of length `N = prod(grid.size)`.
+- The linear index `i` is consistent with `vec(grid.grid)`.
 """
-function coordinate_grid(grid::StructuredGrid{D, TF}) where {D, TF<:AbstractFloat}
-    coords = Array{NTuple{D, TF}, D}(undef, grid.size...)
-    @inbounds for I in CartesianIndices(coords)
-        coords[I] = coordinate(grid, Tuple(I))
+function coordinate_grid(grid::StructuredGrid{D,TF}) where {D,TF<:AbstractFloat}
+    sz = grid.size
+    gv = vec(grid.grid)
+    coor = ntuple(_ -> similar(gv), D)
+
+    L = LinearIndices(sz)
+
+    @inbounds for I in CartesianIndices(sz)
+        i = L[I]
+        @inbounds @simd for d in 1:D
+            coor[d][i] = grid.axes[d][I[d]]
+        end
     end
-    return coords
+
+    return coor
 end
 
 """
@@ -389,7 +467,7 @@ Flatten a `StructuredGrid` into a one-dimensional `GeneralGrid`.
 """
 function flatten(grid::StructuredGrid)
     coor = coordinate_grid(grid)
-    return GeneralGrid(vec(grid.grid), vec(coor))
+    return GeneralGrid(vec(grid.grid), coor)
 end
 
 """
@@ -435,7 +513,7 @@ subsequent interpolation routines.
 - `x, y, z::AbstractVector{T}`: Particle positions along each Cartesian axis.
 
 # Returns
-- `GeneralGrid{3, T, Vector{T}, Vector{NTuple{3, T}}}`: Grid with zeroed values
+- `GeneralGrid{3, T, Vector{T}, NTuple{3, Vector{T}}}`: Grid with zeroed values
     and `(x, y, z)` coordinate tuples.
 """
 function GeneralGrid(x :: V, y :: V, z :: V) where {T <: AbstractFloat, V <: AbstractVector{T}}
@@ -443,12 +521,9 @@ function GeneralGrid(x :: V, y :: V, z :: V) where {T <: AbstractFloat, V <: Abs
     (length(y) == N) || throw(ArgumentError("y length mismatch"))
     (length(z) == N) || throw(ArgumentError("z length mismatch"))
 
-    coords = Vector{NTuple{3, T}}(undef, N)
-    @inbounds @simd for i in eachindex(x, y, z)
-        coords[i] = (x[i], y[i], z[i])
-    end
+    coords = (x, y, z)
     vals = zeros(T, N)
-    return GeneralGrid{3, T, Vector{T}, Vector{NTuple{3, T}}}(vals, coords)
+    return GeneralGrid{3, T, Vector{T}, NTuple{3, Vector{T}}}(vals, coords)
 end
 
 """
@@ -462,19 +537,17 @@ resampling passes.
 - `x, y::AbstractVector{T}`: Particle positions along each axis.
 
 # Returns
-- `GeneralGrid{2, T, Vector{T}, Vector{NTuple{2, T}}}`: Grid with zeroed values
+- `GeneralGrid{3, T, Vector{T}, NTuple{2, Vector{T}}}`: Grid with zeroed values
   and `(x, y)` coordinate tuples.
 """
 function GeneralGrid(x :: V, y :: V) where {T <: AbstractFloat, V <: AbstractVector{T}}
     N = length(x)
     (length(y) == N) || throw(ArgumentError("y length mismatch"))
+    (length(z) == N) || throw(ArgumentError("z length mismatch"))
 
-    coords = Vector{NTuple{2, T}}(undef, N)
-    @inbounds @simd for i in eachindex(x, y)
-        coords[i] = (x[i], y[i])
-    end
+    coords = (x, y)
     vals = zeros(T, N)
-    return GeneralGrid{2, T, Vector{T}, Vector{NTuple{2, T}}}(vals, coords)
+    return GeneralGrid{2, T, Vector{T}, NTuple{3, Vector{T}}}(vals, coords)
 end
 
 ### Cartesian
