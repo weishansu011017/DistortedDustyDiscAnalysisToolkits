@@ -86,23 +86,22 @@ function get_PhantomRevealer_version()
 end
 
 """
-    get_analysis_info(directory::String, filename::String) :: Dict{String,Any}
+    get_analysis_info(filepath::String) :: Dict{Symbol,Any}
 
 Gather analysis information about a file.
 
 # Parameters
-- `directory :: String`: The directory where the file is located.
-- `filename :: String`: The name of the file.
+- `filepath :: String`: The path of the file.
 
 # Returns
-`Dict{String,Any}`: A dictionary containing analysis information.
+`Dict{Symbol,Any}`: A dictionary containing analysis information.
 """
 function get_analysis_info(filepath::String)
     log_info = Dict{String,Any}()
-    log_info["Analysis Date"] = today()
-    log_info["System kernel"] = Sys.KERNEL
-    log_info["File path"] = filepath
-    log_info["Filesize (MB)"] = (filesize(filepath) / (1024 * 1024))
+    log_info[:Analysis_date] = today()
+    log_info[:system_kernel] = Sys.KERNEL
+    log_info[:filepath] = filepath
+    log_info[:filesize] = (filesize(filepath) / (1024 * 1024))
     return log_info
 end
 
@@ -140,18 +139,18 @@ function last_logging()
 end
 
 """
-    file_identifier(Operation_type::String)
+    file_identifier(operation_name::String)
 
 Generate a file identifier string.
 
 # Parameters
-- `Operation_type::String`: Custom operation name.
+- `operation_name::String`: Custom operation name.
 
 # Returns
 - `String`: The file identifier string.
 """
-function file_identifier(Operation_type::String)
+function file_identifier(operation_name::String)
     current_time = Dates.format(now(), "dd/mm/yyyy HH:MM:SS.s")
-    str = "FT:PhantomRevealer:$(get_PhantomRevealer_version()) ($(Operation_type)): $(current_time)"
+    str = "FT:PhantomRevealer:$(get_PhantomRevealer_version()) ($(isempty(operation_name) ? "CommonOutput" : operation_name)): $(current_time)"
     return str
 end

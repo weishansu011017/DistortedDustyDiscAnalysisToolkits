@@ -53,7 +53,7 @@ include(joinpath(@__DIR__, "single_point_interpolation", "single_point_traversal
 include(joinpath(@__DIR__, "grid.jl"))
 
 ## Grid interpolation
-include(joinpath(@__DIR__, "grid_interpolation", "GridInterpolationResult.jl"))
+include(joinpath(@__DIR__, "grid_interpolation", "GridBundle.jl"))
 include(joinpath(@__DIR__, "grid_interpolation", "grid_interpolation.jl"))
 
 # Export function, marco, const...

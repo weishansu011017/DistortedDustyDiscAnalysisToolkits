@@ -36,10 +36,10 @@ y = (0.0f0, 2.0f0, 128)  # AxisParam{Float32}
 const AxisParam{TF} = Tuple{TF, TF, Int}
 
 # General Grid definition
-abstract type AbstractInterpolationGrid{TF} end
+abstract type AbstractGrid{TF} end
 
 """
-    Base.length(grid::GRID) where {GRID <: AbstractInterpolationGrid}
+    Base.length(grid::GRID) where {GRID <: AbstractGrid}
 
 Return the number of elements stored in the grid values array.
 
@@ -47,15 +47,31 @@ This delegates to `length(grid.grid)`, i.e. the length of the internal
 storage vector for grid values.
 
 # Parameters
-- `grid::GRID` : Any concrete subtype of `AbstractInterpolationGrid`.
+- `grid::GRID` : Any concrete subtype of `AbstractGrid`.
 
 # Returns
 - `Int` : The number of stored grid values.
 """
-@inline Base.length(grid :: GRID) where {GRID <: AbstractInterpolationGrid} = length(grid.grid)
+@inline Base.length(grid :: GRID) where {GRID <: AbstractGrid} = length(grid.grid)
 
 """
-    GeneralGrid{D, TF<:AbstractFloat, VG<:AbstractVector{TF}, VC<:NTuple{D, VG}} <: AbstractInterpolationGrid{TF}
+    datatype(::Type{GRID}) where {TF<:AbstractFloat, GRID<:AbstractGrid{TF}}
+
+Return the floating-point element type parameter `TF` of an `AbstractGrid{TF}` type.
+
+This method extracts `TF` purely from the parametric type, without inspecting any
+stored arrays or values.
+
+# Parameters
+- `::Type{GRID}`: A concrete grid type `GRID <: AbstractGrid{TF}`.
+
+# Returns
+- `Type{TF}`: The floating-point element type parameter of the grid type.
+"""
+@inline datatype(::Type{GRID}) where {TF <: AbstractFloat, GRID <: AbstractGrid{TF}} = TF
+
+"""
+    GeneralGrid{D, TF<:AbstractFloat, VG<:AbstractVector{TF}, VC<:NTuple{D, VG}} <: AbstractGrid{TF}
 
 A generic *unstructured* grid container for interpolation, storing grid values together with
 their coordinates.
@@ -78,7 +94,7 @@ across multiple grids without changing its structure.
     and `coor[d][i]` is the coordinate of the `i`-th grid point along dimension `d`.
 
 """
-struct GeneralGrid{D, TF <: AbstractFloat, VG <: AbstractVector{TF}, VC <: NTuple{D, VG}} <: AbstractInterpolationGrid{TF}
+struct GeneralGrid{D, TF <: AbstractFloat, VG <: AbstractVector{TF}, VC <: NTuple{D, VG}} <: AbstractGrid{TF}
     grid :: VG
     coor :: VC
 end
@@ -327,7 +343,7 @@ end
 
 # structured grid (Cartesian/Cylindrical... etc)
 """
-    StructuredGrid{D, TF<:AbstractFloat, V<:AbstractVector{TF}, A<:AbstractArray{TF,D}} <: AbstractInterpolationGrid{TF}
+    StructuredGrid{D, TF<:AbstractFloat, V<:AbstractVector{TF}, A<:AbstractArray{TF,D}} <: AbstractGrid{TF}
 
 A structured grid container, storing values in an N-dimensional array
 together with coordinate axes for each dimension.
@@ -343,7 +359,7 @@ together with coordinate axes for each dimension.
 - `axes :: NTuple{D,V}` : Tuple of coordinate vectors, one per dimension.
 - `size :: NTuple{D,Int}` : Logical size of the grid (cached from axes).
 """
-struct StructuredGrid{D, TF <: AbstractFloat, V <: AbstractVector{TF}, A <: AbstractArray{TF, D}} <: AbstractInterpolationGrid{TF}
+struct StructuredGrid{D, TF <: AbstractFloat, V <: AbstractVector{TF}, A <: AbstractArray{TF, D}} <: AbstractGrid{TF}
     grid :: A
     axes :: NTuple{D, V}
     size :: NTuple{D, Int}

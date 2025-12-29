@@ -167,13 +167,13 @@ launches the interpolation kernel, and copies results back to host memory.
   Interpolation strategy type (e.g., symmetric, gather, scatter).
 
 # Returns
-`GridInterpolationResult{L}` containing:
+`GridBundle{L, typeof(grids[1])}` containing:
 - `grids` — NTuple of host-side grids with all interpolated fields.  
-- `order` — Ordered list of output quantity names.
+- `names` — Ordered list of output quantity names.
 
 """
 function PhantomRevealer.GeneralGrid_interpolation(::MetalComputeBackend, grid_template::GeneralGrid{D}, input::ITPINPUT, catalog::InterpolationCatalog{N, G, Div, C, L}, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {D, N, G, Div, C, L, T <: AbstractFloat, ITPINPUT <: InterpolationInput{T}, ITPSTRATEGY <: AbstractInterpolationStrategy}
-    grids, LBVH, order, catalog_consice, p = PhantomRevealer.initialize_interpolation(PhantomRevealer.CPUComputeBackend(), grid_template, input, catalog)
+    grids, LBVH, names, catalog_consice, p = PhantomRevealer.initialize_interpolation(PhantomRevealer.CPUComputeBackend(), grid_template, input, catalog)
     # To MtlVector
     @info "Copying interpolated grids to device memory..."
     @time begin
@@ -199,17 +199,22 @@ function PhantomRevealer.GeneralGrid_interpolation(::MetalComputeBackend, grid_t
     # Reorder grids back to original order
     @info "Reordering output grids back to original order..."
     @time begin
-    # Reorder coor 
-    @inbounds for i in 1:D
-        Base.invpermute!(grids_result[1].coor[i], p)
-    end
+    # Reorder coor
+    refV = grids_result[1].grid               
+    shared_coor = ntuple(d -> begin
+        v = similar(refV)
+        copyto!(v, grid_template.coor[d])       
+        Base.invpermute!(v, p)           
+        v
+    end, Val(D))
 
     # Reorder each grid
     for grid in grids_result
         Base.invpermute!(grid.grid, p)
     end
     end
-    @info "End reordering output grids."
+    grids = ntuple(i -> GeneralGrid(grids_result[i].grid, shared_coor), Val(L))
+    @info "End reordering output grids..."
 
-    return GridInterpolationResult{L}(grids_result, order)
+    return GridBundle(grids, names)
 end

@@ -39,7 +39,7 @@ to be `isbits` when used with `CuDeviceVector` or `SVector` types, enabling full
 
 # Dependencies
 - Requires kernel definitions from `KernelInterpolation/kernel_function.jl`.
-- Can be constructed using `constructor.jl`, which converts a `ParticlesDataFrame` to a valid input object.
+- Can be constructed using `constructor.jl`, which converts a `ParticleDataFrame` to a valid input object.
 
 """
 

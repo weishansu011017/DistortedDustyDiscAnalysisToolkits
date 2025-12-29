@@ -43,17 +43,17 @@ Next, loading your dumpfiles
 
 ~~~julia
 filepath :: String = "/path/to/your/dumpfile"
-prdf_list :: Vector{ParticlesDataFrame} = read_phantom(filepath, "all")
+prdf_list :: Vector{ParticleDataFrame} = read_phantom(filepath, "all")
 ~~~
 
-You will get the vector that contains all of the particles in a Sarracen-alike dataframes structure, which is named as `ParticlesDataFrame`,  with the separation of different type of particles. 
+You will get the vector that contains all of the particles in a Sarracen-alike dataframes structure, which is named as `ParticleDataFrame`,  with the separation of different type of particles. 
 
 Note that the final element in this vector will always be the data of sinks particles (if exist.)
 
-The structure of `ParticlesDataFrame` is shown below:
+The structure of `ParticleDataFrame` is shown below:
 
 ~~~julia
-struct ParticlesDataFrame <: PhantomRevealerDataStructures
+struct ParticleDataFrame <: PhantomRevealerDataStructures
     dfdata::DataFrame
     params::Dict
 end
@@ -86,7 +86,7 @@ Copy_data = deepcopy(prdf_list[1])
 Beside, the coordinate transformation that shifts the origin to the positional of specific sinks particles is provied
 
 ~~~julia
-sinks_data :: ParticlesDataFrame = prdf_list[end]
+sinks_data :: ParticleDataFrame = prdf_list[end]
 COM2star!(prdf_list, sinks_data, 1)
 ~~~
 
@@ -110,7 +110,7 @@ otherwise, they will give their coorespoding result.
 
 ### K-dimensional tree (KD-Tree) structure support
 
-In some of the calculation, we would like to filter some of the particles to reduce the calculation. However, taking the geometry distance calculation directly will lead to a $\mathcal{O}(n^2)$ time complexity. Therefore, **PhantomRevealer** provides a method to filter your `ParticlesDataFrame` which is based on K-dimensional tree structure that is provided by `Neighborhood.jl`(https://github.com/JuliaNeighbors/Neighborhood.jl). To start with, generate the kd-tree by following
+In some of the calculation, we would like to filter some of the particles to reduce the calculation. However, taking the geometry distance calculation directly will lead to a $\mathcal{O}(n^2)$ time complexity. Therefore, **PhantomRevealer** provides a method to filter your `ParticleDataFrame` which is based on K-dimensional tree structure that is provided by `Neighborhood.jl`(https://github.com/JuliaNeighbors/Neighborhood.jl). To start with, generate the kd-tree by following
 
 ~~~julia
 kdtree3d :: KDTree = Generate_KDtree(data, dim=3)
@@ -123,7 +123,7 @@ Next, filtering the data by entering
 target :: Vector = [10.0, π/4, 0.0]   # In cylindrical coordinate (s, ϕ, z) for exmaple.
 radius :: Float64 = 2.5
 
-filtered_data :: ParticlesDataFrame = KDtree_filter(data, kdtree3d, target, radius, "polar" )  # You can change the final input to "cart" if the `target` input is in cartisian coordinate.
+filtered_data :: ParticleDataFrame = KDtree_filter(data, kdtree3d, target, radius, "polar" )  # You can change the final input to "cart" if the `target` input is in cartisian coordinate.
 ~~~
 
 ### Grid generator
@@ -261,11 +261,11 @@ function Disk_Faceon_interpolation(filepath :: String)
     columns_order :: Vector = ["Sigma", "∇Sigmas", "∇Sigmaϕ", column_names..., (mid_column_names.*"m")...] # construct a ordered column names (Those quantities with taking mid-plane average will have a suffix "m")
     
     # Load file
-    prdf_list :: Vector{ParticlesDataFrame} = read_phantom(filepath, "all")
+    prdf_list :: Vector{ParticleDataFrame} = read_phantom(filepath, "all")
     COM2star!(prdf_list, prdf_list[end], Origin_sinks_id)
-    datag :: ParticlesDataFrame = prdf_list[1]
-    datad :: ParticlesDataFrame = prdf_list[2]
-    sinks_data :: ParticlesDataFrame = prdf_list[3]
+    datag :: ParticleDataFrame = prdf_list[1]
+    datad :: ParticleDataFrame = prdf_list[2]
+    sinks_data :: ParticleDataFrame = prdf_list[3]
     
     # Add extra quantity for interpolation 
     add_cylindrical!(datag)

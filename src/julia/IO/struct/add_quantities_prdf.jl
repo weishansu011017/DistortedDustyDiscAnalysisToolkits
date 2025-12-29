@@ -1,5 +1,5 @@
 """
-Modifing ParticlesDataFrame for several purposes
+Modifing ParticleDataFrame for several purposes
     by Wei-Shan Su
     September 28, 2025
 
@@ -11,70 +11,70 @@ Becarful, the methods with suffix `!` would change the inner state of its first 
 # Method
 ## Distance measurements
 """
-    get_rnorm_ref(data::ParticlesDataFrame, reference_position::NTuple{3, Float64})
+    get_rnorm_ref(data::ParticleDataFrame, reference_position::NTuple{3, Float64})
 Get the array of distance between particles and the reference_position.
 
 # Parameters
-- `data :: ParticlesDataFrame`: The SPH data that is stored in `ParticlesDataFrame` 
+- `data :: ParticleDataFrame`: The SPH data that is stored in `ParticleDataFrame` 
 - `reference_position::NTuple{3, Float64}`: The reference point to estimate the distance.
 
 # Returns
 - `Vector`: The array of distance between particles and the reference_position.
 """
-function get_rnorm_ref(data::ParticlesDataFrame, reference_position::NTuple{3, TF}) where {TF <: AbstractFloat}
+function get_rnorm_ref(data::ParticleDataFrame, reference_position::NTuple{3, TF}) where {TF <: AbstractFloat}
     x = data.dfdata.x; y = data.dfdata.y; z = data.dfdata.z
     rnorm :: Vector{TF} = Euclidean_distance(x, y, z, reference_position)
     return rnorm
 end
 
 """
-    get_snorm_ref(data::ParticlesDataFrame, reference_position::NTuple{2, TF})
+    get_snorm_ref(data::ParticleDataFrame, reference_position::NTuple{2, TF})
 Get the array of distance between particles and the reference_position ON THE XY-PLANE PROJECTION.
 
 # Parameters
-- `data :: ParticlesDataFrame`: The SPH data that is stored in `ParticlesDataFrame` 
+- `data :: ParticleDataFrame`: The SPH data that is stored in `ParticleDataFrame` 
 - `reference_position::NTuple{2, TF}`: The reference point to estimate the distance.
 
 # Returns
 - `Vector`: The array of distance between particles and the reference_position ON THE XY-PLANE PROJECTION.
 """
-function get_snorm_ref(data::ParticlesDataFrame, reference_position::NTuple{2, TF}) where {TF <: AbstractFloat}
+function get_snorm_ref(data::ParticleDataFrame, reference_position::NTuple{2, TF}) where {TF <: AbstractFloat}
     x = data.dfdata.x; y = data.dfdata.y
     rnorm :: Vector{TF} = Euclidean_distance(x, y, reference_position)
     return rnorm
 end
 
 """
-    get_rnorm(data::ParticlesDataFrame)
+    get_rnorm(data::ParticleDataFrame)
 Get the array of distance between particles and the origin ON THE XY-PLANE PROJECTION.
 
 # Parameters
-- `data :: ParticlesDataFrame`: The SPH data that is stored in `ParticlesDataFrame` 
+- `data :: ParticleDataFrame`: The SPH data that is stored in `ParticleDataFrame` 
 
 # Returns
 - `Vector`: The array of distance between particles and the origin ON THE XY-PLANE PROJECTION.
 """
-function get_rnorm(data::ParticlesDataFrame)
+function get_rnorm(data::ParticleDataFrame)
     return get_rnorm_ref(data, (0.0, 0.0, 0.0))
 end
 
 """
-    get_snorm(data::ParticlesDataFrame)
+    get_snorm(data::ParticleDataFrame)
 Get the array of distance between particles and the origin ON THE XY-PLANE PROJECTION.
 
 # Parameters
-- `data :: ParticlesDataFrame`: The SPH data that is stored in `ParticlesDataFrame` 
+- `data :: ParticleDataFrame`: The SPH data that is stored in `ParticleDataFrame` 
 
 # Returns
 - `Vector`: The array of distance between particles and the origin ON THE XY-PLANE PROJECTION.
 """
-function get_snorm(data::ParticlesDataFrame)
+function get_snorm(data::ParticleDataFrame)
     return get_snorm_ref(data, (0.0, 0.0))
 end
 
 ## Shift coordinate
 ### Translation
-function _apply_coordinate_shift!(data :: ParticlesDataFrame, new_origin :: NTuple{6, TF}) where {TF <: AbstractFloat}
+function _apply_coordinate_shift!(data :: ParticleDataFrame, new_origin :: NTuple{6, TF}) where {TF <: AbstractFloat}
     xo, yo, zo, vxo, vyo, vzo = new_origin
     x  = data.dfdata.x
     y  = data.dfdata.y
@@ -97,9 +97,9 @@ function _apply_coordinate_shift!(data :: ParticlesDataFrame, new_origin :: NTup
 end
 
 """
-    COM2star!(data_list :: V,  sink_particle_id :: Int) where {D <: ParticlesDataFrame, V <: AbstractVector{D}}
+    COM2star!(data_list :: V,  sink_particle_id :: Int) where {D <: ParticleDataFrame, V <: AbstractVector{D}}
 Transfer the coordinate to another coordinate with locating star at the origin.
-Assuming the sink data is stored as the final `ParticlesDataFrame` in the Vector
+Assuming the sink data is stored as the final `ParticleDataFrame` in the Vector
 
 # Parameters
 - `data_list :: V`: The array which contains all of the data that would be transfered
@@ -112,7 +112,7 @@ prdf_list = read_phantom(dumpfile_00000)
 COM2star!(prdf_list, 1)
 ```
 """
-function COM2star!(data_list :: V, sink_particle_id :: Int) where {D <: ParticlesDataFrame, V <: AbstractVector{D}}
+function COM2star!(data_list :: V, sink_particle_id :: Int) where {D <: ParticleDataFrame, V <: AbstractVector{D}}
     sinks_data = data_list[end]
     new_origin = (sinks_data.dfdata.x[sink_particle_id], 
                   sinks_data.dfdata.y[sink_particle_id],
@@ -131,7 +131,7 @@ function COM2star!(data_list :: V, sink_particle_id :: Int) where {D <: Particle
 end
 
 """
-    star2COM!(data_list :: V) where {D <: ParticlesDataFrame, V <: AbstractVector{D}}
+    star2COM!(data_list :: V) where {D <: ParticleDataFrame, V <: AbstractVector{D}}
 Transfer the coordinate to COM coordinate.
 
 # Parameters
@@ -149,7 +149,7 @@ println(prdf_list[1].params[:Origin_sink_id][])  # print: -1
 ```
 """
 
-function star2COM!(data_list :: V) where {D <: ParticlesDataFrame, V <: AbstractVector{D}}
+function star2COM!(data_list :: V) where {D <: ParticleDataFrame, V <: AbstractVector{D}}
     COM_position = data_list[1].params[:COM_coordinate]
     new_origin = ntuple(i -> COM_position[i], 6)
 
@@ -201,7 +201,7 @@ end
     return (r11,r12,r13,r21,r22,r23,r31,r32,r33)
 end 
 
-function _apply_zaxis_orientation!(data :: ParticlesDataFrame, R :: NTuple{9, TF}) where {TF <: AbstractFloat}
+function _apply_zaxis_orientation!(data :: ParticleDataFrame, R :: NTuple{9, TF}) where {TF <: AbstractFloat}
     # Inplace rotation
     x  = data.dfdata.x
     y  = data.dfdata.y
@@ -224,7 +224,7 @@ function _apply_zaxis_orientation!(data :: ParticlesDataFrame, R :: NTuple{9, TF
 end
 
 """
-    set_zaxis_orientation!(data::ParticlesDataFrame, target_zaxis::NTuple{3,TF}; inverse::Bool=false) where {TF<:AbstractFloat}
+    set_zaxis_orientation!(data::ParticleDataFrame, target_zaxis::NTuple{3,TF}; inverse::Bool=false) where {TF<:AbstractFloat}
 
 Rotate all positions (x,y,z) and velocities (vx,vy,vz) in-place so that the z-axis aligns with the given `target_zaxis`. The rotation is orthogonal (det=1), preserving lengths and inner products. By construction, the new x-axis lies in the original xy-plane:
     x' = normalize(ẑ × l̂),   y' = z' × x',   z' = l̂
@@ -240,7 +240,7 @@ Ry = [  0      1      0     ]
     -sin(ϕy)  0     cos(ϕy)
 
 # Parameters
-- `data::ParticlesDataFrame`: SPH data container with fields `x,y,z,vx,vy,vz`.
+- `data::ParticleDataFrame`: SPH data container with fields `x,y,z,vx,vy,vz`.
 - `target_zaxis::NTuple{3,TF}`: Vector specifying the new z-axis (not required to be normalized).
 
 # Keyword Arguments
@@ -248,7 +248,7 @@ Ry = [  0      1      0     ]
                          If `true`, apply the inverse rotation (v' = R' * v).
 
 """
-function set_zaxis_orientation!(data :: ParticlesDataFrame, target_zaxis :: NTuple{3, TF}; inverse :: Bool = false) where {TF<: AbstractFloat}
+function set_zaxis_orientation!(data :: ParticleDataFrame, target_zaxis :: NTuple{3, TF}; inverse :: Bool = false) where {TF<: AbstractFloat}
     Rdefault = _rotational_matrix(target_zaxis...)
     if inverse
         R = (Rdefault[1], Rdefault[4], Rdefault[7], Rdefault[2], Rdefault[5], Rdefault[8], Rdefault[3], Rdefault[6], Rdefault[9])
@@ -260,7 +260,7 @@ function set_zaxis_orientation!(data :: ParticlesDataFrame, target_zaxis :: NTup
 end
 
 """
-    set_zaxis_orientation!(data_list :: V, target_zaxis :: NTuple{3, TF}; inverse :: Bool = false) where {TF<: AbstractFloat, D <: ParticlesDataFrame, V <: AbstractVector{D}}
+    set_zaxis_orientation!(data_list :: V, target_zaxis :: NTuple{3, TF}; inverse :: Bool = false) where {TF<: AbstractFloat, D <: ParticleDataFrame, V <: AbstractVector{D}}
 
 Rotate all positions (x,y,z) and velocities (vx,vy,vz) in-place so that the z-axis aligns with the given `target_zaxis`. The rotation is orthogonal (det=1), preserving lengths and inner products. By construction, the new x-axis lies in the original xy-plane:
     x' = normalize(ẑ × l̂),   y' = z' × x',   z' = l̂
@@ -276,7 +276,7 @@ where ẑ = (0,0,1) and l̂ = normalized target_zaxis.
                          If `true`, apply the inverse rotation (v' = R' * v).
 
 """
-function set_zaxis_orientation!(data_list :: V, target_zaxis :: NTuple{3, TF}; inverse :: Bool = false) where {TF<: AbstractFloat, D <: ParticlesDataFrame, V <: AbstractVector{D}}
+function set_zaxis_orientation!(data_list :: V, target_zaxis :: NTuple{3, TF}; inverse :: Bool = false) where {TF<: AbstractFloat, D <: ParticleDataFrame, V <: AbstractVector{D}}
     Rdefault = _rotational_matrix(target_zaxis...)
     if inverse
         R = (Rdefault[1], Rdefault[4], Rdefault[7], Rdefault[2], Rdefault[5], Rdefault[8], Rdefault[3], Rdefault[6], Rdefault[9])
@@ -320,15 +320,15 @@ end
 end
 
 """
-    add_rho!(data::ParticlesDataFrame)
+    add_rho!(data::ParticleDataFrame)
 Add the local density of disk for each particles.
 
 **Note**: This function is invalid when per-particle masses are used.
 
 # Parameters
-- `data :: ParticlesDataFrame`: The SPH data that is stored in `ParticlesDataFrame` 
+- `data :: ParticleDataFrame`: The SPH data that is stored in `ParticleDataFrame` 
 """
-function add_rho!(data::ParticlesDataFrame)
+function add_rho!(data::ParticleDataFrame)
     if (hasproperty(data.dfdata, "m"))
         @warn("This function assumes all particles share the same mass. It is invalid if per-particle masses are used.")
     end
@@ -348,13 +348,13 @@ end
 
 ### Norm of coordinate and velocity w.r.t. origin
 """
-    add_norm!(data::ParticlesDataFrame)
+    add_norm!(data::ParticleDataFrame)
 Add the length of position vector and velocity vector in 3D.
 
 # Parameters
-- `data :: ParticlesDataFrame`: The SPH data that is stored in `ParticlesDataFrame` 
+- `data :: ParticleDataFrame`: The SPH data that is stored in `ParticleDataFrame` 
 """
-function add_norm!(data::ParticlesDataFrame)
+function add_norm!(data::ParticleDataFrame)
     x = data.dfdata.x; y = data.dfdata.y; z = data.dfdata.z
     vx = data.dfdata.vx; vy = data.dfdata.vy; vz = data.dfdata.vz
 
@@ -396,19 +396,19 @@ end
 
 
 """
-    add_kinetic_energy!(data::ParticlesDataFrame; specific_mass_column::Symbol = :m)
+    add_kinetic_energy!(data::ParticleDataFrame; specific_mass_column::Symbol = :m)
 
 Compute and add the kinetic energy of each particle in `data` for the current frame.
 
 # Parameters
-- `data :: ParticlesDataFrame`: SPH particle data stored in `ParticlesDataFrame`.
+- `data :: ParticleDataFrame`: SPH particle data stored in `ParticleDataFrame`.
 
 # Keyword Arguments
 | Name | Default | Description |
 |------|----------|-------------|
 | `specific_mass_column` | `:m` | Symbol of the column storing per-particle masses. If missing, a global mass in `data.params[:mass]` will be used instead. |
 """
-function add_kinetic_energy!(data::ParticlesDataFrame; specific_mass_column :: Symbol = :m)
+function add_kinetic_energy!(data::ParticleDataFrame; specific_mass_column :: Symbol = :m)
     vx = data.dfdata.vx
     vy = data.dfdata.vy
     vz = data.dfdata.vz
@@ -465,13 +465,13 @@ function _potential_energy(x :: V, y :: V, z :: V, m :: V, xt :: TF, yt :: TF, z
 end
 
 """
-    add_potential_energy!(data::ParticlesDataFrame, sink_data::ParticlesDataFrame; pecific_mass_column::Symbol = :m, store_sinks :: V = Int[]) where {V <: AbstractVector{<:Integer}}
+    add_potential_energy!(data::ParticleDataFrame, sink_data::ParticleDataFrame; pecific_mass_column::Symbol = :m, store_sinks :: V = Int[]) where {V <: AbstractVector{<:Integer}}
 
 Compute and add the gravitational potential energy of all gas particles in `data` with respect to each sink particle in `sink_data`.
 
 # Parameters
-- `data :: ParticlesDataFrame`: SPH particle data stored in `ParticlesDataFrame`.
-- `sink_data :: ParticlesDataFrame`: Sink particle data used as potential sources.
+- `data :: ParticleDataFrame`: SPH particle data stored in `ParticleDataFrame`.
+- `sink_data :: ParticleDataFrame`: Sink particle data used as potential sources.
 
 # Keyword Arguments
 | Name | Default | Description |
@@ -481,7 +481,7 @@ Compute and add the gravitational potential energy of all gas particles in `data
 
 
 """
-function add_potential_energy!(data::ParticlesDataFrame, sink_data :: ParticlesDataFrame; specific_mass_column::Symbol = :m, store_sinks :: V = Int[]) where {V <: AbstractVector{<:Integer}}
+function add_potential_energy!(data::ParticleDataFrame, sink_data :: ParticleDataFrame; specific_mass_column::Symbol = :m, store_sinks :: V = Int[]) where {V <: AbstractVector{<:Integer}}
     x = data.dfdata.x
     y = data.dfdata.y
     z = data.dfdata.z
@@ -561,7 +561,7 @@ function _bounded_flag(KE::V, PEn::V) where {TF <: AbstractFloat, V <: AbstractV
 end
 
 """
-    add_bounded_flag!(data::ParticlesDataFrame; check_sinks::V = [1]) where {V <: AbstractVector{<:Integer}}
+    add_bounded_flag!(data::ParticleDataFrame; check_sinks::V = [1]) where {V <: AbstractVector{<:Integer}}
 
 Compute and add boundedness flags for each particle relative to one or more sink particles.
 
@@ -569,8 +569,8 @@ A particle is considered *bound* to a sink if its total energy (kinetic + potent
 i.e. `E_total = KE + PEₙ < 0`.
 
 # Parameters
-- `data :: ParticlesDataFrame`:  
-  SPH particle data stored in a `ParticlesDataFrame`. Must contain kinetic energy `KE` and potential energy columns `PEₙ`.
+- `data :: ParticleDataFrame`:  
+  SPH particle data stored in a `ParticleDataFrame`. Must contain kinetic energy `KE` and potential energy columns `PEₙ`.
 
 # Keyword Arguments
 | Name | Default | Description |
@@ -578,7 +578,7 @@ i.e. `E_total = KE + PEₙ < 0`.
 | `check_sinks` | `[1]` | Vector of sink indices (e.g. `[1,2,3]`) for which boundedness flags will be computed. Each will generate a `bflagₙ` column. |
 
 """
-function add_bounded_flag!(data::ParticlesDataFrame; check_sinks :: V = Int[1]) where {V <: AbstractVector{<:Integer}}
+function add_bounded_flag!(data::ParticleDataFrame; check_sinks :: V = Int[1]) where {V <: AbstractVector{<:Integer}}
     if !hasproperty(data.dfdata, :KE)
         error("ArgumentError: Kinetic Energy of particles is missing!")
     end
@@ -618,13 +618,13 @@ function _cylindrical(x :: V, y :: V, vx :: V, vy :: V) where {TF <: AbstractFlo
 end
 
 """
-    add_cylindrical!(data::ParticlesDataFrame)
+    add_cylindrical!(data::ParticleDataFrame)
 Add the cylindrical/polar coordinate (s,ϕ) and corresponding velocity (vs, vϕ) into the data
 
 # Parameters
-- `data :: ParticlesDataFrame`: The SPH data that is stored in `ParticlesDataFrame` 
+- `data :: ParticleDataFrame`: The SPH data that is stored in `ParticleDataFrame` 
 """
-function add_cylindrical!(data::ParticlesDataFrame)
+function add_cylindrical!(data::ParticleDataFrame)
     x  = data.dfdata.x 
     y  = data.dfdata.y 
     vx = data.dfdata.vx
@@ -657,13 +657,13 @@ function _Kepelarian_azimuthal_velocity(s :: V, vϕ :: V, μ :: TF) where {TF <:
     return vϕk, vrelϕ
 end
 """
-    add_Kepelarian_azimuthal_velocity!(data::ParticlesDataFrame)
+    add_Kepelarian_azimuthal_velocity!(data::ParticleDataFrame)
 Add the Kepelarian azimuthal velocity for each particles.
 
 # Parameters
-- `data :: ParticlesDataFrame`: The SPH data that is stored in `ParticlesDataFrame`
+- `data :: ParticleDataFrame`: The SPH data that is stored in `ParticleDataFrame`
 """
-function add_Kepelarian_azimuthal_velocity!(data::ParticlesDataFrame)
+function add_Kepelarian_azimuthal_velocity!(data::ParticleDataFrame)
     if !(haskey(data.params, :Origin_sink_id)) || (data.params[:Origin_sink_id] == -1)
         error(
             "OriginLocatedError: Wrong origin located. Please use COM2star!() to transfer the coordinate.",
@@ -698,13 +698,13 @@ function _Kepelarian_angular_velocity(x :: V, y :: V, z :: V, μ :: TF) where {T
 end
 
 """
-    add_Kepelarian_angular_velocity!(data::ParticlesDataFrame)
+    add_Kepelarian_angular_velocity!(data::ParticleDataFrame)
 Add the Kepelarian angular velocity for each particles.
 
 # Parameters
-- `data :: ParticlesDataFrame`: The SPH data that is stored in `ParticlesDataFrame`
+- `data :: ParticleDataFrame`: The SPH data that is stored in `ParticleDataFrame`
 """
-function add_Kepelarian_angular_velocity!(data::ParticlesDataFrame)
+function add_Kepelarian_angular_velocity!(data::ParticleDataFrame)
     if !(haskey(data.params, :Origin_sink_id)) || (data.params[:Origin_sink_id] == -1)
         error(
             "OriginLocatedError: Wrong origin located. Please use COM2star!() to transfer the coordinate.",
@@ -749,13 +749,13 @@ function _eccentricity(x :: V, y :: V, z :: V, vx :: V, vy :: V, vz :: V, μ :: 
 end
 
 """
-    add_eccentricity!(data::ParticlesDataFrame)
+    add_eccentricity!(data::ParticleDataFrame)
 Add the eccentricity for each particle with respect to current origin.
 
 # Parameters
-- `data :: ParticlesDataFrame`: The SPH data that is stored in `ParticlesDataFrame`
+- `data :: ParticleDataFrame`: The SPH data that is stored in `ParticleDataFrame`
 """
-function add_eccentricity!(data::ParticlesDataFrame)
+function add_eccentricity!(data::ParticleDataFrame)
     if !(haskey(data.params, :Origin_sink_id)) || (data.params[:Origin_sink_id] == -1)
         error(
             "OriginLocatedError: Wrong origin located. Please use COM2star!() to transfer the coordinate.",
@@ -798,14 +798,14 @@ function _specific_angular_momentum(x :: V, y :: V, z :: V, vx :: V, vy :: V, vz
 end
 
 """
-    add_specific_angular_momentum!(data::ParticlesDataFrame)
+    add_specific_angular_momentum!(data::ParticleDataFrame)
 
 Compute and add the specific angular momentum vector **l = r × v** for each particle in the current frame.
 
 # Parameters
-- `data :: ParticlesDataFrame`: The SPH data that is stored in `ParticlesDataFrame`
+- `data :: ParticleDataFrame`: The SPH data that is stored in `ParticleDataFrame`
 """
-function add_specific_angular_momentum!(data::ParticlesDataFrame)
+function add_specific_angular_momentum!(data::ParticleDataFrame)
     x = data.dfdata.x
     y = data.dfdata.y
     z = data.dfdata.z
@@ -840,7 +840,7 @@ function _tilt(x :: V, y :: V, z :: V, lx :: V, ly :: V, lz :: V, l :: V) where 
 end
 
 """
-    add_tilt!(data::ParticlesDataFrame)
+    add_tilt!(data::ParticleDataFrame)
 
 Compute and add the inclination angle (tilt) between each particle’s position vector **r**
 and its specific angular momentum vector **l**.
@@ -853,8 +853,8 @@ For **gravitationally bound** particles (`E < 0`), it represents the true orbita
 For **unbound** particles (`E ≥ 0`), it only indicates the instantaneous direction of angular momentum and has no stable orbital interpretation.
 
 # Parameters
-- `data :: ParticlesDataFrame`:  
-  The SPH particle data stored in a `ParticlesDataFrame`.  
+- `data :: ParticleDataFrame`:  
+  The SPH particle data stored in a `ParticleDataFrame`.  
   Must contain columns `x`, `y`, `z`, and either precomputed angular momentum components `lx`, `ly`, `lz`, `lnorm`,  
   or allow them to be generated automatically by `add_specific_angular_momentum!()`.
 
@@ -862,7 +862,7 @@ For **unbound** particles (`E ≥ 0`), it only indicates the instantaneous direc
 - If `lx`, `ly`, or `lz` columns are missing, they are automatically computed.  
 - Adds a new column `tilt` to `data.dfdata` containing the tilt angle (in radians) for each particle.
 """
-function add_tilt!(data::ParticlesDataFrame)
+function add_tilt!(data::ParticleDataFrame)
     if !(hasproperty(data.dfdata, "lx")) || !(hasproperty(data.dfdata, "ly")) || !(hasproperty(data.dfdata, "lz"))
         add_specific_angular_momentum!(data)
     end

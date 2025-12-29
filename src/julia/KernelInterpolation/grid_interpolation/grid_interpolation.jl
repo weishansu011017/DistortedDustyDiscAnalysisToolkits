@@ -60,7 +60,7 @@ function initialize_interpolation(:: CPUComputeBackend, grid_template::GeneralGr
     # Generate a grid array for result
     @info "Allocating output grids..."
     @time begin
-    order = catalog.ordered_names
+    names = catalog.ordered_names
     grids = ntuple(_ -> similar(grid_template), Val(L))
     end
     @info "End allocating output grids..."
@@ -75,7 +75,7 @@ function initialize_interpolation(:: CPUComputeBackend, grid_template::GeneralGr
     # Consice catalog 
     catalog_consice = to_concise_catalog(catalog)
 
-    return grids, LBVH, order, catalog_consice, p
+    return grids, LBVH, names, catalog_consice, p
 end
 
 @inline function _general_grid_interpolation_kernel!(:: CPUComputeBackend, grids :: NTuple{L, GeneralGrid{3}}, i :: Int, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {N, G, Div, C, L, TF <: AbstractFloat, ITPINPUT <: InterpolationInput{TF}, ITPSTRATEGY <: AbstractInterpolationStrategy}
@@ -236,17 +236,17 @@ and evaluates each grid point in parallel using threaded execution.
   Interpolation strategy type controlling symmetric/gather/scatter modes.
 
 # Returns
-`GridInterpolationResult{L}` containing:
+`GridBundle{L, typeof(grids[1])}` containing:
 - `grids` — NTuple of output grids storing interpolated results.  
-- `order` — Ordered list of all output quantity names, matching the grid tuple order.
+- `names` — Ordered list of all output quantity names, matching the grid tuple order.
 """
 function GeneralGrid_interpolation(backend :: CPUComputeBackend, grid_template::GeneralGrid{D}, input::ITPINPUT, catalog::InterpolationCatalog{N, G, Div, C, L}, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {D, N, G, Div, C, L, T <: AbstractFloat, ITPINPUT <: InterpolationInput{T}, ITPSTRATEGY <: AbstractInterpolationStrategy}
-    grids, LBVH, order, catalog_consice, p = initialize_interpolation(backend, grid_template, input, catalog)
+    grids_result, LBVH, names, catalog_consice, p = initialize_interpolation(backend, grid_template, input, catalog)
     npoints = length(grid_template)
     @info"Start interpolation..."
     @time @inbounds @threads for i in 1:npoints
         # Do single point interpolation
-        _general_grid_interpolation_kernel!(backend, grids, i, input, catalog_consice, LBVH, itp_strategy)
+        _general_grid_interpolation_kernel!(backend, grids_result, i, input, catalog_consice, LBVH, itp_strategy)
 
     end
     @info "End interpolation..."
@@ -254,17 +254,86 @@ function GeneralGrid_interpolation(backend :: CPUComputeBackend, grid_template::
     # Reorder grids back to original order
     @info "Reordering output grids back to original order..."
     @time begin
-    # Reorder coor (Represent bu grid template since they share the same coor array)
-    @inbounds for i in 1:D
-        Base.invpermute!(grid_template.coor[i], p)
-    end
+    # Reorder coor
+    refV = grids_result[1].grid               
+    shared_coor = ntuple(d -> begin
+        v = similar(refV)
+        copyto!(v, grid_template.coor[d])       
+        Base.invpermute!(v, p)           
+        v
+    end, Val(D))
 
     # Reorder each grid
-    for grid in grids
+    for grid in grids_result
         Base.invpermute!(grid.grid, p)
     end
     end
+    grids = ntuple(i -> GeneralGrid(grids_result[i].grid, shared_coor), Val(L))
     @info "End reordering output grids..."
 
-    return GridInterpolationResult{L}(grids, order)
+    return GridBundle(grids, names)
+end
+
+"""
+    StructuredGrid_interpolation(backend::B,
+                                 grid_template::StructuredGrid{D},
+                                 input::ITPINPUT,
+                                 catalog::InterpolationCatalog{N,G,Div,C,L},
+                                 itp_strategy::Type{ITPSTRATEGY}=itpSymmetric) where
+                                 {D,N,G,Div,C,L,
+                                  T<:AbstractFloat, ITPINPUT<:InterpolationInput{T},
+                                  ITPSTRATEGY<:AbstractInterpolationStrategy,
+                                  B<:AbstractExecutionBackend}
+
+Perform SPH interpolation on a structured grid and return interpolated fields as a `GridBundle`.
+
+This routine converts a `StructuredGrid` template into a flattened `GeneralGrid` representation,
+dispatches interpolation to `GeneralGrid_interpolation` on the specified execution backend,
+then restores each interpolated field back to `StructuredGrid` layout using the copied axes.
+
+# Parameters
+- `backend::B`:
+  Execution backend used by `GeneralGrid_interpolation` (e.g. CPU/CUDA/Metal backends).
+
+- `grid_template::StructuredGrid{D}`:
+  Structured grid template providing the coordinate axes and logical grid shape.
+
+- `input::ITPINPUT`:
+  Interpolation input containing particle coordinates, smoothing lengths, field data, and the SPH kernel.
+
+- `catalog::InterpolationCatalog{N,G,Div,C,L}`:
+  Interpolation catalog describing which scalar, gradient, divergence, and curl quantities to compute.
+  The number of output grids is `L`.
+
+- `itp_strategy::Type{ITPSTRATEGY}=itpSymmetric`:
+  Interpolation strategy controlling symmetric/gather/scatter modes.
+
+# Returns
+- `GridBundle{L,<:StructuredGrid}`:
+  A bundle containing:
+  - `grids`: `NTuple{L,StructuredGrid{D,T}}` storing interpolated results for each requested quantity.
+  - `names`: `NTuple{L,Symbol}` giving the corresponding quantity names in the same order.
+"""
+function StructuredGrid_interpolation(backend :: B, grid_template::StructuredGrid{D}, input::ITPINPUT, catalog::InterpolationCatalog{N, G, Div, C, L}, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {D, N, G, Div, C, L, T <: AbstractFloat, ITPINPUT <: InterpolationInput{T}, ITPSTRATEGY <: AbstractInterpolationStrategy, B <: AbstractExecutionBackend}
+    @info "Flatterning grid..."
+    @time begin
+    flatten_grid = flatten(grid_template)
+    end
+    @info "End flatterning grid."
+    generalgrid_bundle = GeneralGrid_interpolation(backend, flatten_grid, input, catalog, itp_strategy)
+    names = generalgrid_bundle.names
+
+    @info "Restoring grid..."
+    @time begin
+    newT = datatype(generalgrid_bundle)
+    axes = ntuple(d -> begin
+        ax  = grid_template.axes[d]
+        out = similar(ax, newT)
+        map!(newT, out, ax)           
+        out
+    end, Val(D))
+    structuredgrids = ntuple(i -> restore_struct(generalgrid_bundle.grids[i], axes), Val(L))
+    end
+    @info "End restoring grid."
+    return GridBundle(structuredgrids, names)
 end

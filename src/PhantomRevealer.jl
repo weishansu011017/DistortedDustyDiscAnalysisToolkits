@@ -22,7 +22,7 @@ include(joinpath(@__DIR__, "julia", "KernelInterpolation", "KernelInterpolation.
 include(joinpath(@__DIR__, "julia", "IO", "IO.jl"))
 @reexport using .IO
 
-### Constructors of the `InterpolationInput` from `ParticlesDataFrame`
+### Constructors of the `InterpolationInput` from `ParticleDataFrame`
 include(joinpath(@__DIR__, "julia", "KernelInterpolation", "single_point_interpolation", "constructor.jl"))
 
 ## StreamingInstability

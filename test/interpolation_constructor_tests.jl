@@ -26,7 +26,7 @@ const NS = PhantomRevealer.NeighborSearch
         Bz = Float32[1.4, 1.5, 1.6],
     )
     params = Dict{Symbol, Any}()
-    prdf = IO.ParticlesDataFrame(df, params)
+    prdf = IO.ParticleDataFrame(df, params)
     mass_source = MassFromColumn(:mass)
 
     input, catalog = build_input(
@@ -62,7 +62,7 @@ const NS = PhantomRevealer.NeighborSearch
     @test all(input.quant[7] .== Float64.(df.Bz))
 
     df_missing = select(df, Not(:Bz))
-    prdf_missing = IO.ParticlesDataFrame(df_missing, params)
+    prdf_missing = IO.ParticleDataFrame(df_missing, params)
     @test_throws ArgumentError build_input(
         prdf_missing,
         mass_source;
@@ -87,7 +87,7 @@ end
         Bz = Float32[1.4, 1.5, 1.6],
     )
     params = Dict{Symbol, Any}(:mass => 0.42f0)
-    prdf = IO.ParticlesDataFrame(df, params)
+    prdf = IO.ParticleDataFrame(df, params)
     mass_source = MassFromParams(:mass)
 
     input, catalog = build_input(
@@ -121,7 +121,7 @@ end
     )
 
     df_missing = select(df, Not(:h))
-    prdf_missing = IO.ParticlesDataFrame(df_missing, params)
+    prdf_missing = IO.ParticleDataFrame(df_missing, params)
     @test_throws ArgumentError build_input(
         prdf_missing,
         mass_source;
