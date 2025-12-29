@@ -15,8 +15,7 @@ module IO
 using .Threads 
 using DataFrames
 using HDF5
-using PhantomRevealer.KernelInterpolation
-using PhantomRevealer.Tools
+using PhantomRevealer
 
 
 # IO & data structure
@@ -28,7 +27,7 @@ include(joinpath(@__DIR__,  "struct", "add_quantities_prdf.jl"))
 include(joinpath(@__DIR__,  "struct", "GridDataset.jl"))
 
 ## Read & Write GridDataset
-# include(joinpath(@__DIR__, "gridsIO", "read_grids.jl"))
+include(joinpath(@__DIR__, "gridsIO", "read_grids.jl"))
 include(joinpath(@__DIR__, "gridsIO", "write_grids.jl"))
 
 ## Read & Write Phantom Binary dumpfiles
