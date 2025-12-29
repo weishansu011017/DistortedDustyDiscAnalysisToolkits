@@ -142,7 +142,7 @@ end
     point = grids[1].coor[i]
 
     # Interpolation
-    itpresult :: Tuple{NTuple{N,TF}, NTuple{G,NTuple{3,TF}}, NTuple{Div,TF}, NTuple{C,NTuple{3,TF}}} = _general_quantity_interpolate_kernel(input, point, LBVH, catalog_consice, itp_strategy)
+    itpresult :: Tuple{NTuple{N,TF}, NTuple{G,NTuple{3,TF}}, NTuple{Div,TF}, NTuple{C,NTuple{3,TF}}} = _general_quantity_interpolate_kernel(input, point, LBVH, catalog_consice, itpScatter)
 
     scalars :: NTuple{N,TF} = itpresult[1]
     gradients :: NTuple{G,NTuple{3,TF}} = itpresult[2]

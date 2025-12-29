@@ -4,7 +4,7 @@ IO
 Handles data structures and input/output operations for PhantomRevealer.
 This module provides:
 
-- Definition of `PhantomRevealerDataFrame`, the main container for SPH data.
+- Definition of `ParticlesDataFrame`, the main container for SPH data.
 - Utility functions to add physical quantities to the data frame.
 - Routines for reading and writing Phantom binary dumpfiles.
 
@@ -17,8 +17,8 @@ using DataFrames
 
 
 # IO & data structure
-## PhantomRevealerDataFrame & basic adding quantities function
-include(joinpath(@__DIR__,  "struct", "PhantomRevealerDataFrame.jl"))
+## ParticlesDataFrame & basic adding quantities function
+include(joinpath(@__DIR__,  "struct", "ParticlesDataFrame.jl"))
 include(joinpath(@__DIR__,  "struct", "add_quantities_prdf.jl"))
 
 ## Read & Write Phantom Binary dumpfiles

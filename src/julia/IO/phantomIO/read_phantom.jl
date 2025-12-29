@@ -227,7 +227,7 @@ end
 
 
 """
-    function read_phantom(filename::String, separate_types::Symbol = :sinks, ignore_inactive::Bool = true) :: Union{PhantomRevealerDataFrame,Vector}
+    function read_phantom(filename::String, separate_types::Symbol = :sinks, ignore_inactive::Bool = true) :: Union{ParticlesDataFrame,Vector}
 
 Note: This implementation is inspired by the function of the same name in the 'saracen' python package.
 Check out the documentation of `saracen <https://sarracen.readthedocs.io/en/latest/index.html>`_
@@ -249,7 +249,7 @@ data frame in the field `params`.
         typically particles that have been accreted onto a sink particle or are otherwise inactive.
 
 # Returns
-- `Vector{PhantomRevealerDataFrame}`: Array of PhantomRevealerDataFrames
+- `Vector{ParticlesDataFrame}`: Array of ParticlesDataFrames
 
 # Examples
 ## Example 1: By default, SPH particles are grouped into one data frame and sink particles into a second data frame.
@@ -274,7 +274,7 @@ function read_phantom(
     filename::String;
     separate_types::Symbol = :sinks,
     ignore_inactive::Bool = true,
-) :: Vector{PhantomRevealerDataFrame}
+) :: Vector{ParticlesDataFrame}
     # Read data
     df, df_sinks, header_vars = _gathering_data(filename)
 
@@ -285,7 +285,7 @@ function read_phantom(
 
     # Separate by itype and num(itype) > 1
     if (separate_types == :all) && (hasproperty(df, :itype)) && (length(unique(df.itype)) > 1)
-        df_list = PhantomRevealerDataFrame[]
+        df_list = ParticlesDataFrame[]
         for group in groupby(df, :itype)
             itype::Int = Int(group[!, :itype][1])
             mass_key = itype == 1 ? :massoftype : Symbol("massoftype_$(itype)")
@@ -295,10 +295,10 @@ function read_phantom(
             )
             params_group = merge(header_vars, Dict(:mass => header_vars[mass_key]))
             params_group[:itype] = itype
-            push!(df_list, PhantomRevealerDataFrame(group_clean, params_group))
+            push!(df_list, ParticlesDataFrame(group_clean, params_group))
         end
         if !(isempty(df_sinks))
-            push!(df_list, PhantomRevealerDataFrame(df_sinks, header_vars))
+            push!(df_list, ParticlesDataFrame(df_sinks, header_vars))
         end
         return df_list
     end
@@ -308,14 +308,14 @@ function read_phantom(
         params = merge(header_vars, Dict(:mass => nothing))
 
         params[:itype] = NaN
-        df = PhantomRevealerDataFrame(df, params)
-        df_sinks = PhantomRevealerDataFrame(df_sinks, header_vars)
-        return PhantomRevealerDataFrame[df, df_sinks]
+        df = ParticlesDataFrame(df, params)
+        df_sinks = ParticlesDataFrame(df_sinks, header_vars)
+        return ParticlesDataFrame[df, df_sinks]
     end
     # else
     combined_df = vcat(df, df_sinks, cols = :union)
     params = merge(header_vars, Dict(:mass => nothing))
     params[:itype] = nothing
-    df = PhantomRevealerDataFrame(combined_df, params)
-    return PhantomRevealerDataFrame[df]
+    df = ParticlesDataFrame(combined_df, params)
+    return ParticlesDataFrame[df]
 end

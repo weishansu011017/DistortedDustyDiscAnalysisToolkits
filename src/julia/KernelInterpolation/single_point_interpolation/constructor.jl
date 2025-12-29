@@ -4,7 +4,7 @@ Constructors for `InterpolationInput`
     November 3, 2025
 
 This file provides high-level builders for `InterpolationInput` objects derived
-from a `PhantomRevealerDataFrame`.
+from a `ParticlesDataFrame`.
 
 All constructors return immutable, type-stable data containers for single-point SPH interpolation.
 """
@@ -27,7 +27,7 @@ struct MassFromParams <: AbstractMassSource
 end
 
 """
-  build_input(data::PhantomRevealerDataFrame,
+  build_input(data::ParticlesDataFrame,
                        mass_from_column::MassFromColumn;
                        scalars::Vector{Symbol},
                        gradients::Vector{Symbol}=Symbol[],
@@ -36,7 +36,7 @@ end
                        smoothed_kernel::Type{K}=M5_spline) where {K<:AbstractSPHKernel}
 
 Construct a SPH interpolation container using **per-particle mass values** read from a specific column
-in the `PhantomRevealerDataFrame`.
+in the `ParticlesDataFrame`.
 
 This variant of `InterpolationInput` assumes each particle has its own mass value stored in a data column.
 It extracts the necessary SPH fields (positions, mass, density, smoothing length, and user-requested scalar/vector
@@ -44,7 +44,7 @@ components), promotes all numerical fields to a unified floating-point type, and
 immutable container and a host-side catalog for name-to-column lookup.
 
 # Parameters
-- `data::PhantomRevealerDataFrame`  
+- `data::ParticlesDataFrame`  
   Input particle dataset containing all physical quantities and parameters.
 - `mass_from_column::MassFromColumn`  
   Specifies the column from which to read per-particle masses.  
@@ -65,7 +65,7 @@ immutable container and a host-side catalog for name-to-column lookup.
 # Notes
 - All values are promoted to a consistent floating-point type `T`.
 """
-function build_input(data::PhantomRevealerDataFrame,
+function build_input(data::ParticlesDataFrame,
                             mass_from_column::MassFromColumn;
                             scalars::Vector{Symbol},
                             gradients::Vector{Symbol}=Symbol[],
@@ -107,7 +107,7 @@ function build_input(data::PhantomRevealerDataFrame,
     end
     if !isempty(missing_columns)
     missing_list = join(string.(missing_columns), ", ")
-        throw(ArgumentError("Missing columns in PhantomRevealerDataFrame: " * missing_list))
+        throw(ArgumentError("Missing columns in ParticlesDataFrame: " * missing_list))
     end
 
     x_col = data[!, :x]
@@ -169,7 +169,7 @@ function build_input(data::PhantomRevealerDataFrame,
 end
 
 """
-  build_input(data::PhantomRevealerDataFrame,
+  build_input(data::ParticlesDataFrame,
              mass_from_params::MassFromParams;
              scalars::Vector{Symbol},
              gradients::Vector{Symbol}=Symbol[],
@@ -187,7 +187,7 @@ quantities), promotes them to a unified floating-point type, and returns both th
 immutable container and a host-side catalog for name-to-column lookup.
 
 # Parameters
-- `data::PhantomRevealerDataFrame`  
+- `data::ParticlesDataFrame`  
   Input particle dataset containing all physical quantities and parameters.
 - `mass_from_params::MassFromParams`  
   Parameter descriptor from which the constant particle mass is retrieved.  
@@ -208,7 +208,7 @@ immutable container and a host-side catalog for name-to-column lookup.
 # Notes
 - All values are promoted to a consistent floating-point type `T`.
 """
-function build_input(data::PhantomRevealerDataFrame,
+function build_input(data::ParticlesDataFrame,
                      mass_from_params::MassFromParams;
                      scalars::Vector{Symbol},
                      gradients::Vector{Symbol}=Symbol[],
@@ -250,7 +250,7 @@ function build_input(data::PhantomRevealerDataFrame,
     end
     if !isempty(missing_columns)
     missing_list = join(string.(missing_columns), ", ")
-        throw(ArgumentError("Missing columns in PhantomRevealerDataFrame: " * missing_list))
+        throw(ArgumentError("Missing columns in ParticlesDataFrame: " * missing_list))
     end
 
     x_col = data[!, :x]

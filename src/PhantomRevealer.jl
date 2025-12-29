@@ -31,7 +31,7 @@ include(joinpath(@__DIR__, "julia", "KernelInterpolation", "KernelInterpolation.
 # include(joinpath(@__DIR__, "julia", "KernelInterpolation", "grid.jl"))
 
 
-### Constructors of the `InterpolationInput` from `PhantomRevealerDataFrame`
+### Constructors of the `InterpolationInput` from `ParticlesDataFrame`
 include(joinpath(@__DIR__, "julia", "KernelInterpolation", "single_point_interpolation", "constructor.jl"))
 
 

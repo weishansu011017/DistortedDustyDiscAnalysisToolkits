@@ -10,7 +10,7 @@ gas_candidates = filter(prdf -> IO.get_npart(prdf) > 0 && get(prdf.params, :ityp
 
 gas_full = first(gas_candidates)
 
-gas = IO.PhantomRevealerDataFrame(DataFrame(gas_full.dfdata[1:128, :]), deepcopy(gas_full.params))
+gas = IO.ParticlesDataFrame(DataFrame(gas_full.dfdata[1:128, :]), deepcopy(gas_full.params))
 IO.add_rho!(gas)
 println("mass param: ", gas.params[:mass])
 println("rho[1]: ", gas.dfdata.rho[1])
