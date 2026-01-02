@@ -1,6 +1,7 @@
 using Test
 using Random
 using PhantomRevealer
+using PhantomRevealer.KernelInterpolation: _density_kernel, _number_density_kernel, _quantity_interpolate_kernel, _divergence_quantity_interpolate_kernel, _curl_quantity_interpolate_kernel, _LOS_density_kernel
 
 @static if !isdefined(@__MODULE__, :support_radius)
     include("traversal_test_common.jl")
@@ -16,9 +17,13 @@ end
 
     # Traversal → Baseline → Assertions
     for strategy in (itpGather, itpScatter, itpSymmetric)
-        @test density(input, reference_point, ha, LBVH, strategy) ≈ brute_density(input, reference_point, ha, strategy) atol=1e-10 rtol=1e-8
-        @test number_density(input, reference_point, ha, LBVH, strategy) ≈ brute_number_density(input, reference_point, ha, strategy) atol=1e-10 rtol=1e-8
-        @test quantity_interpolate(input, reference_point, ha, LBVH, 1, true, strategy) ≈ brute_quantity(input, reference_point, ha, 1, strategy) atol=1e-10 rtol=1e-8
+        dens = strategy === itpScatter ? _density_kernel(input, reference_point, LBVH, strategy) : _density_kernel(input, reference_point, ha, LBVH, strategy)
+        n_dens = strategy === itpScatter ? _number_density_kernel(input, reference_point, LBVH, strategy) : _number_density_kernel(input, reference_point, ha, LBVH, strategy)
+        qty = strategy === itpScatter ? _quantity_interpolate_kernel(input, reference_point, LBVH, 1, true, strategy) : _quantity_interpolate_kernel(input, reference_point, ha, LBVH, 1, true, strategy)
+
+        @test dens ≈ brute_density(input, reference_point, ha, strategy) atol=1e-10 rtol=1e-8
+        @test n_dens ≈ brute_number_density(input, reference_point, ha, strategy) atol=1e-10 rtol=1e-8
+        @test qty ≈ brute_quantity(input, reference_point, ha, 1, strategy) atol=1e-10 rtol=1e-8
     end
 end
 
@@ -43,8 +48,8 @@ end
     reference_point = (x[1], y[1], z[1])
     ha = h[1]
     for strategy in (itpGather, itpScatter, itpSymmetric)
-        divv = divergence_quantity_interpolate(input, reference_point, ha, LBVH, 1, 2, 3, strategy)
-        curlv = curl_quantity_interpolate(input, reference_point, ha, LBVH, 1, 2, 3, strategy)
+        divv = strategy === itpScatter ? _divergence_quantity_interpolate_kernel(input, reference_point, LBVH, 1, 2, 3, strategy) : _divergence_quantity_interpolate_kernel(input, reference_point, ha, LBVH, 1, 2, 3, strategy)
+        curlv = strategy === itpScatter ? _curl_quantity_interpolate_kernel(input, reference_point, LBVH, 1, 2, 3, strategy) : _curl_quantity_interpolate_kernel(input, reference_point, ha, LBVH, 1, 2, 3, strategy)
         @test divv ≈ 0.0 atol = 1e-12 rtol = 1e-10
         @test curlv[1] ≈ 0.0 atol = 1e-12 rtol = 1e-10
         @test curlv[2] ≈ 0.0 atol = 1e-12 rtol = 1e-10
@@ -62,6 +67,7 @@ end
 
     # Traversal → Baseline → Assertions
     for strategy in (itpGather, itpScatter, itpSymmetric)
-        @test LOS_density(input, reference_point, ha, LBVH, strategy) ≈ brute_LOS_density(input, reference_point, ha, strategy) atol=1e-10 rtol=1e-8
+        ρ_LOS = strategy === itpScatter ? _LOS_density_kernel(input, reference_point, LBVH, strategy) : _LOS_density_kernel(input, reference_point, ha, LBVH, strategy)
+        @test ρ_LOS ≈ brute_LOS_density(input, reference_point, ha, strategy) atol=1e-10 rtol=1e-8
     end
 end
