@@ -1,9 +1,10 @@
-module KernelInterpolation
+module Grids
 using PhantomRevealer
-using Metal
+using CUDA
 
-# Grid interpolation
-include(joinpath(@__DIR__, "grid_interpolation", "grid_interpolation.jl"))
+# Grid construction
+include(joinpath(@__DIR__, "grids", "GeneralGrid.jl"))
+
 
 # Export function, marco, const...
 for name in filter(s -> !startswith(string(s), "#"), names(@__MODULE__, all = true))

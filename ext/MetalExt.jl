@@ -8,6 +8,10 @@ using PhantomRevealer
 include(joinpath(@__DIR__, "MetalExt", "AdaptStructure", "AdaptStructure.jl"))
 @reexport using .AdaptStructure
 
+# Grids
+include(joinpath(@__DIR__, "MetalExt", "Grids", "Grids.jl"))
+@reexport using .AdaptStructure
+
 # Kernel interpolation
 include(joinpath(@__DIR__, "MetalExt", "KernelInterpolation", "KernelInterpolation.jl"))
 @reexport using .KernelInterpolation
