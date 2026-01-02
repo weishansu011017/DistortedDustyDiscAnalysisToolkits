@@ -1,14 +1,57 @@
 """
 KernelInterpolation
 
-Provides core routines for kernel-based interpolation of SPH data.
-This module includes:
-- Kernel functions (spline, Wendland, and related forms)
-- Line-of-sight (LOS) integration tables
-- Grid-based interpolation and sampling utilities
+Core infrastructure for kernel-based interpolation of SPH data in PhantomRevealer.
 
-All numerical implementations are organized under the `table/`,
-`kernel_function/`, and `grid/` submodules.
+This module implements the full interpolation pipeline used to map particle-based
+SPH quantities onto arbitrary points or grids. It is designed to be:
+
+- Numerically explicit and allocation-aware
+- Compatible with GPU execution via `Adapt.jl`
+- Structured around LBVH-based neighbor traversal
+
+# Scope and Responsibilities
+
+The module provides:
+
+## Kernel Definitions
+- Spline kernels (M4, M5, M6)
+- Wendland kernels (C2, C4, C6)
+- Line-of-sight (LOS) integrated kernels
+
+Kernel implementations are located under:
+- `kernel_function/`
+- `kernel_function/kernels/`
+
+## LOS Integration Tables
+- Precomputed tables for LOS-integrated kernels
+- Used by projected / column-integrated quantities
+
+Implemented under:
+- `table/`
+
+## Interpolation Framework
+- Strategy and catalog abstractions for interpolation modes
+- Strongly-typed, GPU-safe interpolation input definitions
+
+Implemented under:
+- `interpolation_setup/`
+
+## Single-Point Interpolation
+- Scalar interpolation
+- LOS scalar interpolation
+- Gradient, divergence, and curl evaluation
+- General interpolation kernels
+
+All single-point interpolation routines are implemented using
+LBVH-based neighbor traversal and accumulation, under:
+- `single_point_interpolation/`
+
+## Grid-Based Interpolation
+- Sampling SPH data onto structured grids
+
+Implemented under:
+- `grid_interpolation/`
 """
 module KernelInterpolation
 using .Threads 

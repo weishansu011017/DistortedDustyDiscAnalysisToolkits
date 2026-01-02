@@ -1,3 +1,34 @@
+"""
+Particles
+
+Core particle data abstractions for PhantomRevealer.
+
+This module defines the canonical particle-level data structures and
+associated utilities used throughout PhantomRevealer. It provides a
+DataFrame-backed representation of SPH particle data together with
+helper routines for constructing and augmenting particle quantities.
+
+# Scope and Responsibilities
+
+The module provides:
+
+## Particle Data Container
+- `ParticleDataFrame`, a structured wrapper around `DataFrames.DataFrame`
+  tailored for SPH particle data
+- Standardised column conventions for particle properties
+  (e.g. position, velocity, mass, density)
+
+Implemented in:
+- `ParticleDataFrame.jl`
+
+## Quantity Construction Utilities
+- Functions for adding derived or auxiliary particle quantities
+- Designed to operate in-place on `ParticleDataFrame` objects
+- Supports statistical operations where appropriate
+
+Implemented in:
+- `add_quantities.jl`
+"""
 module Particles
 
 using .Threads

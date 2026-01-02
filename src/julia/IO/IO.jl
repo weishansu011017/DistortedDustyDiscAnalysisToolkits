@@ -1,14 +1,33 @@
 """
 IO
 
-Handles data structures and input/output operations for PhantomRevealer.
-This module provides:
+I/O utilities for PhantomRevealer data structures.
 
-- Definition of `ParticleDataFrame`, the main container for SPH data.
-- Utility functions to add physical quantities to the data frame.
-- Routines for reading and writing Phantom binary dumpfiles.
+This module provides a unified interface for reading and writing simulation data
+used in PhantomRevealer, including:
 
-All I/O functions are built on top of `DataFrames.jl` for flexible data access.
+- Phantom binary dump files (particle-based data)
+- Grid-based datasets stored in HDF5 format
+
+The module aggregates lower-level I/O implementations and re-exports all
+public-facing functions for external use.
+
+# Included Components
+
+## Phantom Binary I/O
+- Reading Phantom binary dump files
+- Writing Phantom binary dump files
+
+Implemented in:
+- `phantomIO/read_phantom.jl`
+
+## Grid Dataset I/O
+- Reading grid-based datasets
+- Writing grid-based datasets
+
+Implemented in:
+- `gridsIO/read_grids.jl`
+- `gridsIO/write_grids.jl`
 """
 module IO
 
