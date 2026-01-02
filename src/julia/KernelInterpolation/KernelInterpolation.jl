@@ -15,6 +15,8 @@ using .Threads
 using StaticArrays
 using Adapt
 
+using PhantomRevealer.Particles
+using PhantomRevealer.Grids
 using PhantomRevealer.NeighborSearch
 
 # KernelInterpolation
@@ -30,30 +32,25 @@ include(joinpath(@__DIR__, "kernel_function", "kernels", "C6_Wendland.jl"))
 include(joinpath(@__DIR__, "kernel_function", "losintegrated_kernel.jl"))
 
 ## Single point interpolation
-include(joinpath(@__DIR__, "InterpolationStrategy.jl"))
-include(joinpath(@__DIR__, "single_point_interpolation", "InterpolationCatalog.jl"))
-include(joinpath(@__DIR__, "single_point_interpolation", "InterpolationInput.jl"))
+include(joinpath(@__DIR__, "interpolation_setup", "InterpolationStrategy.jl"))
+include(joinpath(@__DIR__, "interpolation_setup", "InterpolationCatalog.jl"))
+include(joinpath(@__DIR__, "interpolation_setup", "InterpolationInput.jl"))
+include(joinpath(@__DIR__, "interpolation_setup", "constructor.jl"))
 
 ### LBVH Traversal
-include(joinpath(@__DIR__, "single_point_interpolation", "operations", "accumulations", "scalar_accumulation.jl"))
-include(joinpath(@__DIR__, "single_point_interpolation", "operations", "accumulations", "LOSscalar_accumulation.jl"))
-include(joinpath(@__DIR__, "single_point_interpolation", "operations", "accumulations", "gradient_accumulation.jl"))
-include(joinpath(@__DIR__, "single_point_interpolation", "operations", "accumulations", "divergence_accumulation.jl"))
-include(joinpath(@__DIR__, "single_point_interpolation", "operations", "accumulations", "curl_accumulation.jl"))
-include(joinpath(@__DIR__, "single_point_interpolation", "operations", "kernels", "scalar_interpolation.jl"))
-include(joinpath(@__DIR__, "single_point_interpolation", "operations", "kernels", "LOSscalar_interpolation.jl"))
-include(joinpath(@__DIR__, "single_point_interpolation", "operations", "kernels", "gradient_interpolation.jl"))
-include(joinpath(@__DIR__, "single_point_interpolation", "operations", "kernels", "divergence_interpolation.jl"))
-include(joinpath(@__DIR__, "single_point_interpolation", "operations", "kernels", "curl_interpolation.jl"))
-include(joinpath(@__DIR__, "single_point_interpolation", "operations", "kernels", "general_interpolation.jl"))
-include(joinpath(@__DIR__, "single_point_interpolation", "single_point_traversal_interpolation.jl"))
-
-
-## Grids
-include(joinpath(@__DIR__, "grid.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "accumulations", "scalar_accumulation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "accumulations", "LOSscalar_accumulation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "accumulations", "gradient_accumulation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "accumulations", "divergence_accumulation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "accumulations", "curl_accumulation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "kernels", "scalar_interpolation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "kernels", "LOSscalar_interpolation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "kernels", "gradient_interpolation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "kernels", "divergence_interpolation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "kernels", "curl_interpolation.jl"))
+include(joinpath(@__DIR__, "single_point_interpolation", "kernels", "general_interpolation.jl"))
 
 ## Grid interpolation
-include(joinpath(@__DIR__, "grid_interpolation", "GridBundle.jl"))
 include(joinpath(@__DIR__, "grid_interpolation", "grid_interpolation.jl"))
 
 # Export function, marco, const...

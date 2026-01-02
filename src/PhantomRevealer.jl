@@ -10,6 +10,18 @@ using Reexport
 include(joinpath(@__DIR__, "julia", "Tools", "Tools.jl"))
 @reexport using .Tools
 
+## ParticleDataFrame
+include(joinpath(@__DIR__, "julia", "Particles", "Particles.jl"))
+@reexport using .Particles
+
+## Structure of Grids
+include(joinpath(@__DIR__, "julia", "Grids", "Grids.jl"))
+@reexport using .Grids
+
+## IO & data structure
+include(joinpath(@__DIR__, "julia", "IO", "IO.jl"))
+@reexport using .IO
+
 ## NeighborSearch 
 include(joinpath(@__DIR__, "julia", "NeighborSearch", "NeighborSearch.jl"))
 @reexport using .NeighborSearch
@@ -17,13 +29,6 @@ include(joinpath(@__DIR__, "julia", "NeighborSearch", "NeighborSearch.jl"))
 ## KernelInterpolation
 include(joinpath(@__DIR__, "julia", "KernelInterpolation", "KernelInterpolation.jl"))
 @reexport using .KernelInterpolation
-
-## IO & data structure
-include(joinpath(@__DIR__, "julia", "IO", "IO.jl"))
-@reexport using .IO
-
-### Constructors of the `InterpolationInput` from `ParticleDataFrame`
-include(joinpath(@__DIR__, "julia", "KernelInterpolation", "single_point_interpolation", "constructor.jl"))
 
 ## StreamingInstability
 include(joinpath(@__DIR__, "julia", "StreamingInstability", "StreamingInstability.jl"))

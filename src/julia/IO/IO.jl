@@ -15,23 +15,19 @@ module IO
 using .Threads 
 using DataFrames
 using HDF5
-using PhantomRevealer
+using PhantomRevealer.Particles
+using PhantomRevealer.Grids
 
 
-# IO & data structure
-## ParticleDataFrame & basic adding quantities function
-include(joinpath(@__DIR__,  "struct", "ParticleDataFrame.jl"))
-include(joinpath(@__DIR__,  "struct", "add_quantities_prdf.jl"))
 
-## GridDataset
-include(joinpath(@__DIR__,  "struct", "GridDataset.jl"))
+# IO for data structure
+## Read & Write Phantom Binary dumpfiles
+include(joinpath(@__DIR__, "phantomIO", "read_phantom.jl"))
 
 ## Read & Write GridDataset
 include(joinpath(@__DIR__, "gridsIO", "read_grids.jl"))
 include(joinpath(@__DIR__, "gridsIO", "write_grids.jl"))
 
-## Read & Write Phantom Binary dumpfiles
-include(joinpath(@__DIR__, "phantomIO", "read_phantom.jl"))
 
 
 # Export function, marco, const...

@@ -9,8 +9,6 @@ from a `ParticleDataFrame`.
 All constructors return immutable, type-stable data containers for single-point SPH interpolation.
 """
 
-import .KernelInterpolation: InterpolationCatalog, InterpolationInput
-
 # For field suffixes
 const _XYZ_SUFFIXES = (:x, :y, :z)
 @inline function _vector_components(name::Symbol; suffixes=_XYZ_SUFFIXES)::NTuple{3,Symbol}
@@ -310,5 +308,3 @@ function build_input(data::ParticleDataFrame,
 
     return input, catalog
 end
-
-export AbstractMassSource, MassFromColumn, MassFromParams, InterpolationInput, build_input
