@@ -18,9 +18,9 @@ function Adapt.adapt_structure(to, x :: AB) where {D, AB <: AABB{D}}
 end
 
 struct LinearBVH{D, TF <: AbstractFloat, TI <: Unsigned, VF <: AbstractVector{TF}, VI <: AbstractVector{TI}, A <: AbstractVector{Int}, B <: AbstractVector{Bool}}
-    enc :: MortonEncoding{D, TF, TI, VF, VI}
     brt :: BinaryRadixTree{TI, VI, A, B}
     leaf_aabb :: AABB{D, TF, VF}
+    leaf_h    :: VF
     node_aabb :: AABB{D, TF, VF}
     node_hmax :: VF
     root :: Int
@@ -28,9 +28,9 @@ end
 
 function Adapt.adapt_structure(to, x :: LBVH) where {D, LBVH <: LinearBVH{D}}
     LinearBVH(
-        Adapt.adapt(to, x.enc),
         Adapt.adapt(to, x.brt),
         Adapt.adapt(to, x.leaf_aabb),
+        Adapt.adapt(to, x.leaf_h),
         Adapt.adapt(to, x.node_aabb),
         Adapt.adapt(to, x.node_hmax),
         x.root
@@ -67,8 +67,9 @@ function LinearBVH(enc::MortonEncoding{D, TF, TI, VF, VI}, brt::BinaryRadixTree{
     node_hmax = similar(enc.h, ninternal)
 
     root = _find_root_index(brt)
-    LBVH = LinearBVH{D, TF, TI, VF, VI, A, B}(enc, brt, leaf_aabb, node_aabb, node_hmax, root)
-    _build_LBVH!(LBVH)
+    LBVH = LinearBVH{D, TF, TI, VF, VI, A, B}(brt, leaf_aabb, enc.h, node_aabb, node_hmax, root)
+    _build_leaf_aabb!(LBVH, enc)
+    _build_internal_aabb!(LBVH)
     return LBVH
 end
 
@@ -160,8 +161,8 @@ end
     end
 end
 
-@inline function _build_leaf_aabb!(LBVH::LinearBVH{D}) where {D}
-    coords = LBVH.enc.coord
+@inline function _build_leaf_aabb!(LBVH::LinearBVH{D, TF, TI, VF, VI}, enc :: MortonEncoding{D, TF, TI, VF, VI}) where {D, TF <: AbstractFloat, TI <: Unsigned, VF <: AbstractVector{TF}, VI <: AbstractVector{TI}}
+    coords = enc.coord
     leaf = LBVH.leaf_aabb
     @inbounds for d in 1:D
         copyto!(leaf.min[d], coords[d])
@@ -177,7 +178,7 @@ end
     node_hmax = LBVH.node_hmax
     leaf_min = LBVH.leaf_aabb.min
     leaf_max = LBVH.leaf_aabb.max
-    leaf_h = LBVH.enc.h
+    leaf_h = LBVH.leaf_h
 
     L = brt.left_child
     R = brt.right_child
@@ -233,12 +234,6 @@ end
         visit[i] = zero_visit
     end
 
-    return nothing
-end
-
-@inline function _build_LBVH!(LBVH::LinearBVH)
-    _build_leaf_aabb!(LBVH)
-    _build_internal_aabb!(LBVH)
     return nothing
 end
 
@@ -457,12 +452,12 @@ This routine traverses the BVH using point-to-AABB squared distances for pruning
 With the current LBVH construction where each leaf AABB is degenerate
 (`leaf_min == leaf_max == particle_position`), the leaf distance reduces to the
 squared Euclidean distance between `point` and the particle position. The
-returned value is `LBVH.enc.h[best_idx]`, where `best_idx` is the closest leaf.
+returned value is `LBVH.leaf_h[best_idx]`, where `best_idx` is the closest leaf.
 
 # Parameters
 - `LBVH::LinearBVH{D,T}`  
   Bounding volume hierarchy built from Morton-sorted particle coordinates and
-  associated per-particle smoothing lengths `LBVH.enc.h`.
+  associated per-particle smoothing lengths `LBVH.leaf_h`.
 - `point::NTuple{D,T}`  
   Query point in the same coordinate space as the particles.
 
@@ -490,7 +485,7 @@ returned value is `LBVH.enc.h[best_idx]`, where `best_idx` is the closest leaf.
     root = LBVH.root
 
     # Smoothed radius
-    smoothed_radius = LBVH.enc.h
+    smoothed_radius = LBVH.leaf_h
 
     # If degenerate (no internal nodes)
     if root == 0

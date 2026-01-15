@@ -44,9 +44,9 @@ end
 
 function PhantomRevealer.to_MtlVector(LBVH :: LinearBVH{D, TF, TI, VF, VI, A, B}) where {D, TF <: AbstractFloat, TI <: Unsigned, VF <: AbstractVector{TF}, VI <: AbstractVector{TI}, A <: AbstractVector{Int}, B <: AbstractVector{Bool}}
     return LinearBVH{D, Float32, TI, MtlVector{Float32}, MtlVector{TI}, MtlVector{Int}, MtlVector{Bool}}(
-        to_MtlVector(LBVH.enc),
         to_MtlVector(LBVH.brt),
         to_MtlVector(LBVH.leaf_aabb),
+        MtlVector{Float32}(LBVH.leaf_h),
         to_MtlVector(LBVH.node_aabb),
         MtlVector{Float32}(LBVH.node_hmax),
         LBVH.root

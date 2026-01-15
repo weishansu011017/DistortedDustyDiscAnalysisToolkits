@@ -4,8 +4,8 @@ using PhantomRevealer
 
 const NS = PhantomRevealer.NeighborSearch
 
-function expected_neighbor_indices(lbvh, point::NTuple{D, T}, radius) where {D, T}
-    coords = lbvh.enc.coord
+function expected_neighbor_indices(enc, point::NTuple{D, T}, radius) where {D, T}
+    coords = enc.coord
     r2 = radius * radius
     tol = eps(eltype(coords[1])) * 16
     n = length(coords[1])
@@ -180,7 +180,7 @@ end
 
         pool = zeros(Int, length(enc.codes))
         for (point, radius) in cases
-            expected = expected_neighbor_indices(lbvh, point, radius)
+            expected = expected_neighbor_indices(enc, point, radius)
 
             result1 = LBVH_query!(pool, lbvh, point, radius)
             got = sort(result1.pool[1:result1.count])

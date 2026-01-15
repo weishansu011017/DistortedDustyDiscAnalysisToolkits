@@ -44,9 +44,9 @@ end
 
 function PhantomRevealer.to_CuVector(LBVH :: LinearBVH{D, TF, TI, VF, VI, A, B}) where {D, TF <: AbstractFloat, TI <: Unsigned, VF <: AbstractVector{TF}, VI <: AbstractVector{TI}, A <: AbstractVector{Int}, B <: AbstractVector{Bool}}
     return LinearBVH{D, TF, TI, CuVector{TF}, CuVector{TI}, CuVector{Int}, CuVector{Bool}}(
-        to_CuVector(LBVH.enc),
         to_CuVector(LBVH.brt),
         to_CuVector(LBVH.leaf_aabb),
+        CuVector{TF}(LBVH.leaf_h),
         to_CuVector(LBVH.node_aabb),
         CuVector{TF}(LBVH.node_hmax),
         LBVH.root
