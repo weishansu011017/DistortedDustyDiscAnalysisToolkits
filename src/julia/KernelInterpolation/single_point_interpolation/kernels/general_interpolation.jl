@@ -19,19 +19,16 @@
     scalars :: MVector{N, T} = zero(MVector{N, T})
 
     ## Gradients
-    gradients :: MVector{G, NTuple{3, T}} = MVector{G, NTuple{3, T}}(ntuple(_ -> (zero(T), zero(T), zero(T)), Val(G)))
     gradients_f :: MVector{G, SVector{3,T}} = MVector{G, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(G)))
     gradients_b :: MVector{G, SVector{3,T}} = MVector{G, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(G)))
     gradients_scalars :: MVector{G, T} = zero(MVector{G, T})                                                                  # Scalar that is used for estimating gradients
 
     ## Divergences
-    divergences :: MVector{D, T} = zero(MVector{D, T}) 
     divergences_f :: MVector{D, T} = zero(MVector{D, T})     
     divergences_b :: MVector{D, SVector{3,T}} = MVector{D, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(D)))
     divergences_scalars :: MVector{D, SVector{3,T}} = MVector{D, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(D)))       # Scalars that is used for estimating divergnece
 
     ## Curls
-    curls :: MVector{C, NTuple{3, T}} = MVector{C, NTuple{3, T}}(ntuple(_ -> (zero(T), zero(T), zero(T)), Val(C)))
     curls_f :: MVector{C, SVector{3,T}} = MVector{C, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(C)))
     curls_b :: MVector{C, SVector{3,T}} = MVector{C, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(C)))
     curls_scalars :: MVector{C, SVector{3,T}} = MVector{C, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(C)))             # Scalars that is used for estimating curls
@@ -146,78 +143,81 @@
         end
 
         # Construct gradients
-        @inbounds for j in 1:G
-            A    = gradients_scalars[j] * invS1
+        gradients_out = ntuple(Val(G)) do j
+            @inbounds begin
+                A = gradients_scalars[j] * invS1
 
-            ∇Axf = gradients_f[j][1]
-            ∇Ayf = gradients_f[j][2]
-            ∇Azf = gradients_f[j][3]
+                ∇Axf = gradients_f[j][1]
+                ∇Ayf = gradients_f[j][2]
+                ∇Azf = gradients_f[j][3]
 
-            ∇Axb = gradients_b[j][1]
-            ∇Ayb = gradients_b[j][2]
-            ∇Azb = gradients_b[j][3]
+                ∇Axb = gradients_b[j][1]
+                ∇Ayb = gradients_b[j][2]
+                ∇Azb = gradients_b[j][3]
 
-            # Final result
-            ∇Axb *= A
-            ∇Ayb *= A
-            ∇Azb *= A
+                # Final result
+                ∇Axb *= A
+                ∇Ayb *= A
+                ∇Azb *= A
 
-            ∇Ax = (∇Axf - ∇Axb)
-            ∇Ay = (∇Ayf - ∇Ayb)
-            ∇Az = (∇Azf - ∇Azb)
+                ∇Ax = ∇Axf - ∇Axb
+                ∇Ay = ∇Ayf - ∇Ayb
+                ∇Az = ∇Azf - ∇Azb
 
-            gradients[j] = (∇Ax, ∇Ay, ∇Az)
+                (∇Ax, ∇Ay, ∇Az)
+            end
         end
 
         # Construct divergences
-        @inbounds for j in 1:D
-            Ax   = divergences_scalars[j][1] * invS1
-            Ay   = divergences_scalars[j][2] * invS1
-            Az   = divergences_scalars[j][3] * invS1
+        divergences_out = ntuple(Val(D)) do j 
+            @inbounds begin
+                Ax   = divergences_scalars[j][1] * invS1
+                Ay   = divergences_scalars[j][2] * invS1
+                Az   = divergences_scalars[j][3] * invS1
 
-            ∇Af  = divergences_f[j]
+                ∇Af  = divergences_f[j]
 
-            ∇Axb = divergences_b[j][1]
-            ∇Ayb = divergences_b[j][2]
-            ∇Azb = divergences_b[j][3]
+                ∇Axb = divergences_b[j][1]
+                ∇Ayb = divergences_b[j][2]
+                ∇Azb = divergences_b[j][3]
 
-            # Final result
-            ∇Ab = Ax * ∇Axb + Ay * ∇Ayb + Az * ∇Azb
-            ∇A = (∇Af - ∇Ab)
+                # Final result
+                ∇Ab = Ax * ∇Axb + Ay * ∇Ayb + Az * ∇Azb
+                ∇A = (∇Af - ∇Ab)
 
-            divergences[j] = ∇A
+                ∇A
+            end
         end
 
         # Construct curls
-        @inbounds for j in 1:C
-            Ax   = curls_scalars[j][1] * invS1
-            Ay   = curls_scalars[j][2] * invS1
-            Az   = curls_scalars[j][3] * invS1
+        curls_out = ntuple(Val(C)) do j 
+            @inbounds begin
+                Ax   = curls_scalars[j][1] * invS1
+                Ay   = curls_scalars[j][2] * invS1
+                Az   = curls_scalars[j][3] * invS1
 
-            ∇Axf = curls_f[j][1]
-            ∇Ayf = curls_f[j][2]
-            ∇Azf = curls_f[j][3]
+                ∇Axf = curls_f[j][1]
+                ∇Ayf = curls_f[j][2]
+                ∇Azf = curls_f[j][3]
 
-            mlρ∂xW = curls_b[j][1]
-            mlρ∂yW = curls_b[j][2]
-            mlρ∂zW = curls_b[j][3]
+                mlρ∂xW = curls_b[j][1]
+                mlρ∂yW = curls_b[j][2]
+                mlρ∂zW = curls_b[j][3]
 
-            # Final result
-            ∇Axb = Ay * mlρ∂zW - Az * mlρ∂yW
-            ∇Ayb = Az * mlρ∂xW - Ax * mlρ∂zW
-            ∇Azb = Ax * mlρ∂yW - Ay * mlρ∂xW
+                # Final result
+                ∇Axb = Ay * mlρ∂zW - Az * mlρ∂yW
+                ∇Ayb = Az * mlρ∂xW - Ax * mlρ∂zW
+                ∇Azb = Ax * mlρ∂yW - Ay * mlρ∂xW
 
-            ∇Ax = -(∇Axf - ∇Axb)
-            ∇Ay = -(∇Ayf - ∇Ayb)
-            ∇Az = -(∇Azf - ∇Azb)
+                ∇Ax = -(∇Axf - ∇Axb)
+                ∇Ay = -(∇Ayf - ∇Ayb)
+                ∇Az = -(∇Azf - ∇Azb)
 
-            curls[j] = (∇Ax, ∇Ay, ∇Az)
+                (∇Ax, ∇Ay, ∇Az)
+            end
         end
 
         scalars_out = ntuple(i -> scalars[i], Val(N))
-        gradients_out = ntuple(i -> gradients[i], Val(G))
-        divergences_out = ntuple(i -> divergences[i], Val(D))
-        curls_out = ntuple(i -> curls[i], Val(C))
 
         output = (scalars_out, gradients_out, divergences_out, curls_out)
         return output
@@ -410,78 +410,81 @@
     end
 
     # Construct gradients
-    @inbounds for j in 1:G
-        A    = gradients_scalars[j] * invS1
+    gradients_out = ntuple(Val(G)) do j
+        @inbounds begin
+            A = gradients_scalars[j] * invS1
 
-        ∇Axf = gradients_f[j][1]
-        ∇Ayf = gradients_f[j][2]
-        ∇Azf = gradients_f[j][3]
+            ∇Axf = gradients_f[j][1]
+            ∇Ayf = gradients_f[j][2]
+            ∇Azf = gradients_f[j][3]
 
-        ∇Axb = gradients_b[j][1]
-        ∇Ayb = gradients_b[j][2]
-        ∇Azb = gradients_b[j][3]
+            ∇Axb = gradients_b[j][1]
+            ∇Ayb = gradients_b[j][2]
+            ∇Azb = gradients_b[j][3]
 
-        # Final result
-        ∇Axb *= A
-        ∇Ayb *= A
-        ∇Azb *= A
+            # Final result
+            ∇Axb *= A
+            ∇Ayb *= A
+            ∇Azb *= A
 
-        ∇Ax = (∇Axf - ∇Axb)
-        ∇Ay = (∇Ayf - ∇Ayb)
-        ∇Az = (∇Azf - ∇Azb)
+            ∇Ax = ∇Axf - ∇Axb
+            ∇Ay = ∇Ayf - ∇Ayb
+            ∇Az = ∇Azf - ∇Azb
 
-        gradients[j] = (∇Ax, ∇Ay, ∇Az)
+            (∇Ax, ∇Ay, ∇Az)
+        end
     end
 
     # Construct divergences
-    @inbounds for j in 1:D
-        Ax   = divergences_scalars[j][1] * invS1
-        Ay   = divergences_scalars[j][2] * invS1
-        Az   = divergences_scalars[j][3] * invS1
+    divergences_out = ntuple(Val(D)) do j 
+        @inbounds begin
+            Ax   = divergences_scalars[j][1] * invS1
+            Ay   = divergences_scalars[j][2] * invS1
+            Az   = divergences_scalars[j][3] * invS1
 
-        ∇Af  = divergences_f[j]
+            ∇Af  = divergences_f[j]
 
-        ∇Axb = divergences_b[j][1]
-        ∇Ayb = divergences_b[j][2]
-        ∇Azb = divergences_b[j][3]
+            ∇Axb = divergences_b[j][1]
+            ∇Ayb = divergences_b[j][2]
+            ∇Azb = divergences_b[j][3]
 
-        # Final result
-        ∇Ab = Ax * ∇Axb + Ay * ∇Ayb + Az * ∇Azb
-        ∇A = (∇Af - ∇Ab)
+            # Final result
+            ∇Ab = Ax * ∇Axb + Ay * ∇Ayb + Az * ∇Azb
+            ∇A = (∇Af - ∇Ab)
 
-        divergences[j] = ∇A
+            ∇A
+        end
     end
 
     # Construct curls
-    @inbounds for j in 1:C
-        Ax   = curls_scalars[j][1] * invS1
-        Ay   = curls_scalars[j][2] * invS1
-        Az   = curls_scalars[j][3] * invS1
+    curls_out = ntuple(Val(C)) do j 
+        @inbounds begin
+            Ax   = curls_scalars[j][1] * invS1
+            Ay   = curls_scalars[j][2] * invS1
+            Az   = curls_scalars[j][3] * invS1
 
-        ∇Axf = curls_f[j][1]
-        ∇Ayf = curls_f[j][2]
-        ∇Azf = curls_f[j][3]
+            ∇Axf = curls_f[j][1]
+            ∇Ayf = curls_f[j][2]
+            ∇Azf = curls_f[j][3]
 
-        mlρ∂xW = curls_b[j][1]
-        mlρ∂yW = curls_b[j][2]
-        mlρ∂zW = curls_b[j][3]
+            mlρ∂xW = curls_b[j][1]
+            mlρ∂yW = curls_b[j][2]
+            mlρ∂zW = curls_b[j][3]
 
-        # Final result
-        ∇Axb = Ay * mlρ∂zW - Az * mlρ∂yW
-        ∇Ayb = Az * mlρ∂xW - Ax * mlρ∂zW
-        ∇Azb = Ax * mlρ∂yW - Ay * mlρ∂xW
+            # Final result
+            ∇Axb = Ay * mlρ∂zW - Az * mlρ∂yW
+            ∇Ayb = Az * mlρ∂xW - Ax * mlρ∂zW
+            ∇Azb = Ax * mlρ∂yW - Ay * mlρ∂xW
 
-        ∇Ax = -(∇Axf - ∇Axb)
-        ∇Ay = -(∇Ayf - ∇Ayb)
-        ∇Az = -(∇Azf - ∇Azb)
+            ∇Ax = -(∇Axf - ∇Axb)
+            ∇Ay = -(∇Ayf - ∇Ayb)
+            ∇Az = -(∇Azf - ∇Azb)
 
-        curls[j] = (∇Ax, ∇Ay, ∇Az)
+            (∇Ax, ∇Ay, ∇Az)
+        end
     end
 
     scalars_out = ntuple(i -> scalars[i], Val(N))
-    gradients_out = ntuple(i -> gradients[i], Val(G))
-    divergences_out = ntuple(i -> divergences[i], Val(D))
-    curls_out = ntuple(i -> curls[i], Val(C))
 
     output = (scalars_out, gradients_out, divergences_out, curls_out)     
     return output 
@@ -507,19 +510,16 @@ end
     scalars :: MVector{N, T} = zero(MVector{N, T})
 
     ## Gradients
-    gradients :: MVector{G, NTuple{3, T}} = MVector{G, NTuple{3, T}}(ntuple(_ -> (zero(T), zero(T), zero(T)), Val(G)))
     gradients_f :: MVector{G, SVector{3,T}} = MVector{G, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(G)))
     gradients_b :: MVector{G, SVector{3,T}} = MVector{G, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(G)))
     gradients_scalars :: MVector{G, T} = zero(MVector{G, T})                                                                  # Scalar that is used for estimating gradients
 
     ## Divergences
-    divergences :: MVector{D, T} = zero(MVector{D, T}) 
     divergences_f :: MVector{D, T} = zero(MVector{D, T})     
     divergences_b :: MVector{D, SVector{3,T}} = MVector{D, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(D)))
     divergences_scalars :: MVector{D, SVector{3,T}} = MVector{D, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(D)))       # Scalars that is used for estimating divergnece
 
     ## Curls
-    curls :: MVector{C, NTuple{3, T}} = MVector{C, NTuple{3, T}}(ntuple(_ -> (zero(T), zero(T), zero(T)), Val(C)))
     curls_f :: MVector{C, SVector{3,T}} = MVector{C, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(C)))
     curls_b :: MVector{C, SVector{3,T}} = MVector{C, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(C)))
     curls_scalars :: MVector{C, SVector{3,T}} = MVector{C, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(C)))             # Scalars that is used for estimating curls
@@ -635,78 +635,81 @@ end
         end
 
         # Construct gradients
-        @inbounds for j in 1:G
-            A    = gradients_scalars[j] * invS1
+        gradients_out = ntuple(Val(G)) do j
+            @inbounds begin
+                A = gradients_scalars[j] * invS1
 
-            ∇Axf = gradients_f[j][1]
-            ∇Ayf = gradients_f[j][2]
-            ∇Azf = gradients_f[j][3]
+                ∇Axf = gradients_f[j][1]
+                ∇Ayf = gradients_f[j][2]
+                ∇Azf = gradients_f[j][3]
 
-            ∇Axb = gradients_b[j][1]
-            ∇Ayb = gradients_b[j][2]
-            ∇Azb = gradients_b[j][3]
+                ∇Axb = gradients_b[j][1]
+                ∇Ayb = gradients_b[j][2]
+                ∇Azb = gradients_b[j][3]
 
-            # Final result
-            ∇Axb *= A
-            ∇Ayb *= A
-            ∇Azb *= A
+                # Final result
+                ∇Axb *= A
+                ∇Ayb *= A
+                ∇Azb *= A
 
-            ∇Ax = (∇Axf - ∇Axb)
-            ∇Ay = (∇Ayf - ∇Ayb)
-            ∇Az = (∇Azf - ∇Azb)
+                ∇Ax = ∇Axf - ∇Axb
+                ∇Ay = ∇Ayf - ∇Ayb
+                ∇Az = ∇Azf - ∇Azb
 
-            gradients[j] = (∇Ax, ∇Ay, ∇Az)
+                (∇Ax, ∇Ay, ∇Az)
+            end
         end
 
         # Construct divergences
-        @inbounds for j in 1:D
-            Ax   = divergences_scalars[j][1] * invS1
-            Ay   = divergences_scalars[j][2] * invS1
-            Az   = divergences_scalars[j][3] * invS1
+        divergences_out = ntuple(Val(D)) do j 
+            @inbounds begin
+                Ax   = divergences_scalars[j][1] * invS1
+                Ay   = divergences_scalars[j][2] * invS1
+                Az   = divergences_scalars[j][3] * invS1
 
-            ∇Af  = divergences_f[j]
+                ∇Af  = divergences_f[j]
 
-            ∇Axb = divergences_b[j][1]
-            ∇Ayb = divergences_b[j][2]
-            ∇Azb = divergences_b[j][3]
+                ∇Axb = divergences_b[j][1]
+                ∇Ayb = divergences_b[j][2]
+                ∇Azb = divergences_b[j][3]
 
-            # Final result
-            ∇Ab = Ax * ∇Axb + Ay * ∇Ayb + Az * ∇Azb
-            ∇A = (∇Af - ∇Ab)
+                # Final result
+                ∇Ab = Ax * ∇Axb + Ay * ∇Ayb + Az * ∇Azb
+                ∇A = (∇Af - ∇Ab)
 
-            divergences[j] = ∇A
+                ∇A
+            end
         end
 
         # Construct curls
-        @inbounds for j in 1:C
-            Ax   = curls_scalars[j][1] * invS1
-            Ay   = curls_scalars[j][2] * invS1
-            Az   = curls_scalars[j][3] * invS1
+        curls_out = ntuple(Val(C)) do j 
+            @inbounds begin
+                Ax   = curls_scalars[j][1] * invS1
+                Ay   = curls_scalars[j][2] * invS1
+                Az   = curls_scalars[j][3] * invS1
 
-            ∇Axf = curls_f[j][1]
-            ∇Ayf = curls_f[j][2]
-            ∇Azf = curls_f[j][3]
+                ∇Axf = curls_f[j][1]
+                ∇Ayf = curls_f[j][2]
+                ∇Azf = curls_f[j][3]
 
-            mlρ∂xW = curls_b[j][1]
-            mlρ∂yW = curls_b[j][2]
-            mlρ∂zW = curls_b[j][3]
+                mlρ∂xW = curls_b[j][1]
+                mlρ∂yW = curls_b[j][2]
+                mlρ∂zW = curls_b[j][3]
 
-            # Final result
-            ∇Axb = Ay * mlρ∂zW - Az * mlρ∂yW
-            ∇Ayb = Az * mlρ∂xW - Ax * mlρ∂zW
-            ∇Azb = Ax * mlρ∂yW - Ay * mlρ∂xW
+                # Final result
+                ∇Axb = Ay * mlρ∂zW - Az * mlρ∂yW
+                ∇Ayb = Az * mlρ∂xW - Ax * mlρ∂zW
+                ∇Azb = Ax * mlρ∂yW - Ay * mlρ∂xW
 
-            ∇Ax = -(∇Axf - ∇Axb)
-            ∇Ay = -(∇Ayf - ∇Ayb)
-            ∇Az = -(∇Azf - ∇Azb)
+                ∇Ax = -(∇Axf - ∇Axb)
+                ∇Ay = -(∇Ayf - ∇Ayb)
+                ∇Az = -(∇Azf - ∇Azb)
 
-            curls[j] = (∇Ax, ∇Ay, ∇Az)
+                (∇Ax, ∇Ay, ∇Az)
+            end
         end
 
         scalars_out = ntuple(i -> scalars[i], Val(N))
-        gradients_out = ntuple(i -> gradients[i], Val(G))
-        divergences_out = ntuple(i -> divergences[i], Val(D))
-        curls_out = ntuple(i -> curls[i], Val(C))
 
         output = (scalars_out, gradients_out, divergences_out, curls_out)     
         return output 
@@ -907,78 +910,81 @@ end
     end
 
     # Construct gradients
-    @inbounds for j in 1:G
-        A    = gradients_scalars[j] * invS1
+    gradients_out = ntuple(Val(G)) do j
+        @inbounds begin
+            A = gradients_scalars[j] * invS1
 
-        ∇Axf = gradients_f[j][1]
-        ∇Ayf = gradients_f[j][2]
-        ∇Azf = gradients_f[j][3]
+            ∇Axf = gradients_f[j][1]
+            ∇Ayf = gradients_f[j][2]
+            ∇Azf = gradients_f[j][3]
 
-        ∇Axb = gradients_b[j][1]
-        ∇Ayb = gradients_b[j][2]
-        ∇Azb = gradients_b[j][3]
+            ∇Axb = gradients_b[j][1]
+            ∇Ayb = gradients_b[j][2]
+            ∇Azb = gradients_b[j][3]
 
-        # Final result
-        ∇Axb *= A
-        ∇Ayb *= A
-        ∇Azb *= A
+            # Final result
+            ∇Axb *= A
+            ∇Ayb *= A
+            ∇Azb *= A
 
-        ∇Ax = (∇Axf - ∇Axb)
-        ∇Ay = (∇Ayf - ∇Ayb)
-        ∇Az = (∇Azf - ∇Azb)
+            ∇Ax = ∇Axf - ∇Axb
+            ∇Ay = ∇Ayf - ∇Ayb
+            ∇Az = ∇Azf - ∇Azb
 
-        gradients[j] = (∇Ax, ∇Ay, ∇Az)
+            (∇Ax, ∇Ay, ∇Az)
+        end
     end
 
     # Construct divergences
-    @inbounds for j in 1:D
-        Ax   = divergences_scalars[j][1] * invS1
-        Ay   = divergences_scalars[j][2] * invS1
-        Az   = divergences_scalars[j][3] * invS1
+    divergences_out = ntuple(Val(D)) do j 
+        @inbounds begin
+            Ax   = divergences_scalars[j][1] * invS1
+            Ay   = divergences_scalars[j][2] * invS1
+            Az   = divergences_scalars[j][3] * invS1
 
-        ∇Af  = divergences_f[j]
+            ∇Af  = divergences_f[j]
 
-        ∇Axb = divergences_b[j][1]
-        ∇Ayb = divergences_b[j][2]
-        ∇Azb = divergences_b[j][3]
+            ∇Axb = divergences_b[j][1]
+            ∇Ayb = divergences_b[j][2]
+            ∇Azb = divergences_b[j][3]
 
-        # Final result
-        ∇Ab = Ax * ∇Axb + Ay * ∇Ayb + Az * ∇Azb
-        ∇A = (∇Af - ∇Ab)
+            # Final result
+            ∇Ab = Ax * ∇Axb + Ay * ∇Ayb + Az * ∇Azb
+            ∇A = (∇Af - ∇Ab)
 
-        divergences[j] = ∇A
+            ∇A
+        end
     end
 
     # Construct curls
-    @inbounds for j in 1:C
-        Ax   = curls_scalars[j][1] * invS1
-        Ay   = curls_scalars[j][2] * invS1
-        Az   = curls_scalars[j][3] * invS1
+    curls_out = ntuple(Val(C)) do j 
+        @inbounds begin
+            Ax   = curls_scalars[j][1] * invS1
+            Ay   = curls_scalars[j][2] * invS1
+            Az   = curls_scalars[j][3] * invS1
 
-        ∇Axf = curls_f[j][1]
-        ∇Ayf = curls_f[j][2]
-        ∇Azf = curls_f[j][3]
+            ∇Axf = curls_f[j][1]
+            ∇Ayf = curls_f[j][2]
+            ∇Azf = curls_f[j][3]
 
-        mlρ∂xW = curls_b[j][1]
-        mlρ∂yW = curls_b[j][2]
-        mlρ∂zW = curls_b[j][3]
+            mlρ∂xW = curls_b[j][1]
+            mlρ∂yW = curls_b[j][2]
+            mlρ∂zW = curls_b[j][3]
 
-        # Final result
-        ∇Axb = Ay * mlρ∂zW - Az * mlρ∂yW
-        ∇Ayb = Az * mlρ∂xW - Ax * mlρ∂zW
-        ∇Azb = Ax * mlρ∂yW - Ay * mlρ∂xW
+            # Final result
+            ∇Axb = Ay * mlρ∂zW - Az * mlρ∂yW
+            ∇Ayb = Az * mlρ∂xW - Ax * mlρ∂zW
+            ∇Azb = Ax * mlρ∂yW - Ay * mlρ∂xW
 
-        ∇Ax = -(∇Axf - ∇Axb)
-        ∇Ay = -(∇Ayf - ∇Ayb)
-        ∇Az = -(∇Azf - ∇Azb)
+            ∇Ax = -(∇Axf - ∇Axb)
+            ∇Ay = -(∇Ayf - ∇Ayb)
+            ∇Az = -(∇Azf - ∇Azb)
 
-        curls[j] = (∇Ax, ∇Ay, ∇Az)
+            (∇Ax, ∇Ay, ∇Az)
+        end
     end
 
     scalars_out = ntuple(i -> scalars[i], Val(N))
-    gradients_out = ntuple(i -> gradients[i], Val(G))
-    divergences_out = ntuple(i -> divergences[i], Val(D))
-    curls_out = ntuple(i -> curls[i], Val(C))
 
     output = (scalars_out, gradients_out, divergences_out, curls_out)     
     return output 
@@ -1005,19 +1011,16 @@ end
     scalars :: MVector{N, T} = zero(MVector{N, T})
 
     ## Gradients
-    gradients :: MVector{G, NTuple{3, T}} = MVector{G, NTuple{3, T}}(ntuple(_ -> (zero(T), zero(T), zero(T)), Val(G)))
     gradients_f :: MVector{G, SVector{3,T}} = MVector{G, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(G)))
     gradients_b :: MVector{G, SVector{3,T}} = MVector{G, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(G)))
     gradients_scalars :: MVector{G, T} = zero(MVector{G, T})                                                                  # Scalar that is used for estimating gradients
 
     ## Divergences
-    divergences :: MVector{D, T} = zero(MVector{D, T}) 
     divergences_f :: MVector{D, T} = zero(MVector{D, T})     
     divergences_b :: MVector{D, SVector{3,T}} = MVector{D, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(D)))
     divergences_scalars :: MVector{D, SVector{3,T}} = MVector{D, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(D)))       # Scalars that is used for estimating divergnece
 
     ## Curls
-    curls :: MVector{C, NTuple{3, T}} = MVector{C, NTuple{3, T}}(ntuple(_ -> (zero(T), zero(T), zero(T)), Val(C)))
     curls_f :: MVector{C, SVector{3,T}} = MVector{C, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(C)))
     curls_b :: MVector{C, SVector{3,T}} = MVector{C, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(C)))
     curls_scalars :: MVector{C, SVector{3,T}} = MVector{C, SVector{3,T}}(ntuple(_ -> zero(SVector{3,T}), Val(C)))             # Scalars that is used for estimating curls
@@ -1133,78 +1136,81 @@ end
         end
 
         # Construct gradients
-        @inbounds for j in 1:G
-            A    = gradients_scalars[j] * invS1
+        gradients_out = ntuple(Val(G)) do j
+            @inbounds begin
+                A = gradients_scalars[j] * invS1
 
-            ∇Axf = gradients_f[j][1]
-            ∇Ayf = gradients_f[j][2]
-            ∇Azf = gradients_f[j][3]
+                ∇Axf = gradients_f[j][1]
+                ∇Ayf = gradients_f[j][2]
+                ∇Azf = gradients_f[j][3]
 
-            ∇Axb = gradients_b[j][1]
-            ∇Ayb = gradients_b[j][2]
-            ∇Azb = gradients_b[j][3]
+                ∇Axb = gradients_b[j][1]
+                ∇Ayb = gradients_b[j][2]
+                ∇Azb = gradients_b[j][3]
 
-            # Final result
-            ∇Axb *= A
-            ∇Ayb *= A
-            ∇Azb *= A
+                # Final result
+                ∇Axb *= A
+                ∇Ayb *= A
+                ∇Azb *= A
 
-            ∇Ax = (∇Axf - ∇Axb)
-            ∇Ay = (∇Ayf - ∇Ayb)
-            ∇Az = (∇Azf - ∇Azb)
+                ∇Ax = ∇Axf - ∇Axb
+                ∇Ay = ∇Ayf - ∇Ayb
+                ∇Az = ∇Azf - ∇Azb
 
-            gradients[j] = (∇Ax, ∇Ay, ∇Az)
+                (∇Ax, ∇Ay, ∇Az)
+            end
         end
 
         # Construct divergences
-        @inbounds for j in 1:D
-            Ax   = divergences_scalars[j][1] * invS1
-            Ay   = divergences_scalars[j][2] * invS1
-            Az   = divergences_scalars[j][3] * invS1
+        divergences_out = ntuple(Val(D)) do j 
+            @inbounds begin
+                Ax   = divergences_scalars[j][1] * invS1
+                Ay   = divergences_scalars[j][2] * invS1
+                Az   = divergences_scalars[j][3] * invS1
 
-            ∇Af  = divergences_f[j]
+                ∇Af  = divergences_f[j]
 
-            ∇Axb = divergences_b[j][1]
-            ∇Ayb = divergences_b[j][2]
-            ∇Azb = divergences_b[j][3]
+                ∇Axb = divergences_b[j][1]
+                ∇Ayb = divergences_b[j][2]
+                ∇Azb = divergences_b[j][3]
 
-            # Final result
-            ∇Ab = Ax * ∇Axb + Ay * ∇Ayb + Az * ∇Azb
-            ∇A = (∇Af - ∇Ab)
+                # Final result
+                ∇Ab = Ax * ∇Axb + Ay * ∇Ayb + Az * ∇Azb
+                ∇A = (∇Af - ∇Ab)
 
-            divergences[j] = ∇A
+                ∇A
+            end
         end
 
         # Construct curls
-        @inbounds for j in 1:C
-            Ax   = curls_scalars[j][1] * invS1
-            Ay   = curls_scalars[j][2] * invS1
-            Az   = curls_scalars[j][3] * invS1
+        curls_out = ntuple(Val(C)) do j 
+            @inbounds begin
+                Ax   = curls_scalars[j][1] * invS1
+                Ay   = curls_scalars[j][2] * invS1
+                Az   = curls_scalars[j][3] * invS1
 
-            ∇Axf = curls_f[j][1]
-            ∇Ayf = curls_f[j][2]
-            ∇Azf = curls_f[j][3]
+                ∇Axf = curls_f[j][1]
+                ∇Ayf = curls_f[j][2]
+                ∇Azf = curls_f[j][3]
 
-            mlρ∂xW = curls_b[j][1]
-            mlρ∂yW = curls_b[j][2]
-            mlρ∂zW = curls_b[j][3]
+                mlρ∂xW = curls_b[j][1]
+                mlρ∂yW = curls_b[j][2]
+                mlρ∂zW = curls_b[j][3]
 
-            # Final result
-            ∇Axb = Ay * mlρ∂zW - Az * mlρ∂yW
-            ∇Ayb = Az * mlρ∂xW - Ax * mlρ∂zW
-            ∇Azb = Ax * mlρ∂yW - Ay * mlρ∂xW
+                # Final result
+                ∇Axb = Ay * mlρ∂zW - Az * mlρ∂yW
+                ∇Ayb = Az * mlρ∂xW - Ax * mlρ∂zW
+                ∇Azb = Ax * mlρ∂yW - Ay * mlρ∂xW
 
-            ∇Ax = -(∇Axf - ∇Axb)
-            ∇Ay = -(∇Ayf - ∇Ayb)
-            ∇Az = -(∇Azf - ∇Azb)
+                ∇Ax = -(∇Axf - ∇Axb)
+                ∇Ay = -(∇Ayf - ∇Ayb)
+                ∇Az = -(∇Azf - ∇Azb)
 
-            curls[j] = (∇Ax, ∇Ay, ∇Az)
+                (∇Ax, ∇Ay, ∇Az)
+            end
         end
 
         scalars_out = ntuple(i -> scalars[i], Val(N))
-        gradients_out = ntuple(i -> gradients[i], Val(G))
-        divergences_out = ntuple(i -> divergences[i], Val(D))
-        curls_out = ntuple(i -> curls[i], Val(C))
 
         output = (scalars_out, gradients_out, divergences_out, curls_out)     
         return output 
@@ -1405,78 +1411,81 @@ end
     end
 
     # Construct gradients
-    @inbounds for j in 1:G
-        A    = gradients_scalars[j] * invS1
+    gradients_out = ntuple(Val(G)) do j
+        @inbounds begin
+            A = gradients_scalars[j] * invS1
 
-        ∇Axf = gradients_f[j][1]
-        ∇Ayf = gradients_f[j][2]
-        ∇Azf = gradients_f[j][3]
+            ∇Axf = gradients_f[j][1]
+            ∇Ayf = gradients_f[j][2]
+            ∇Azf = gradients_f[j][3]
 
-        ∇Axb = gradients_b[j][1]
-        ∇Ayb = gradients_b[j][2]
-        ∇Azb = gradients_b[j][3]
+            ∇Axb = gradients_b[j][1]
+            ∇Ayb = gradients_b[j][2]
+            ∇Azb = gradients_b[j][3]
 
-        # Final result
-        ∇Axb *= A
-        ∇Ayb *= A
-        ∇Azb *= A
+            # Final result
+            ∇Axb *= A
+            ∇Ayb *= A
+            ∇Azb *= A
 
-        ∇Ax = (∇Axf - ∇Axb)
-        ∇Ay = (∇Ayf - ∇Ayb)
-        ∇Az = (∇Azf - ∇Azb)
+            ∇Ax = ∇Axf - ∇Axb
+            ∇Ay = ∇Ayf - ∇Ayb
+            ∇Az = ∇Azf - ∇Azb
 
-        gradients[j] = (∇Ax, ∇Ay, ∇Az)
+            (∇Ax, ∇Ay, ∇Az)
+        end
     end
 
     # Construct divergences
-    @inbounds for j in 1:D
-        Ax   = divergences_scalars[j][1] * invS1
-        Ay   = divergences_scalars[j][2] * invS1
-        Az   = divergences_scalars[j][3] * invS1
+    divergences_out = ntuple(Val(D)) do j 
+        @inbounds begin
+            Ax   = divergences_scalars[j][1] * invS1
+            Ay   = divergences_scalars[j][2] * invS1
+            Az   = divergences_scalars[j][3] * invS1
 
-        ∇Af  = divergences_f[j]
+            ∇Af  = divergences_f[j]
 
-        ∇Axb = divergences_b[j][1]
-        ∇Ayb = divergences_b[j][2]
-        ∇Azb = divergences_b[j][3]
+            ∇Axb = divergences_b[j][1]
+            ∇Ayb = divergences_b[j][2]
+            ∇Azb = divergences_b[j][3]
 
-        # Final result
-        ∇Ab = Ax * ∇Axb + Ay * ∇Ayb + Az * ∇Azb
-        ∇A = (∇Af - ∇Ab)
+            # Final result
+            ∇Ab = Ax * ∇Axb + Ay * ∇Ayb + Az * ∇Azb
+            ∇A = (∇Af - ∇Ab)
 
-        divergences[j] = ∇A
+            ∇A
+        end
     end
 
     # Construct curls
-    @inbounds for j in 1:C
-        Ax   = curls_scalars[j][1] * invS1
-        Ay   = curls_scalars[j][2] * invS1
-        Az   = curls_scalars[j][3] * invS1
+    curls_out = ntuple(Val(C)) do j 
+        @inbounds begin
+            Ax   = curls_scalars[j][1] * invS1
+            Ay   = curls_scalars[j][2] * invS1
+            Az   = curls_scalars[j][3] * invS1
 
-        ∇Axf = curls_f[j][1]
-        ∇Ayf = curls_f[j][2]
-        ∇Azf = curls_f[j][3]
+            ∇Axf = curls_f[j][1]
+            ∇Ayf = curls_f[j][2]
+            ∇Azf = curls_f[j][3]
 
-        mlρ∂xW = curls_b[j][1]
-        mlρ∂yW = curls_b[j][2]
-        mlρ∂zW = curls_b[j][3]
+            mlρ∂xW = curls_b[j][1]
+            mlρ∂yW = curls_b[j][2]
+            mlρ∂zW = curls_b[j][3]
 
-        # Final result
-        ∇Axb = Ay * mlρ∂zW - Az * mlρ∂yW
-        ∇Ayb = Az * mlρ∂xW - Ax * mlρ∂zW
-        ∇Azb = Ax * mlρ∂yW - Ay * mlρ∂xW
+            # Final result
+            ∇Axb = Ay * mlρ∂zW - Az * mlρ∂yW
+            ∇Ayb = Az * mlρ∂xW - Ax * mlρ∂zW
+            ∇Azb = Ax * mlρ∂yW - Ay * mlρ∂xW
 
-        ∇Ax = -(∇Axf - ∇Axb)
-        ∇Ay = -(∇Ayf - ∇Ayb)
-        ∇Az = -(∇Azf - ∇Azb)
+            ∇Ax = -(∇Axf - ∇Axb)
+            ∇Ay = -(∇Ayf - ∇Ayb)
+            ∇Az = -(∇Azf - ∇Azb)
 
-        curls[j] = (∇Ax, ∇Ay, ∇Az)
+            (∇Ax, ∇Ay, ∇Az)
+        end
     end
 
     scalars_out = ntuple(i -> scalars[i], Val(N))
-    gradients_out = ntuple(i -> gradients[i], Val(G))
-    divergences_out = ntuple(i -> divergences[i], Val(D))
-    curls_out = ntuple(i -> curls[i], Val(C))
 
     output = (scalars_out, gradients_out, divergences_out, curls_out)     
     return output 
