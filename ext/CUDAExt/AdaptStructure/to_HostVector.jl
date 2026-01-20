@@ -22,15 +22,14 @@ function PhantomRevealer.to_HostVector(enc :: MortonEncoding{D, TF, TI, VF, VI})
     )
 end
 
-function PhantomRevealer.to_HostVector(brt :: BinaryRadixTree{TI, VI, A, B}) where {TI <: Unsigned, VI <: CuVector{TI},  A <: CuVector{Int}, B <: CuVector{Bool}}
-    return BinaryRadixTree{TI, Vector{TI}, Vector{Int}, Vector{Bool}}(
-        Vector{Int}(brt.left_child),
-        Vector{Int}(brt.right_child),
-        Vector{Bool}(brt.is_leaf_left),
-        Vector{Bool}(brt.is_leaf_right),
-        Vector{TI}(brt.leaf_parent),
-        Vector{TI}(brt.node_parent),
-        Vector{TI}(brt.visit_counter)
+function PhantomRevealer.to_HostVector(brt :: BinaryRadixTree{V}) where {V <: CuVector{Int32}}
+    return BinaryRadixTree{Vector{Int32}}(
+        brt.root,
+        brt.nleaf,
+        Vector{Int32}(brt.left),
+        Vector{Int32}(brt.right),
+        Vector{Int32}(brt.escape),
+        Vector{Int32}(brt.parent)
     )
 end
 
@@ -42,14 +41,13 @@ function PhantomRevealer.to_HostVector(AB :: AABB{D, TF, VF}) where {D, TF <: Ab
 
 end
 
-function PhantomRevealer.to_HostVector(LBVH :: LinearBVH{D, TF, TI, VF, VI, A, B}) where {D, TF <: AbstractFloat, TI <: Unsigned, VF <: CuVector{TF}, VI <: CuVector{TI}, A <: CuVector{Int}, B <: CuVector{Bool}}
-    return LinearBVH{D, TF, TI, Vector{TF}, Vector{TI}, Vector{Int}, Vector{Bool}}(
+function PhantomRevealer.to_HostVector(LBVH :: LinearBVH{D, TF, VF, VB}) where {D, TF <: AbstractFloat, VF <: CuVector{TF}, VB <: CuVector{Int32}}
+    return LinearBVH{D, TF, Vector{TF}, Vector{Int32}}(
         to_HostVector(LBVH.brt),
         to_HostVector(LBVH.leaf_aabb),
         Vector{TF}(LBVH.leaf_h),
         to_HostVector(LBVH.node_aabb),
-        Vector{TF}(LBVH.node_hmax),
-        LBVH.root
+        Vector{TF}(LBVH.node_hmax)
     )
 end
 

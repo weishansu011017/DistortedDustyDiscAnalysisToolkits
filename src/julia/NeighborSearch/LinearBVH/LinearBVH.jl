@@ -17,13 +17,12 @@ function Adapt.adapt_structure(to, x :: AB) where {D, AB <: AABB{D}}
     )
 end
 
-struct LinearBVH{D, TF <: AbstractFloat, TI <: Unsigned, VF <: AbstractVector{TF}, VI <: AbstractVector{TI}, A <: AbstractVector{Int}, B <: AbstractVector{Bool}}
-    brt :: BinaryRadixTree{TI, VI, A, B}
+struct LinearBVH{D, TF <: AbstractFloat, VF <: AbstractVector{TF}, VB <: AbstractVector{Int32}}
+    brt :: BinaryRadixTree{VB}
     leaf_aabb :: AABB{D, TF, VF}
     leaf_h    :: VF
     node_aabb :: AABB{D, TF, VF}
     node_hmax :: VF
-    root :: Int
 end
 
 function Adapt.adapt_structure(to, x :: LBVH) where {D, LBVH <: LinearBVH{D}}
@@ -33,7 +32,6 @@ function Adapt.adapt_structure(to, x :: LBVH) where {D, LBVH <: LinearBVH{D}}
         Adapt.adapt(to, x.leaf_h),
         Adapt.adapt(to, x.node_aabb),
         Adapt.adapt(to, x.node_hmax),
-        x.root
     )
 end
 
@@ -54,9 +52,12 @@ hierarchical extent data required for subsequent neighbor queries.
 - `LinearBVH`: Immutable hierarchy storing the encoding, tree topology, and
     bounding volumes.
 """
-function LinearBVH(enc::MortonEncoding{D, TF, TI, VF, VI}, brt::BinaryRadixTree{TI, VI, A, B}) where {D, TF <: AbstractFloat, TI <: Unsigned, VF <: AbstractVector{TF}, VI <: AbstractVector{TI}, A <: AbstractVector{Int}, B <: AbstractVector{Bool}}
-    nleaf = length(enc.coord[1])
-    ninternal = max(nleaf - 1, 0)
+function LinearBVH(enc::MortonEncoding{D, TF, TI, VF, VI}, brt::BinaryRadixTree{VB}) where {D, TF <: AbstractFloat, TI <: Unsigned, VF <: AbstractVector{TF}, VI <: AbstractVector{TI}, VB <: AbstractVector{Int32}}
+    nleaf = brt.nleaf
+    ninternal = nleaf - 1
+    ntotal = 2 * nleaf - 1
+
+    # (ninternal == 0) && return LBVH
 
     vproto = enc.coord[1]
 
@@ -65,103 +66,28 @@ function LinearBVH(enc::MortonEncoding{D, TF, TI, VF, VI}, brt::BinaryRadixTree{
     node_aabb = AABB(ntuple(_ -> similar(vproto, ninternal), D),
                      ntuple(_ -> similar(vproto, ninternal), D))
     node_hmax = similar(enc.h, ninternal)
+    
+    LBVH = LinearBVH{D, TF, VF, VB}(brt, leaf_aabb, enc.h, node_aabb, node_hmax)
 
-    root = _find_root_index(brt)
-    LBVH = LinearBVH{D, TF, TI, VF, VI, A, B}(brt, leaf_aabb, enc.h, node_aabb, node_hmax, root)
+    visited = AtomicMemory{UInt32}(undef, ninternal)                        # atomic visit counters for internal nodes (2nd arrival processes the node)
+    @threads for i in eachindex(visited)
+        @inbounds @atomic :sequentially_consistent visited[i] = zero(UInt32)
+    end
+
     _build_leaf_aabb!(LBVH, enc)
-    _build_internal_aabb!(LBVH)
+
+    @threads for startid in Int32(nleaf):Int32(ntotal)                      # Karras: Each thread starts from one leaf node and walks up the tree using parent pointers that we record during radix tree construction.
+        _build_internal_aabb!(LBVH, visited, startid)                       # Well I prefer to use id in 2n-1 space rather than the index of leaf
+    end
+
+    @inbounds for i in eachindex(visited)                                   # sanity: every internal node must be combined twice
+        @assert (@atomic :sequentially_consistent visited[i]) >= UInt32(2)
+    end
+
     return LBVH
 end
 
-# Toolbox
-@inline function _push!(stack::AbstractVector{Int}, top::Int, value::Int)
-    new_top = top + 1
-    @inbounds stack[new_top] = value
-    return new_top
-end
-
-@inline function _pop!(stack::AbstractVector{Int}, top::Int)
-    @inbounds value = stack[top]
-    return value, top - 1
-end
-
-@inline function _find_root_index(brt::BinaryRadixTree)
-    parents = brt.node_parent
-    zero_parent = zero(eltype(parents))
-    @inbounds for (idx, parent) in pairs(parents)
-        if parent == zero_parent
-            return idx
-        end
-    end
-    return 0
-end
-
-@inline function _dist2_to_node_aabb(node_min :: NTuple{D, VF} , node_max :: NTuple{D, VF}, point :: NTuple{D, TF}, idx :: Int) where {D,TF <: AbstractFloat, VF <: AbstractVector{TF}}
-    T = typeof(point[1])
-    zero_T = zero(T)
-    s = zero_T
-    @inbounds for d in eachindex(point)
-        a = node_min[d][idx]
-        b = node_max[d][idx]
-        p = point[d]
-        t = p < a ? (a - p) : (p > b ? (p - b) : zero_T)
-        s += t * t
-    end
-    return s
-end
-
-@inline function _dist2_to_leaf_aabb(leaf_min :: NTuple{D, VF}, leaf_max :: NTuple{D, VF}, point :: NTuple{D, TF}, idx :: Int) where {D,TF <: AbstractFloat, VF <: AbstractVector{TF}}
-    T = typeof(point[1])
-    zero_T = zero(T)
-    s = zero_T
-    @inbounds for d in eachindex(point)
-        a = leaf_min[d][idx]
-        b = leaf_max[d][idx]
-        p = point[d]
-        t = p < a ? (a - p) : (p > b ? (p - b) : zero_T)
-        s += t * t
-    end
-    return s
-end
-
-@inline function _process_leaf!(pool :: VI, count :: Int, leaf_idx :: Int, r2 :: T, point :: NTuple{D, T}, leaf_min :: NTuple{D, VF}, leaf_max :: NTuple{D, VF}, closest_idx :: Int, closest_dist2 :: T) where {D, T <: AbstractFloat, VI <: AbstractVector{Int}, VF <: AbstractVector{T}}
-    dist2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, point, leaf_idx)
-    if dist2 <= r2
-        count += 1
-        @inbounds pool[count] = leaf_idx
-        if dist2 < closest_dist2
-            closest_dist2 = dist2
-            closest_idx = leaf_idx
-        end
-    end
-    return count, closest_idx, closest_dist2
-end
-
-@inline function _next_internal_node(node::Int,
-                                     left_child::A,
-                                     right_child::A,
-                                     is_leaf_left::B,
-                                     is_leaf_right::B,
-                                     node_parent) where {A <: AbstractVector{Int}, B <: AbstractVector{Bool}}
-    while true
-        @inbounds parent_raw = node_parent[node]
-        parent = Int(parent_raw)
-        if parent == 0
-            return 0
-        end
-        if (!is_leaf_left[parent]) && left_child[parent] == node
-            if is_leaf_right[parent]
-                node = parent
-                continue
-            else
-                return right_child[parent]
-            end
-        end
-        node = parent
-    end
-end
-
-@inline function _build_leaf_aabb!(LBVH::LinearBVH{D, TF, TI, VF, VI}, enc :: MortonEncoding{D, TF, TI, VF, VI}) where {D, TF <: AbstractFloat, TI <: Unsigned, VF <: AbstractVector{TF}, VI <: AbstractVector{TI}}
+function _build_leaf_aabb!(LBVH::LinearBVH{D}, enc :: MortonEncoding{D}) where {D}
     coords = enc.coord
     leaf = LBVH.leaf_aabb
     @inbounds for d in 1:D
@@ -171,491 +97,83 @@ end
     return nothing
 end
 
-@inline function _build_internal_aabb!(LBVH::LinearBVH{D}) where {D}
+function _build_internal_aabb!(LBVH::LinearBVH{D}, visited :: AtomicMemory{UInt32}, startid :: Int32) where {D}
     brt = LBVH.brt
-    node_min = LBVH.node_aabb.min
-    node_max = LBVH.node_aabb.max
+    nleaf = brt.nleaf
+
+    # unified parent: length = 2nleaf-1, parent[root]=0, parent[leaf/internal]=parent internal id
+    parent = brt.parent
+
+    # AABB buffers
+    node_min  = LBVH.node_aabb.min
+    node_max  = LBVH.node_aabb.max
     node_hmax = LBVH.node_hmax
-    leaf_min = LBVH.leaf_aabb.min
-    leaf_max = LBVH.leaf_aabb.max
-    leaf_h = LBVH.leaf_h
+    leaf_min  = LBVH.leaf_aabb.min
+    leaf_max  = LBVH.leaf_aabb.max
+    leaf_h    = LBVH.leaf_h
 
-    L = brt.left_child
-    R = brt.right_child
-    LL = brt.is_leaf_left
-    RR = brt.is_leaf_right
+    # BRT children (only meaningful for internal ids 1..ninternal)
+    left  = brt.left
+    right = brt.right
 
-    nint = length(L)
-    root = LBVH.root
-    if nint == 0 || root == 0
-        return nothing
-    end
+    # climb starts from parent(startid); startid is a leaf unified node id in nleaf..2nleaf-1
+    p = @inbounds parent[Int(startid)]   # internal id (1..ninternal) or 0
 
-    visit = brt.visit_counter
-    zero_visit = zero(eltype(visit))
-    fill!(visit, zero_visit)
-    one_visit = one(eltype(visit))
+    while p != 0
+        pidx = internal_index(p)
 
-    stack = zero(MVector{128, Int})
-    top = _push!(stack, 0, root)
+        # Karras: combine on the second arrival (newval == 2)
+        newval = @atomic :sequentially_consistent visited[pidx] += one(UInt32)
 
-    while top > 0
-        i, top = _pop!(stack, top)
-        v = visit[i] + one_visit
+        if newval == UInt32(2)
+            # second arrival: both children are ready => combine
+            @inbounds begin
+                l = left[pidx]
+                r = right[pidx]
 
-        if v == one_visit
-            visit[i] = v
-            top = _push!(stack, top, i)
-            if !RR[i]
-                top = _push!(stack, top, R[i])
+                # hmax
+                hl = is_leaf_id(l, nleaf) ? leaf_h[leaf_index(l, nleaf)] : node_hmax[internal_index(l)]
+                hr = is_leaf_id(r, nleaf) ? leaf_h[leaf_index(r, nleaf)] : node_hmax[internal_index(r)]
+                node_hmax[pidx] = ifelse(hl > hr, hl, hr)
+
+                # bounds
+                for d in 1:D
+                    lmin = is_leaf_id(l, nleaf) ? leaf_min[d][leaf_index(l, nleaf)] : node_min[d][internal_index(l)]
+                    rmin = is_leaf_id(r, nleaf) ? leaf_min[d][leaf_index(r, nleaf)] : node_min[d][internal_index(r)]
+                    lmax = is_leaf_id(l, nleaf) ? leaf_max[d][leaf_index(l, nleaf)] : node_max[d][internal_index(l)]
+                    rmax = is_leaf_id(r, nleaf) ? leaf_max[d][leaf_index(r, nleaf)] : node_max[d][internal_index(r)]
+                    node_min[d][pidx] = ifelse(lmin < rmin, lmin, rmin)
+                    node_max[d][pidx] = ifelse(lmax > rmax, lmax, rmax)
+                end
             end
-            if !LL[i]
-                top = _push!(stack, top, L[i])
-            end
-            continue
-        end
 
-        @inbounds begin
-            l = L[i]; r = R[i]
-            hl = LL[i] ? leaf_h[l] : node_hmax[l]
-            hr = RR[i] ? leaf_h[r] : node_hmax[r]
-            node_hmax[i] = ifelse(hl > hr, hl, hr)
+            # climb to parent of this internal node id (internal ids are valid indices in parent[])
+            p = @inbounds parent[pidx]
+        else
+            # first arrival
+            break
         end
-
-        @inbounds for d in 1:D
-            l = L[i]; r = R[i]
-            lmin = LL[i] ? leaf_min[d][l] : node_min[d][l]
-            rmin = RR[i] ? leaf_min[d][r] : node_min[d][r]
-            lmax = LL[i] ? leaf_max[d][l] : node_max[d][l]
-            rmax = RR[i] ? leaf_max[d][r] : node_max[d][r]
-            node_min[d][i] = ifelse(lmin < rmin, lmin, rmin)
-            node_max[d][i] = ifelse(lmax > rmax, lmax, rmax)
-        end
-        visit[i] = zero_visit
     end
 
     return nothing
 end
 
-################# Traversal and Query #################
-"""
-    LBVH_probe_neighbors(LBVH, point, radius)
-
-Probe all leaf AABBs in a Linear Bounding Volume Hierarchy (LinearBVH) to
-find which leaves lie within a spherical query region of radius `radius`
-centred at `point`. Returns the number of intersecting leaves, the index of
-the closest leaf, and its squared distance.
-
-# Parameters
-- `LBVH::LinearBVH{D,T}`: Linear BVH structure containing node and leaf AABBs,
-  child relationships, and root index.
-- `point::NTuple{D,T}`: Query point in D-dimensional space.
-- `radius::T`: Search radius.
-
-# Returns
-A 3-tuple `(count, closest_idx, closest_dist2)`:
-- `count::Int`: Number of leaves whose bounding boxes intersect the sphere.
-- `closest_idx::Int`: Index of the closest intersecting leaf (0 if none).
-- `closest_dist2::T`: Minimum squared distance to an intersecting leaf
-  (`typemax(T)` if none).
-"""
-@inline function LBVH_probe_neighbors(
-    LBVH::LinearBVH{D, T},
-    point::NTuple{D, T},
-    radius::T
-) where {D, T <: AbstractFloat}
-
-    node_min = LBVH.node_aabb.min
-    node_max = LBVH.node_aabb.max
-    leaf_min = LBVH.leaf_aabb.min
-    leaf_max = LBVH.leaf_aabb.max
-
-    L  = LBVH.brt.left_child
-    R  = LBVH.brt.right_child
-    LL = LBVH.brt.is_leaf_left
-    RR = LBVH.brt.is_leaf_right
-    node_parent = LBVH.brt.node_parent
-    root = LBVH.root
-
-    r2 = radius * radius
-    count = 0
-    closest_idx = 0
-    closest_dist2 = typemax(T)
-
-    if root == 0
-        nleaf = length(leaf_min[1])
-        @inbounds for leaf_idx in 1:nleaf
-            d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, point, leaf_idx)
-            if d2 <= r2
-                count += 1
-                if d2 < closest_dist2
-                    closest_dist2 = d2
-                    closest_idx = leaf_idx
-                end
-            end
-        end
-        return count, closest_idx, closest_dist2
+# Toolbox
+@inline function _dist2_to_aabb(aabb_min :: NTuple{D, VF} , aabb_max :: NTuple{D, VF}, point :: NTuple{D, TF}, idx :: Int) where {D,TF <: AbstractFloat, VF <: AbstractVector{TF}}
+    # Contract:
+    # - `idx` must index the provided AABB arrays directly.
+    #   i.e. `idx ∈ 1:length(aabb_min[d])` for all d.
+    # - This function DOES NOT accept "unified node IDs" in the 1:(2nleaf-1) space.
+    #   Callers must convert unified IDs to the appropriate array index
+    #   (e.g. leaf_index(...) or internal_index(...)) before calling.
+    zero_T = zero(TF)
+    s = zero_T
+    @inbounds for d in eachindex(point)
+        a = aabb_min[d][idx]
+        b = aabb_max[d][idx]
+        p = point[d]
+        t = p < a ? (a - p) : (p > b ? (p - b) : zero_T)
+        s += t * t
     end
-
-    node = root
-    while node != 0
-        dist2_node = _dist2_to_node_aabb(node_min, node_max, point, node)
-        if dist2_node <= r2
-            if LL[node]
-                @inbounds leaf_idx = L[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, point, leaf_idx)
-                if d2 <= r2
-                    count += 1
-                    if d2 < closest_dist2
-                        closest_dist2 = d2
-                        closest_idx = leaf_idx
-                    end
-                end
-            end
-            if RR[node]
-                @inbounds leaf_idx = R[node]
-                d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, point, leaf_idx)
-                if d2 <= r2
-                    count += 1
-                    if d2 < closest_dist2
-                        closest_dist2 = d2
-                        closest_idx = leaf_idx
-                    end
-                end
-            end
-
-            if !LL[node]
-                node = L[node]
-                continue
-            end
-            if !RR[node]
-                node = R[node]
-                continue
-            end
-
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
-        else
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
-        end
-    end
-
-    return count, closest_idx, closest_dist2
+    return s
 end
-
-"""
-    LBVH_find_nearest(LBVH, point)
-
-Find the nearest leaf AABB to a query point in a Linear Bounding Volume
-Hierarchy (LinearBVH). Returns the index of the closest leaf and the
-corresponding squared distance. Uses a stackless BVH traversal with
-aggressive pruning based on current best distance.
-
-# Parameters
-- `LBVH::LinearBVH{D,T}`: Linear BVH structure containing node and leaf AABBs,
-  child relations, parent pointers, and the root index.
-- `point::NTuple{D,T}`: Query point in D-dimensional space.
-
-# Keyword Arguments
-(None)
-
-# Returns
-A 2-tuple `(best_idx, best_dist2)`:
-- `best_idx::Int`: Index of the closest leaf (`0` if the BVH contains no nodes).
-- `best_dist2::T`: Squared distance from `point` to the closest leaf AABB
-  (`typemax(T)` if no leaves exist).
-"""
-@inline function LBVH_find_nearest(LBVH::LinearBVH{D,T}, point::NTuple{D,T}) where {D,T<:AbstractFloat}
-    # AABB references
-    node_min = LBVH.node_aabb.min
-    node_max = LBVH.node_aabb.max
-    leaf_min = LBVH.leaf_aabb.min
-    leaf_max = LBVH.leaf_aabb.max
-
-    # BVH tree topology
-    L  = LBVH.brt.left_child
-    R  = LBVH.brt.right_child
-    LL = LBVH.brt.is_leaf_left
-    RR = LBVH.brt.is_leaf_right
-    parent = LBVH.brt.node_parent
-    root = LBVH.root
-
-    # If degenerate (no internal nodes)
-    if root == 0
-        nleaf = length(leaf_min[1])
-        best_idx = 0
-        best_dist2 = typemax(T)
-        @inbounds for leaf_idx in 1:nleaf
-            d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, point, leaf_idx)
-            if d2 < best_dist2
-                best_dist2 = d2
-                best_idx = leaf_idx
-            end
-        end
-        return best_idx, best_dist2
-    end
-
-    # Initial best distance set to +∞
-    best_idx = 0
-    best_dist2 = typemax(T)
-
-    # Traverse with "manual stackless BVH" (your existing mechanism)
-    node = root
-    while node != 0
-        # Bounding box distance test
-        d2 = _dist2_to_node_aabb(node_min, node_max, point, node)
-
-        if d2 > best_dist2
-            # Too far → prune subtree
-            node = _next_internal_node(node, L, R, LL, RR, parent)
-            continue
-        end
-
-        @inbounds if LL[node]
-            leaf_idx = L[node]
-            d2leaf = _dist2_to_leaf_aabb(leaf_min, leaf_max, point, leaf_idx)
-            if d2leaf < best_dist2
-                best_dist2 = d2leaf
-                best_idx = leaf_idx
-            end
-        elseif L[node] != 0
-            # recurse into left node
-            node = L[node]
-            continue
-        end
-
-        @inbounds if RR[node]
-            leaf_idx = R[node]
-            d2leaf = _dist2_to_leaf_aabb(leaf_min, leaf_max, point, leaf_idx)
-            if d2leaf < best_dist2
-                best_dist2 = d2leaf
-                best_idx = leaf_idx
-            end
-        elseif R[node] != 0
-            node = R[node]
-            continue
-        end
-
-        # Finished both children, climb back
-        node = _next_internal_node(node, L, R, LL, RR, parent)
-    end
-
-    return best_idx, best_dist2
-end
-
-"""
-    LBVH_find_nearest_h(LBVH::LinearBVH{D,T}, point::NTuple{D,T}) where {D,T<:AbstractFloat}
-
-Return the smoothing length `h` of the nearest particle (leaf) to `point` in a
-`LinearBVH`.
-
-This routine traverses the BVH using point-to-AABB squared distances for pruning.
-With the current LBVH construction where each leaf AABB is degenerate
-(`leaf_min == leaf_max == particle_position`), the leaf distance reduces to the
-squared Euclidean distance between `point` and the particle position. The
-returned value is `LBVH.leaf_h[best_idx]`, where `best_idx` is the closest leaf.
-
-# Parameters
-- `LBVH::LinearBVH{D,T}`  
-  Bounding volume hierarchy built from Morton-sorted particle coordinates and
-  associated per-particle smoothing lengths `LBVH.leaf_h`.
-- `point::NTuple{D,T}`  
-  Query point in the same coordinate space as the particles.
-
-# Keyword Arguments
-- None.
-
-# Returns
-- `h::T`  
-  Smoothing length of the nearest particle (leaf) to `point`.
-
-"""
-@inline function LBVH_find_nearest_h(LBVH::LinearBVH{D,T}, point::NTuple{D,T}) where {D,T<:AbstractFloat}
-    # AABB references
-    node_min = LBVH.node_aabb.min
-    node_max = LBVH.node_aabb.max
-    leaf_min = LBVH.leaf_aabb.min
-    leaf_max = LBVH.leaf_aabb.max
-
-    # BVH tree topology
-    L  = LBVH.brt.left_child
-    R  = LBVH.brt.right_child
-    LL = LBVH.brt.is_leaf_left
-    RR = LBVH.brt.is_leaf_right
-    parent = LBVH.brt.node_parent
-    root = LBVH.root
-
-    # Smoothed radius
-    smoothed_radius = LBVH.leaf_h
-
-    # If degenerate (no internal nodes)
-    if root == 0
-        nleaf = length(leaf_min[1])
-        best_idx = 0
-        best_dist2 = typemax(T)
-        @inbounds for leaf_idx in 1:nleaf
-            d2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, point, leaf_idx)
-            if d2 < best_dist2
-                best_dist2 = d2
-                best_idx = leaf_idx
-            end
-        end
-        best_h = smoothed_radius[best_idx]
-        return best_h
-    end
-
-    # Initial best distance set to +∞
-    best_idx = 0
-    best_dist2 = typemax(T)
-
-    # Traverse with "manual stackless BVH" (your existing mechanism)
-    node = root
-    while node != 0
-        # Bounding box distance test
-        d2 = _dist2_to_node_aabb(node_min, node_max, point, node)
-
-        if d2 > best_dist2
-            # Too far → prune subtree
-            node = _next_internal_node(node, L, R, LL, RR, parent)
-            continue
-        end
-
-        @inbounds if LL[node]
-            leaf_idx = L[node]
-            d2leaf = _dist2_to_leaf_aabb(leaf_min, leaf_max, point, leaf_idx)
-            if d2leaf < best_dist2
-                best_dist2 = d2leaf
-                best_idx = leaf_idx
-            end
-        elseif L[node] != 0
-            # recurse into left node
-            node = L[node]
-            continue
-        end
-
-        @inbounds if RR[node]
-            leaf_idx = R[node]
-            d2leaf = _dist2_to_leaf_aabb(leaf_min, leaf_max, point, leaf_idx)
-            if d2leaf < best_dist2
-                best_dist2 = d2leaf
-                best_idx = leaf_idx
-            end
-        elseif R[node] != 0
-            node = R[node]
-            continue
-        end
-
-        # Finished both children, climb back
-        node = _next_internal_node(node, L, R, LL, RR, parent)
-    end
-
-    best_h = smoothed_radius[best_idx]
-    return best_h
-end
-
-"""
-    LBVH_query!(pool, lbvh, point, radius)
-
-Depth–first traversal of a Linear BVH **without an explicit stack**.  
-Traversal proceeds using per–node parent links (`node_parent`) to determine the
-next internal node once a subtree has been fully processed. This eliminates
-scratch–space requirements for a stack and is suitable for GPU kernels where
-per–thread memory must remain minimal.
-
-The algorithm performs:
-- AABB rejection at each internal node.
-- Direct leaf processing when a leaf child is encountered.
-- Morton–order neighbor emission by visiting left before right children.
-- Iterative DFS without recursion and without a software stack.
-
-# Parameters
-- `pool::AbstractVector{Int}`  
-  Output buffer that receives leaf indices intersecting the spherical query.
-  Written in Morton order; the valid prefix is returned through a
-  `NeighborSelection` handle.
-
-- `lbvh::LinearBVH{D,T}`  
-  Linear Bounding Volume Hierarchy constructed from Morton–sorted primitives.
-
-- `point::NTuple{D,T}`  
-  Query position.
-
-- `radius::Real`  
-  Query radius; promotes to the BVH floating–point type.
-
-# Returns
-- `NeighborSelection`  
-  A lightweight view into `pool` containing the number of neighbors and the
-  closest leaf index with respect to squared distance.
-"""
-
-@inline function LBVH_query!(pool::VI, LBVH::LinearBVH{D, T},
-                                       point::NTuple{D, T},
-                                       radius::T) where {D, T <: AbstractFloat, VI <: AbstractVector{Int}}
-    node_min = LBVH.node_aabb.min
-    node_max = LBVH.node_aabb.max
-    leaf_min = LBVH.leaf_aabb.min
-    leaf_max = LBVH.leaf_aabb.max
-
-    L = LBVH.brt.left_child
-    R = LBVH.brt.right_child
-    LL = LBVH.brt.is_leaf_left
-    RR = LBVH.brt.is_leaf_right
-    node_parent = LBVH.brt.node_parent
-    root = LBVH.root
-
-    r2 = radius * radius
-    count = 0
-    closest_idx = zero(eltype(pool))
-    closest_dist2 = typemax(T)
-
-    if root == 0
-        nleaf = length(leaf_min[1])
-        @inbounds for leaf_idx in 1:nleaf
-            dist2 = _dist2_to_leaf_aabb(leaf_min, leaf_max, point, leaf_idx)
-            if dist2 <= r2
-                count += 1
-                @inbounds pool[count] = leaf_idx
-                if dist2 < closest_dist2
-                    closest_dist2 = dist2
-                    closest_idx = leaf_idx
-                end
-            end
-        end
-        return NeighborSelection(pool, count, closest_idx)
-    end
-
-    node = root
-    while node != 0
-        dist2 = _dist2_to_node_aabb(node_min, node_max, point, node)
-        if dist2 <= r2
-            if LL[node]
-                @inbounds leaf_idx = L[node]
-                count, closest_idx, closest_dist2 = _process_leaf!(pool, count, leaf_idx, r2, point, leaf_min, leaf_max, closest_idx, closest_dist2)
-            end
-            if RR[node]
-                @inbounds leaf_idx = R[node]
-                count, closest_idx, closest_dist2 = _process_leaf!(pool, count, leaf_idx, r2, point, leaf_min, leaf_max, closest_idx, closest_dist2)
-            end
-            if !LL[node]
-                @inbounds node = L[node]
-                continue
-            end
-            if !RR[node]
-                @inbounds node = R[node]
-                continue
-            end
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
-        else
-            node = _next_internal_node(node, L, R, LL, RR, node_parent)
-        end
-    end
-
-    return NeighborSelection(pool, count, closest_idx)
-end
-
-@inline function LBVH_query!(pool::VI, LBVH::LinearBVH{D, T},
-                                       point::NTuple{D, T},
-                                       radius::S) where {D, T <: AbstractFloat, S <: AbstractFloat, VI <: AbstractVector{Int}}
-    return LBVH_query!(pool, LBVH, point, T(radius))
-end
-###################################################

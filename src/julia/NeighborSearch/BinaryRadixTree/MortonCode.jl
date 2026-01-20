@@ -373,17 +373,22 @@ function _decode_morton_code2D(code :: V) where {T <: Unsigned, V <: AbstractVec
 end
 
 # δ-operator for two points
-@inline function _longest_common_prefix_length(a :: T, b :: T) where {T <: Unsigned}
+@inline function _longest_common_prefix_length(a :: T, b :: T) :: Int64 where {T <: Unsigned}
     return leading_zeros(a ⊻ b)
 end
 
-@inline function _longest_common_prefix_length(codes :: V, i :: Int, j :: Int) where {T <: Unsigned, V <: AbstractVector{T}}
+@inline function _longest_common_prefix_length(codes :: V, i :: Int, j :: Int) :: Int64 where {T <: Unsigned, V <: AbstractVector{T}}
     a = codes[i]; b = codes[j]
     if a == b
         return _longest_common_prefix_length(UInt64(i), UInt64(j))
     else
         return _longest_common_prefix_length(a, b)
     end
+end
+
+@inline function _longest_common_prefix_length(codes :: V, i :: Int) :: Int64 where {T <: Unsigned, V <: AbstractVector{T}}
+    j = i + 1
+    return _longest_common_prefix_length(codes, i, j)
 end
 
 @inline function _longest_common_prefix(a :: T, b :: T) where {T <: Unsigned}

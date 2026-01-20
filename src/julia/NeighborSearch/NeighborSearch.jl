@@ -24,6 +24,8 @@ include(joinpath(@__DIR__, "NeighborSelection.jl"))
 
 # Linear bounding vloume hierarchies (LBVH)
 include(joinpath(@__DIR__, "LinearBVH", "LinearBVH.jl"))
+include(joinpath(@__DIR__, "LinearBVH", "LinearBVHTraversalMacros.jl"))
+include(joinpath(@__DIR__, "LinearBVH", "LinearBVHQueries.jl"))
 
 # Export function, marco, const...
 for name in filter(s -> !startswith(string(s), "#"), names(@__MODULE__, all = true))

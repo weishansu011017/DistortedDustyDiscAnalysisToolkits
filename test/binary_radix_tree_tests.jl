@@ -36,67 +36,54 @@ identical_encoding(::Val{3}, n::Int) = MortonEncoding(fill(0.5, n), fill(0.5, n)
     offsets = 0:4
     for offset in offsets
         for D in (Val(2), Val(3))
-            for n in 2:20
+            for n in 1:20
                 enc = build_encoding(D, n, offset)
                 brt = BinaryRadixTree(enc)
 
-                @test length(brt.left_child) == n - 1
-                @test length(brt.right_child) == n - 1
-                @test length(brt.is_leaf_left) == n - 1
-                @test length(brt.is_leaf_right) == n - 1
-                @test length(brt.node_parent) == n - 1
-                @test length(brt.visit_counter) == n - 1
-                @test length(brt.leaf_parent) == n
+                ntotal = 2n - 1
+                @test brt.root === (n >= 2 ? Int32(1) : Int32(0))
+                @test brt.nleaf == n
+                @test length(brt.left) == ntotal
+                @test length(brt.right) == ntotal
+                @test length(brt.escape) == ntotal
+                @test length(brt.parent) == ntotal
 
-                # Visit counters should stay zero after construction
-                @test all(==(zero(eltype(brt.visit_counter))), brt.visit_counter)
+                # parent[root] == 0 and all parents are valid IDs
+                if brt.root != 0
+                    @test brt.parent[Int(brt.root)] == 0
+                end
+                @test all(p -> p >= 0 && p < Int32(ntotal + 1), brt.parent)
 
+                # Internal node children follow Karras split rules in unified ID space
                 codes = enc.codes
-                root_idx = findfirst(==(zero(eltype(brt.node_parent))), brt.node_parent)
-                @test root_idx !== nothing
-                for (idx, parent) in enumerate(brt.node_parent)
-                    if idx == root_idx
-                        @test parent == zero(eltype(brt.node_parent))
-                    else
-                        @test parent > zero(eltype(brt.node_parent))
-                    end
-                end
-
-                for (idx, parent) in enumerate(brt.leaf_parent)
-                    @test parent > zero(eltype(brt.leaf_parent))
-                end
-
-                for i in eachindex(brt.left_child)
+                leaf_offset = n - 1
+                for i in 1:(n - 1)  # internal ids
                     lo, hi = NS._find_range(codes, i)
                     split = NS._split_position(codes, lo, hi)
 
-                    l = brt.left_child[i]
-                    r = brt.right_child[i]
+                    l = brt.left[i]
+                    r = brt.right[i]
 
-                    if brt.is_leaf_left[i]
-                        @test 1 <= l <= n
-                        @test l == lo
-                        @test brt.leaf_parent[l] == i
+                    @test NS.is_internal_id(l, n) || NS.is_leaf_id(l, n)
+                    @test NS.is_internal_id(r, n) || NS.is_leaf_id(r, n)
+
+                    if NS.is_leaf_id(l, n)
+                        @test NS.leaf_index(l, n) == lo
+                        @test l == Int32(leaf_offset + lo)
                     else
-                        @test 1 <= l <= n - 1
-                        @test l == split
-                        @test brt.node_parent[l] == i
+                        @test l == Int32(split)
                     end
 
-                    if brt.is_leaf_right[i]
-                        @test 1 <= r <= n
-                        @test r == hi
-                        @test brt.leaf_parent[r] == i
+                    if NS.is_leaf_id(r, n)
+                        @test NS.leaf_index(r, n) == hi
+                        @test r == Int32(leaf_offset + hi)
                     else
-                        @test 1 <= r <= n - 1
-                        @test r == split + 1
-                        @test brt.node_parent[r] == i
+                        @test r == Int32(split + 1)
                     end
-
-                    @test lo <= hi
-                    @test lo <= l <= hi
-                    @test lo <= r <= hi
                 end
+
+                # Escape links stay within [0, ntotal]
+                @test all(e -> 0 <= e <= Int32(ntotal), brt.escape)
             end
         end
     end
@@ -104,12 +91,15 @@ end
 
 @testset "BinaryRadixTree identical codes" begin
     for D in (Val(2), Val(3))
-        for n in (2, 8, 16)
+        for n in (1, 2, 8, 16)
             enc = identical_encoding(D, n)
             brt = BinaryRadixTree(enc)
 
-            @test count(==(zero(eltype(brt.node_parent))), brt.node_parent) == 1
-            @test all(>(zero(eltype(brt.leaf_parent))), brt.leaf_parent)
+            @test brt.root === (n >= 2 ? Int32(1) : Int32(0))
+            if n >= 2
+                @test brt.parent[Int(brt.root)] == 0
+            end
+            @test count(==(Int32(0)), brt.parent) == 1
         end
     end
 end

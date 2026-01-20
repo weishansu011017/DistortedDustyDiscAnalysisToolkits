@@ -25,19 +25,25 @@ function expected_neighbor_indices(enc, point::NTuple{D, T}, radius) where {D, T
 end
 
 function subtree_hmax(enc, brt)
-    nint = length(brt.left_child)
+    nleaf = brt.nleaf
+    nint = nleaf - 1
     out = zeros(eltype(enc.h), nint)
-    root = NS._find_root_index(brt)
-    if root == 0
-        return out
+    root = brt.root
+    root == 0 && return out
+
+    function visit(node::Int32)
+        if NS.is_leaf_id(node, nleaf)
+            return enc.h[NS.leaf_index(node, nleaf)]
+        end
+
+        idx = NS.internal_index(node)
+        l = brt.left[idx]; r = brt.right[idx]
+        hl = visit(l)
+        hr = visit(r)
+        out[idx] = max(hl, hr)
+        return out[idx]
     end
-    function visit(node)
-        l = brt.left_child[node]; r = brt.right_child[node]
-        hl = brt.is_leaf_left[node] ? enc.h[l] : visit(l)
-        hr = brt.is_leaf_right[node] ? enc.h[r] : visit(r)
-        out[node] = max(hl, hr)
-        return out[node]
-    end
+
     visit(root)
     return out
 end
@@ -47,20 +53,18 @@ function scatter_neighbors(lbvh, point::NTuple{D,T}, Kvalid::T, hvec) where {D,T
     node_max = lbvh.node_aabb.max
     leaf_min = lbvh.leaf_aabb.min
     leaf_max = lbvh.leaf_aabb.max
-    L = lbvh.brt.left_child
-    R = lbvh.brt.right_child
-    LL = lbvh.brt.is_leaf_left
-    RR = lbvh.brt.is_leaf_right
-    parent = lbvh.brt.node_parent
-    node_hmax = lbvh.node_hmax
-    root = lbvh.root
+    brt = lbvh.brt
+    left = brt.left
+    escape = brt.escape
+    nleaf = brt.nleaf
 
     hits = Int[]
-    if root == 0
-        nleaf = length(hvec)
+    node = brt.root
+
+    if node == 0
         @inbounds for leaf in 1:nleaf
             r2 = (Kvalid * hvec[leaf])^2
-            d2 = NS._dist2_to_leaf_aabb(leaf_min, leaf_max, point, leaf)
+            d2 = NS._dist2_to_aabb(leaf_min, leaf_max, point, leaf)
             if d2 <= r2
                 push!(hits, leaf)
             end
@@ -69,40 +73,24 @@ function scatter_neighbors(lbvh, point::NTuple{D,T}, Kvalid::T, hvec) where {D,T
         return hits
     end
 
-    node = root
     while node != 0
-        r2node = (Kvalid * node_hmax[node])^2
-        d2node = NS._dist2_to_node_aabb(node_min, node_max, point, node)
-        if d2node <= r2node
-            if LL[node]
-                @inbounds leaf = L[node]
-                r2 = (Kvalid * hvec[leaf])^2
-                d2 = NS._dist2_to_leaf_aabb(leaf_min, leaf_max, point, leaf)
-                if d2 <= r2
-                    push!(hits, leaf)
-                end
+        if NS.is_leaf_id(node, nleaf)
+            leaf = NS.leaf_index(node, nleaf)
+            r2 = (Kvalid * hvec[leaf])^2
+            d2 = NS._dist2_to_aabb(leaf_min, leaf_max, point, leaf)
+            if d2 <= r2
+                push!(hits, leaf)
             end
-            if RR[node]
-                @inbounds leaf = R[node]
-                r2 = (Kvalid * hvec[leaf])^2
-                d2 = NS._dist2_to_leaf_aabb(leaf_min, leaf_max, point, leaf)
-                if d2 <= r2
-                    push!(hits, leaf)
-                end
-            end
-            if !LL[node]
-                node = L[node]
-                continue
-            end
-            if !RR[node]
-                node = R[node]
-                continue
-            end
-            node = NS._next_internal_node(node, L, R, LL, RR, parent)
-        else
-            node = NS._next_internal_node(node, L, R, LL, RR, parent)
+            node = escape[Int(node)]
+            continue
         end
+
+        idx = NS.internal_index(node)
+        r2node = (Kvalid * lbvh.node_hmax[idx])^2
+        d2node = NS._dist2_to_aabb(node_min, node_max, point, idx)
+        node = (d2node <= r2node) ? left[idx] : escape[idx]
     end
+
     sort!(hits)
     return hits
 end
@@ -117,31 +105,28 @@ end
             brt = BinaryRadixTree(enc)
             lbvh = LinearBVH(enc, brt)
 
-            @test lbvh.root == NS._find_root_index(brt)
+            @test lbvh.brt.root == (n >= 2 ? Int32(1) : Int32(0))
             @test length(lbvh.leaf_aabb.min[1]) == n
             @test length(lbvh.node_aabb.min[1]) == n - 1
-            @test all(==(zero(eltype(brt.visit_counter))), brt.visit_counter)
 
             for d in 1:dim
                 @test lbvh.leaf_aabb.min[d] == enc.coord[d]
                 @test lbvh.leaf_aabb.max[d] == enc.coord[d]
             end
 
-            L = brt.left_child
-            R = brt.right_child
-            LL = brt.is_leaf_left
-            RR = brt.is_leaf_right
+            L = brt.left
+            R = brt.right
             node_min = lbvh.node_aabb.min
             node_max = lbvh.node_aabb.max
             leaf_min = lbvh.leaf_aabb.min
             leaf_max = lbvh.leaf_aabb.max
 
-            for i in eachindex(L)
+            for i in 1:(n - 1) # internal ids
                 for d in 1:dim
-                    lmin = LL[i] ? leaf_min[d][L[i]] : node_min[d][L[i]]
-                    rmin = RR[i] ? leaf_min[d][R[i]] : node_min[d][R[i]]
-                    lmax = LL[i] ? leaf_max[d][L[i]] : node_max[d][L[i]]
-                    rmax = RR[i] ? leaf_max[d][R[i]] : node_max[d][R[i]]
+                    lmin = NS.is_leaf_id(L[i], n) ? leaf_min[d][NS.leaf_index(L[i], n)] : node_min[d][NS.internal_index(L[i])]
+                    rmin = NS.is_leaf_id(R[i], n) ? leaf_min[d][NS.leaf_index(R[i], n)] : node_min[d][NS.internal_index(R[i])]
+                    lmax = NS.is_leaf_id(L[i], n) ? leaf_max[d][NS.leaf_index(L[i], n)] : node_max[d][NS.internal_index(L[i])]
+                    rmax = NS.is_leaf_id(R[i], n) ? leaf_max[d][NS.leaf_index(R[i], n)] : node_max[d][NS.internal_index(R[i])]
                     @test node_min[d][i] == min(lmin, rmin)
                     @test node_max[d][i] == max(lmax, rmax)
                 end
@@ -239,42 +224,35 @@ end
     node_visits_baseline = 0
     node_visits_hmax = 0
 
-    node = lbvh.root
-    L = lbvh.brt.left_child; R = lbvh.brt.right_child
-    LL = lbvh.brt.is_leaf_left; RR = lbvh.brt.is_leaf_right
-    parent = lbvh.brt.node_parent
+    brt = lbvh.brt
     node_min = lbvh.node_aabb.min; node_max = lbvh.node_aabb.max
+    left = brt.left; escape = brt.escape
+    nleaf = brt.nleaf
 
-    # baseline traversal using global hmax
+    node = brt.root
     while node != 0
-        node_visits_baseline += 1
-        r2node = (Kvalid * global_hmax)^2
-        d2node = NS._dist2_to_node_aabb(node_min, node_max, point, node)
-        if d2node <= r2node
-            if !LL[node]
-                node = L[node]; continue
-            end
-            if !RR[node]
-                node = R[node]; continue
-            end
+        if NS.is_leaf_id(node, nleaf)
+            node = escape[Int(node)]
+            continue
         end
-        node = NS._next_internal_node(node, L, R, LL, RR, parent)
+        node_visits_baseline += 1
+        idx = NS.internal_index(node)
+        r2node = (Kvalid * global_hmax)^2
+        d2node = NS._dist2_to_aabb(node_min, node_max, point, idx)
+        node = (d2node <= r2node) ? left[idx] : escape[idx]
     end
 
-    node = lbvh.root
+    node = brt.root
     while node != 0
-        node_visits_hmax += 1
-        r2node = (Kvalid * lbvh.node_hmax[node])^2
-        d2node = NS._dist2_to_node_aabb(node_min, node_max, point, node)
-        if d2node <= r2node
-            if !LL[node]
-                node = L[node]; continue
-            end
-            if !RR[node]
-                node = R[node]; continue
-            end
+        if NS.is_leaf_id(node, nleaf)
+            node = escape[Int(node)]
+            continue
         end
-        node = NS._next_internal_node(node, L, R, LL, RR, parent)
+        node_visits_hmax += 1
+        idx = NS.internal_index(node)
+        r2node = (Kvalid * lbvh.node_hmax[idx])^2
+        d2node = NS._dist2_to_aabb(node_min, node_max, point, idx)
+        node = (d2node <= r2node) ? left[idx] : escape[idx]
     end
 
     @test node_visits_hmax <= node_visits_baseline

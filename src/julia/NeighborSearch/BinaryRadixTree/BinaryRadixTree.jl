@@ -5,27 +5,23 @@ Binary Radix Tree construction and data structure implementation
 """
 
 ################# Define structures #################
-struct BinaryRadixTree{TI <: Unsigned, VI <: AbstractVector{TI},  A <: AbstractVector{Int}, B <: AbstractVector{Bool}}
-    left_child    :: A
-    right_child   :: A
-    is_leaf_left  :: B
-    is_leaf_right :: B
-
-    # For GPU LBVH construction
-    leaf_parent   :: VI
-    node_parent   :: VI
-    visit_counter :: VI
+struct BinaryRadixTree{V<:AbstractVector{Int32}}
+    root   :: Int32   
+    nleaf  :: Int
+    left   :: V                     # length = 2*nleaf-1
+    right  :: V                     # length = 2*nleaf-1
+    escape :: V                     # length = 2*nleaf-1
+    parent :: V                     # length = 2*nleaf-1
 end
 
 function Adapt.adapt_structure(to, x :: BinaryRadixTree)
     BinaryRadixTree(
-        Adapt.adapt(to, x.left_child),
-        Adapt.adapt(to, x.right_child),
-        Adapt.adapt(to, x.is_leaf_left),
-        Adapt.adapt(to, x.is_leaf_right),
-        Adapt.adapt(to, x.leaf_parent),
-        Adapt.adapt(to, x.node_parent),
-        Adapt.adapt(to, x.visit_counter),
+        x.root,
+        x.nleaf,
+        Adapt.adapt(to, x.left),
+        Adapt.adapt(to, x.right),
+        Adapt.adapt(to, x.escape),
+        Adapt.adapt(to, x.parent)
     )
 end
 
@@ -33,61 +29,114 @@ end
 """
     BinaryRadixTree(enc::MortonEncoding)
 
-Constructs a **Binary Radix Tree (BRT)** from a sorted sequence of Morton codes.
+Construct a **Binary Radix Tree (BRT)** from a Morton-sorted code array `enc.codes`,
+using the Karras (2012) range/split construction and a **stackless escape table**
+(Prokopenko & Lebrun-Grandié, 2024) for traversal without parent-walking.
 
-This function implements the *linear-time* construction algorithm described in  
-Karras (2012), which builds the hierarchical connectivity of a binary radix tree  
-directly from a pre-sorted Morton code array. Each internal node encodes its  
-two child indices and flags indicating whether each child is a leaf or an internal node.
+The constructor builds the tree connectivity in *linear time* from the sorted Morton
+codes. Children are stored as **unified node IDs** in a single node-id space of size
+`2n-1` (A1 layout), where `n = length(enc.codes)`:
+
+- internal node IDs: `1:(n-1)`
+- leaf node IDs: `n:(2n-1)`  (leaf index `k ∈ 1:n` maps to node ID `(n-1) + k`)
+- `0` is a sentinel meaning “no node” / termination
+
+In addition, `escape` is computed for **all unified node IDs** (both internal and leaf).
+During stackless traversal, `escape[id]` gives the next node to visit after finishing
+(or pruning) the subtree rooted at `id`. Escape targets are derived from the adjacent
+longest-common-prefix-length array `adj`, with a `+∞` sentinel at `adj[n]`.
+
+This implementation also stores a **unified parent array** `parent` (length `2n-1`,
+`parent[root]=0`). It is not required for stackless traversal when `escape` is used,
+but is useful for bottom-up refit (Karras-style atomic “second arrival” reduction).
 
 # Parameters
-- `enc :: MortonEncoding{D, TF, TI, VF, VI}`  
-  A Morton encoding container holding the sorted Morton codes (`enc.codes`) and  
-  spatial coordinate arrays.
+- `enc :: MortonEncoding{D, TF, TI, VF, VI}`
+  Container holding the sorted Morton codes (`enc.codes`).
 
 # Returns
-- `BinaryRadixTree{TI, VI, Vector{Int}, Vector{Bool}}`  
+- `BinaryRadixTree{Vector{Int32}}`
   A struct containing:
-  - `left_child`    — index of the left child for each internal node  
-  - `right_child`   — index of the right child for each internal node  
-  - `is_leaf_left`  — whether the left child is a leaf node  
-  - `is_leaf_right` — whether the right child is a leaf node  
-  - `leaf_parent`   — parent index for each leaf node  
-  - `node_parent`   — parent index for each internal node  
-  - `visit_counter` — counter used for tree traversal bookkeeping
+  - `root`   — root unified node ID (`1` if `n ≥ 2`, otherwise `0`)
+  - `nleaf`  — number of leaves `n`
+  - `left`   — left child node ID for each node (length `2n-1`; meaningful for internal nodes)
+  - `right`  — right child node ID for each node (length `2n-1`; meaningful for internal nodes)
+  - `escape` — escape node ID for each node (length `2n-1`; defined for both internal and leaf nodes)
+  - `parent` — parent internal ID for each unified node ID (length `2n-1`; `0` for the root)
+
+# Notes
+- `enc.codes` must be sorted; otherwise the constructed tree and escape links are invalid.
+- For leaf nodes, `left` and `right` are unused (typically left as `0`).
+- This implementation stores node IDs in `Int32`. Therefore the maximum supported leaf count is
+  `n ≤ 1_073_741_824` (since `2n-1` must fit in signed 32-bit). 
 
 # Reference
-Karras, T. (2012). *Maximizing Parallelism in the Construction of BVHs, Octrees, and k-d Trees*.  
-In *High Performance Graphics 2012* (pp. 33–37).  
-DOI: [10.2312/EGGH/HPG12/033-037]
+- Karras, T. (2012). *Maximizing Parallelism in the Construction of BVHs, Octrees, and k-d Trees*.  
+    In *High Performance Graphics 2012* (pp. 33–37).  
+    DOI: [10.2312/EGGH/HPG12/033-037]
+- Prokopenko, A., & Lebrun-Grandié, D. (2024). *Revising Apetrei's bounding volume hierarchy
+    construction algorithm to allow stackless traversal*. Oak Ridge National Laboratory
+    Technical Report. DOI: 10.2172/2301619
 """
 function BinaryRadixTree(enc::MortonEncoding{D, TF, TI, VF, VI}) where {D, TF <: AbstractFloat, TI <: Unsigned, VF <: AbstractVector{TF}, VI <: AbstractVector{TI}}
+    # Properties of BRT
     codes = enc.codes
-    n = length(codes)
-    n_internal = n - 1
+    n = length(codes)                    # Int
+    n >= 1 || throw(ArgumentError("BinaryRadixTree: enc.codes must be non-empty (got n=0)."))
+    root = (n >= 2) ? one(Int32) : zero(Int32)
 
-    left_child    = zeros(Int, n_internal)
-    right_child   = zeros(Int, n_internal)
-    is_leaf_left  = zeros(Bool, n_internal)
-    is_leaf_right = zeros(Bool, n_internal)
+    # Int32 node-id capacity: total_length = 2n-1 must fit in Int32
+    n_max = (typemax(Int32) ÷ 2) + 1  # 1_073_741_824
+    n <= n_max || throw(ArgumentError("BinaryRadixTree: n=$n exceeds the Int32 node-id capacity (requires 2n-1 ≤ typemax(Int32); n ≤ $n_max)."))
 
-    leaf_parent   = similar(codes, TI, n)
-    node_parent   = similar(codes, TI, n_internal)
-    visit_counter = similar(codes, TI, n_internal)
+    n_internal = n - 1                   # Int
+    total_length = 2*n - 1               # Int
 
-    fill!(leaf_parent, zero(TI))
-    fill!(node_parent, zero(TI))
-    fill!(visit_counter, zero(TI))
+    # Initializing arrays (length = 2n - 1)
+    left   = zeros(Int32, total_length)
+    right  = zeros(Int32, total_length)
+    escape = zeros(Int32, total_length)
+    parent = zeros(Int32, total_length)
 
+    # range right (length = ninternal)
+    range_hi = Vector{Int32}(undef, n_internal)
 
-    @threads for i in eachindex(left_child, right_child, is_leaf_left, is_leaf_right)
-        _build_binary_radix_tree!(left_child, right_child, is_leaf_left, is_leaf_right, codes, i)
+    if n_internal > 0
+        # Loop: establishing the Karras BRT
+        @threads for i in 1:n_internal
+            _build_child!(left, right, range_hi, parent, codes, i)
+        end
+
+        # Adjacent longest-common-prefix lengths (Algorithm 2, Prokopenko & Lebrun-Grandié 2024)
+        adj = Vector{Int32}(undef, n)
+        @threads for i in 1:n-1
+            _build_adjacent!(adj, codes, i)
+        end
+        adj[n] = typemax(Int32)   # +∞ sentinel for the last slot
+
+        # Internal-node escapes (Algorithm 2)
+        @threads for i in 1:n_internal
+            _build_escape!(escape, adj, range_hi, n, i)
+        end
+
+        # Leaf escapes are derived from parent + sibling relationships
+        for leaf_id in n:total_length
+            _build_escape!(escape, parent, left, right, leaf_id)
+        end
+    else
+        escape[1] = 0
+        parent[1] = 0
     end
-    _build_parent!(left_child, right_child, is_leaf_left, is_leaf_right, node_parent, leaf_parent)
-    return BinaryRadixTree{TI, VI, typeof(left_child), typeof(is_leaf_left)}(left_child, right_child, is_leaf_left, is_leaf_right,leaf_parent , node_parent, visit_counter)
+    
+    return BinaryRadixTree{Vector{Int32}}(root, n, left, right, escape, parent)
 end
 
 # Toolbox
+@inline is_leaf_id(node::Int32, nleaf::Int) = (node != 0) & (node >= Int32(nleaf))
+@inline is_internal_id(node::Int32, nleaf::Int) = (node != 0) & (node < Int32(nleaf))
+@inline leaf_index(node::Int32, nleaf::Int) = Int(node) - (nleaf - 1)               # 1..nleaf
+@inline internal_index(node::Int32) = Int(node)                                     # 1..ninternal
+
 @inline function _range_direction(codes::V, i::Int) where {TI<:Unsigned, V<:AbstractVector{TI}}
     δL = (i > 1) ?  _longest_common_prefix_length(codes, i, i - 1) : -1
     δR = (i < length(codes)) ? _longest_common_prefix_length(codes, i, i + 1) : -1
@@ -116,13 +165,13 @@ end
     end
     # Find the other side
     l = 0
-    t = lmax >> 1    # lmax / 2
+    t = lmax >> 1    # lmax / 2, still Int
     while t > 0
         j = i + (l + t) * d
         if j >= 1 && j <= n && _longest_common_prefix_length(codes, i, j) > δmin
             l += t
         end
-        t >>= 1      # t = t / 2
+        t >>= 1      # t = t / 2, still Int
     end
 
     j = i + l * d
@@ -152,53 +201,115 @@ end
     return split
 end
 
-@inline function _build_binary_radix_tree!(left_child :: S, right_child :: S, is_leaf_left :: U, is_leaf_right :: U, codes::V, i :: Int) where {TI<:Unsigned, V<:AbstractVector{TI},  S<:AbstractVector{Int}, U<:AbstractVector{Bool}}
-    @inbounds begin
-        lo, hi = _find_range(codes, i)
-        if lo == hi
-            left_child[i]  = lo
-            right_child[i] = lo
-            is_leaf_left[i] = true
-            is_leaf_right[i] = true
-            return
-        end
-        s = _split_position(codes, lo, hi)
-
-        if s == lo
-            left_child[i] = lo
-            is_leaf_left[i] = true
-        else
-            left_child[i] = s
-            is_leaf_left[i] = false
-        end
-
-        if s + 1 == hi
-            right_child[i] = hi
-            is_leaf_right[i] = true
-        else
-            right_child[i] = s + 1
-            is_leaf_right[i] = false
-        end
-    end
+@inline function _build_adjacent!(adj :: S, codes :: V, i :: Int) where {TI<:Unsigned, V<:AbstractVector{TI},  S<:AbstractVector{Int32}}
+    adj[i] = _longest_common_prefix_length(codes, i)
+    return nothing                  
 end
 
-@inline function _build_parent!(left_child :: S, right_child :: S, is_leaf_left :: U, is_leaf_right :: U, node_parent :: X, leaf_parent :: W) where {TI<:Unsigned, S<:AbstractVector{Int}, U<:AbstractVector{Bool}, X<:AbstractVector{TI}, W<:AbstractVector{TI}}
-    @inbounds for i in eachindex(left_child)
-        l = left_child[i]
-        r = right_child[i]
+@inline function _build_child!(left :: S, right :: S, range_hi :: S, parent :: S, codes :: V, i :: Int) where {TI<:Unsigned, V<:AbstractVector{TI},  S<:AbstractVector{Int32}}
+    n = length(codes)
+    leaf_offset = n - 1
+    
+    @inbounds begin
+        lo, hi = _find_range(codes, i)
+        range_hi[i] = Int32(hi)
+        s = _split_position(codes, lo, hi)
 
-        if is_leaf_left[i]
-            leaf_parent[l] = i
+        # NOTE (threaded build): We assume each child node has a unique parent in a valid BRT.
+        # If enc.codes is not sorted, or duplicate-code tie-breaking is broken, the topology may
+        # become invalid and the same `idx` could be assigned by multiple `i` concurrently,
+        # causing nondeterministic overwrites in `parent[idx]`.
+
+        # left child
+        if s == lo
+            idx = lo + leaf_offset              # leaf node id in n..2n-1
         else
-            node_parent[l] = i
+            idx = s                             # internal node id in 1..n-1
         end
+        left[i] = Int32(idx)
+        parent[idx] = Int32(i)
 
-        if is_leaf_right[i]
-            leaf_parent[r] = i
+        # right child
+        if s + 1 == hi
+            idx = hi + leaf_offset
         else
-            node_parent[r] = i
+            idx = s + 1
+        end
+        right[i] = Int32(idx)
+        parent[idx] = Int32(i)
+    end
+
+    return nothing
+end
+
+@inline function _build_escape!(escape::V, adj::V, range_hi::V, nleaf::Int,i::Int) where {V<:AbstractVector{Int32}}
+    # Escape for internal node
+    leaf_offset = nleaf - 1
+    @inbounds begin
+        hi = Int(range_hi[i])   # hi is leaf index in 1..nleaf
+        if hi == nleaf
+            escape[i] = 0
+        elseif hi == nleaf - 1
+            escape[i] = Int32(leaf_offset + nleaf)
+        else
+            next = hi + 1
+            escape[i] = (adj[next] < adj[next-1]) ? Int32(leaf_offset + next) : Int32(next)
         end
     end
     return nothing
 end
+
+@inline function _build_escape!(escape::V, parent::V, left::V, right::V, i::Int) where {V<:AbstractVector{Int32}}
+    @inbounds begin
+        p = parent[i]              # unified internal id (1..nleaf-1) or 0
+        if iszero(p)
+            escape[i] = 0
+            return nothing
+        end
+
+        pidx = internal_index(p)         # 1..ninternal
+        if left[pidx] == Int32(i)
+            # next is the sibling subtree root
+            escape[i] = right[pidx]
+        else
+            # must be right child => go where parent would escape to
+            # p is unified id, so escape[p] is valid
+            escape[i] = escape[Int(p)]
+        end
+    end
+    return nothing
+end
+
+function _build_escape_stackless!(escape::V, left::V, right::V, parent::V, root::Int32, nleaf::Int) where {V<:AbstractVector{Int32}}
+    ntotal = 2nleaf - 1
+    @assert length(escape) == ntotal
+    @assert length(left) == ntotal
+    @assert length(right) == ntotal
+    @assert length(parent) == ntotal
+
+    fill!(escape, Int32(0))
+    root == 0 && return nothing
+
+    stack = Int32[root]
+    while !isempty(stack)
+        node = pop!(stack)
+        is_internal_id(node, nleaf) || continue
+
+        node_idx = internal_index(node)
+        l = left[node_idx]
+        r = right[node_idx]
+
+        # left subtree escapes to its sibling; right subtree inherits parent's escape
+        escape[Int(l)] = r
+        escape[Int(r)] = escape[Int(node)]
+
+        # process children; push right first so left is popped/visited first (preorder)
+        push!(stack, r)
+        push!(stack, l)
+    end
+
+    return nothing
+end
+
+
 
