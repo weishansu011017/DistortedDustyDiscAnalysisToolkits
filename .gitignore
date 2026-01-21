@@ -48,6 +48,7 @@ script/*.m
 Manifest.toml
 
 *.mem
+snap*.hdf5
 
 .local/*
 build/*
