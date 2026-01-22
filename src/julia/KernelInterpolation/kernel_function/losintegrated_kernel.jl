@@ -166,9 +166,9 @@ assumed to have already been integrated out and must not be supplied here.
 @inline function LOSint_Smoothed_kernel_function(::Type{K}, ra::NTuple{2,T}, rb::NTuple{2,T}, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
     rax, ray = ra
     rbx, rby = rb
-    dx = rax - rbx
-    dy = ray - rby
-    r2 = dx * dx + dy * dy
+    Δx = rax - rbx
+    Δy = ray - rby
+    r2 = Δx * Δx + Δy * Δy
     r = sqrt(r2)
     return LOSint_Smoothed_kernel_function(K, r, h) 
 end

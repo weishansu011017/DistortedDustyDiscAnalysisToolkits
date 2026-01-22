@@ -9,6 +9,9 @@
     K = input.smoothed_kernel
     Kvalid = KernelFunctionValid(Ktyp, T)
     ShepardNormalization = catalog.scalar_snormalization
+    @inbounds begin
+        xa = reference_point[1]; ya = reference_point[2]; za = reference_point[3]; 
+    end
            
     # For aabb test
     radius = Kvalid * ha
@@ -43,19 +46,25 @@
     NeighborSearch.@_lbvh_gather_traversal LBVH reference_point radius2 leaf_idx p2leaf_d2 begin
         ########### Found a neighbor, do accumulation ###########
         @inbounds begin
-            rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
+            xb = input.x[leaf_idx]; yb = input.y[leaf_idx]; zb = input.z[leaf_idx]
+            Δx = xa - xb
+            Δy = ya - yb 
+            Δz = za - zb
+            Δr2 = Δx * Δx + Δy * Δy + Δz * Δz
+            Δr = sqrt(Δr2)
+
             mb = input.m[leaf_idx]
             ρb = input.ρ[leaf_idx]
 
             # Shepard Normalization
-            S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, K)
+            S1b = _ShepardNormalization_accumulation(Δr, mb, ρb, ha, K, Val(3))
             S1 += S1b
 
             # Scalar interpolations
             @inbounds for j in 1:N
                 slot = catalog.scalar_slots[j]
                 Ab = input.quant[slot][leaf_idx]
-                scalars[j] += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, K)
+                scalars[j] += _quantity_interpolate_accumulation(Δr, mb, ρb, Ab, ha, K, Val(3))
             end
 
             # Gradient interpolations
@@ -63,17 +72,17 @@
                 slot = catalog.grad_slots[j]
                 if slot == 0
                     # Gradient of density
-                    ∇ρxfW, ∇ρyfW, ∇ρzfW, ∇ρxbW, ∇ρybW, ∇ρzbW = _gradient_density_accumulation(reference_point, rb, mb, ρb, ha, K)
+                    ∇ρxfW, ∇ρyfW, ∇ρzfW, ∇ρxbW, ∇ρybW, ∇ρzbW = _gradient_density_accumulation(Δx, Δy, Δz, mb, ρb, ha, K)
                     gradients_f[j] += SVector{3,T}(∇ρxfW, ∇ρyfW, ∇ρzfW)
                     gradients_b[j] += SVector{3,T}(∇ρxbW, ∇ρybW, ∇ρzbW)
-                    gradients_scalars[j] += _density_accumulation(reference_point, rb, mb, ha, K)
+                    gradients_scalars[j] += _density_accumulation(Δr, mb, ha, K, Val(3))
 
                 else
                     Ab = input.quant[slot][leaf_idx]
-                    ∇AxfW, ∇AyfW, ∇AzfW, ∇AxbW, ∇AybW, ∇AzbW = _gradient_quantity_accumulation(reference_point, rb, mb, ρb, Ab, ha, K)
+                    ∇AxfW, ∇AyfW, ∇AzfW, ∇AxbW, ∇AybW, ∇AzbW = _gradient_quantity_accumulation(Δx, Δy, Δz, mb, ρb, Ab, ha, K)
                     gradients_f[j] += SVector{3,T}(∇AxfW, ∇AyfW, ∇AzfW)
                     gradients_b[j] += SVector{3,T}(∇AxbW, ∇AybW, ∇AzbW)
-                    gradients_scalars[j] += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, K)
+                    gradients_scalars[j] += _quantity_interpolate_accumulation(Δr, mb, ρb, Ab, ha, K, Val(3))
                 end
             end
 
@@ -84,12 +93,12 @@
                 Axb = input.quant[Ax_column_idx][leaf_idx]
                 Ayb = input.quant[Ay_column_idx][leaf_idx]
                 Azb = input.quant[Az_column_idx][leaf_idx]
-                ∇AfW, ∇AxbW, ∇AybW, ∇AzbW = _divergence_quantity_accumulation(reference_point, rb, mb, ρb, Axb, Ayb, Azb, ha, K)
+                ∇AfW, ∇AxbW, ∇AybW, ∇AzbW = _divergence_quantity_accumulation(Δx, Δy, Δz, mb, ρb, Axb, Ayb, Azb, ha, K)
                 divergences_f[j] += ∇AfW
                 divergences_b[j] += SVector{3,T}(∇AxbW, ∇AybW, ∇AzbW)
-                Axa = _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Axb, ha, K)
-                Aya = _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ayb, ha, K)
-                Aza = _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Azb, ha, K)
+                Axa = _quantity_interpolate_accumulation(Δr, mb, ρb, Axb, ha, K, Val(3))
+                Aya = _quantity_interpolate_accumulation(Δr, mb, ρb, Ayb, ha, K, Val(3))
+                Aza = _quantity_interpolate_accumulation(Δr, mb, ρb, Azb, ha, K, Val(3))
                 divergences_scalars[j] += SVector{3,T}(Axa, Aya, Aza)
             end
 
@@ -100,12 +109,12 @@
                 Axb = input.quant[Ax_column_idx][leaf_idx]
                 Ayb = input.quant[Ay_column_idx][leaf_idx]
                 Azb = input.quant[Az_column_idx][leaf_idx]
-                ∇AxfW, ∇AyfW, ∇AzfW, ∇AxbW, ∇AybW, ∇AzbW = _curl_quantity_accumulation(reference_point, rb, mb, ρb, Axb, Ayb, Azb, ha, K)
+                ∇AxfW, ∇AyfW, ∇AzfW, ∇AxbW, ∇AybW, ∇AzbW = _curl_quantity_accumulation(Δx, Δy, Δz, mb, ρb, Axb, Ayb, Azb, ha, K)
                 curls_f[j] += SVector{3,T}(∇AxfW, ∇AyfW, ∇AzfW)
                 curls_b[j] += SVector{3,T}(∇AxbW, ∇AybW, ∇AzbW)
-                Axa = _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Axb, ha, K)
-                Aya = _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ayb, ha, K)
-                Aza = _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Azb, ha, K)
+                Axa = _quantity_interpolate_accumulation(Δr, mb, ρb, Axb, ha, K, Val(3))
+                Aya = _quantity_interpolate_accumulation(Δr, mb, ρb, Ayb, ha, K, Val(3))
+                Aza = _quantity_interpolate_accumulation(Δr, mb, ρb, Azb, ha, K, Val(3))
                 curls_scalars[j] += SVector{3,T}(Axa, Aya, Aza)
             end
         end
@@ -220,6 +229,9 @@ end
     K = input.smoothed_kernel
     Kvalid = KernelFunctionValid(Ktyp, T)
     ShepardNormalization = catalog.scalar_snormalization
+    @inbounds begin
+        xa = reference_point[1]; ya = reference_point[2]; za = reference_point[3]; 
+    end
            
     # Initialize counter
     ## Shepard Normalization
@@ -251,19 +263,25 @@ end
     NeighborSearch.@_lbvh_scatter_traversal LBVH reference_point Kvalid leaf_idx p2leaf_d2 hb begin
         ########### Found a neighbor, do accumulation ###########
         @inbounds begin
-            rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
+            xb = input.x[leaf_idx]; yb = input.y[leaf_idx]; zb = input.z[leaf_idx]
+            Δx = xa - xb
+            Δy = ya - yb 
+            Δz = za - zb
+            Δr2 = Δx * Δx + Δy * Δy + Δz * Δz
+            Δr = sqrt(Δr2)
+
             mb = input.m[leaf_idx]
             ρb = input.ρ[leaf_idx]
 
             # Shepard Normalization
-            S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, hb, K)
+            S1b = _ShepardNormalization_accumulation(Δr, mb, ρb, hb, K, Val(3))
             S1 += S1b
 
             # Scalar interpolations
             @inbounds for j in 1:N
                 slot = catalog.scalar_slots[j]
                 Ab = input.quant[slot][leaf_idx]
-                scalars[j] += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, hb, K)
+                scalars[j] += _quantity_interpolate_accumulation(Δr, mb, ρb, Ab, hb, K, Val(3))
             end
 
             # Gradient interpolations
@@ -271,17 +289,17 @@ end
                 slot = catalog.grad_slots[j]
                 if slot == 0
                     # Gradient of density
-                    ∇ρxfW, ∇ρyfW, ∇ρzfW, ∇ρxbW, ∇ρybW, ∇ρzbW = _gradient_density_accumulation(reference_point, rb, mb, ρb, hb, K)
+                    ∇ρxfW, ∇ρyfW, ∇ρzfW, ∇ρxbW, ∇ρybW, ∇ρzbW = _gradient_density_accumulation(Δx, Δy, Δz, mb, ρb, hb, K)
                     gradients_f[j] += SVector{3,T}(∇ρxfW, ∇ρyfW, ∇ρzfW)
                     gradients_b[j] += SVector{3,T}(∇ρxbW, ∇ρybW, ∇ρzbW)
-                    gradients_scalars[j] += _density_accumulation(reference_point, rb, mb, hb, K)
+                    gradients_scalars[j] += _density_accumulation(Δr, mb, hb, K, Val(3))
 
                 else
                     Ab = input.quant[slot][leaf_idx]
-                    ∇AxfW, ∇AyfW, ∇AzfW, ∇AxbW, ∇AybW, ∇AzbW = _gradient_quantity_accumulation(reference_point, rb, mb, ρb, Ab, hb, K)
+                    ∇AxfW, ∇AyfW, ∇AzfW, ∇AxbW, ∇AybW, ∇AzbW = _gradient_quantity_accumulation(Δx, Δy, Δz, mb, ρb, Ab, hb, K)
                     gradients_f[j] += SVector{3,T}(∇AxfW, ∇AyfW, ∇AzfW)
                     gradients_b[j] += SVector{3,T}(∇AxbW, ∇AybW, ∇AzbW)
-                    gradients_scalars[j] += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, hb, K)
+                    gradients_scalars[j] += _quantity_interpolate_accumulation(Δr, mb, ρb, Ab, hb, K, Val(3))
                 end
             end
 
@@ -292,12 +310,12 @@ end
                 Axb = input.quant[Ax_column_idx][leaf_idx]
                 Ayb = input.quant[Ay_column_idx][leaf_idx]
                 Azb = input.quant[Az_column_idx][leaf_idx]
-                ∇AfW, ∇AxbW, ∇AybW, ∇AzbW = _divergence_quantity_accumulation(reference_point, rb, mb, ρb, Axb, Ayb, Azb, hb, K)
+                ∇AfW, ∇AxbW, ∇AybW, ∇AzbW = _divergence_quantity_accumulation(Δx, Δy, Δz, mb, ρb, Axb, Ayb, Azb, hb, K)
                 divergences_f[j] += ∇AfW
                 divergences_b[j] += SVector{3,T}(∇AxbW, ∇AybW, ∇AzbW)
-                Axa = _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Axb, hb, K)
-                Aya = _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ayb, hb, K)
-                Aza = _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Azb, hb, K)
+                Axa = _quantity_interpolate_accumulation(Δr, mb, ρb, Axb, hb, K, Val(3))
+                Aya = _quantity_interpolate_accumulation(Δr, mb, ρb, Ayb, hb, K, Val(3))
+                Aza = _quantity_interpolate_accumulation(Δr, mb, ρb, Azb, hb, K, Val(3))
                 divergences_scalars[j] += SVector{3,T}(Axa, Aya, Aza)
             end
 
@@ -308,12 +326,12 @@ end
                 Axb = input.quant[Ax_column_idx][leaf_idx]
                 Ayb = input.quant[Ay_column_idx][leaf_idx]
                 Azb = input.quant[Az_column_idx][leaf_idx]
-                ∇AxfW, ∇AyfW, ∇AzfW, ∇AxbW, ∇AybW, ∇AzbW = _curl_quantity_accumulation(reference_point, rb, mb, ρb, Axb, Ayb, Azb, hb, K)
+                ∇AxfW, ∇AyfW, ∇AzfW, ∇AxbW, ∇AybW, ∇AzbW = _curl_quantity_accumulation(Δx, Δy, Δz, mb, ρb, Axb, Ayb, Azb, hb, K)
                 curls_f[j] += SVector{3,T}(∇AxfW, ∇AyfW, ∇AzfW)
                 curls_b[j] += SVector{3,T}(∇AxbW, ∇AybW, ∇AzbW)
-                Axa = _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Axb, hb, K)
-                Aya = _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ayb, hb, K)
-                Aza = _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Azb, hb, K)
+                Axa = _quantity_interpolate_accumulation(Δr, mb, ρb, Axb, hb, K, Val(3))
+                Aya = _quantity_interpolate_accumulation(Δr, mb, ρb, Ayb, hb, K, Val(3))
+                Aza = _quantity_interpolate_accumulation(Δr, mb, ρb, Azb, hb, K, Val(3))
                 curls_scalars[j] += SVector{3,T}(Axa, Aya, Aza)
             end
         end
@@ -430,6 +448,9 @@ end
     K = input.smoothed_kernel
     Kvalid = KernelFunctionValid(Ktyp, T)
     ShepardNormalization = catalog.scalar_snormalization
+    @inbounds begin
+        xa = reference_point[1]; ya = reference_point[2]; za = reference_point[3]; 
+    end
            
     # For aabb test
     radius = Kvalid * ha
@@ -465,20 +486,25 @@ end
     NeighborSearch.@_lbvh_symmetric_traversal LBVH reference_point Kvalid radius2 leaf_idx p2leaf_d2 hb begin
         ########### Found a neighbor, do accumulation ###########
         @inbounds begin
-            rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
+            xb = input.x[leaf_idx]; yb = input.y[leaf_idx]; zb = input.z[leaf_idx]
+            Δx = xa - xb
+            Δy = ya - yb 
+            Δz = za - zb
+            Δr2 = Δx * Δx + Δy * Δy + Δz * Δz
+            Δr = sqrt(Δr2)
+
             mb = input.m[leaf_idx]
             ρb = input.ρ[leaf_idx]
 
             # Shepard Normalization
-            S1b = _ShepardNormalization_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
+            S1b = _ShepardNormalization_accumulation(Δr, mb, ρb, ha, hb, K, Val(3))
             S1 += S1b
-                
 
             # Scalar interpolations
             @inbounds for j in 1:N
                 slot = catalog.scalar_slots[j]
                 Ab = input.quant[slot][leaf_idx]
-                scalars[j] += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, hb, K)
+                scalars[j] += _quantity_interpolate_accumulation(Δr, mb, ρb, Ab, ha, hb, K, Val(3))
             end
 
             # Gradient interpolations
@@ -486,17 +512,17 @@ end
                 slot = catalog.grad_slots[j]
                 if slot == 0
                     # Gradient of density
-                    ∇ρxfW, ∇ρyfW, ∇ρzfW, ∇ρxbW, ∇ρybW, ∇ρzbW = _gradient_density_accumulation(reference_point, rb, mb, ρb, ha, hb, K)
+                    ∇ρxfW, ∇ρyfW, ∇ρzfW, ∇ρxbW, ∇ρybW, ∇ρzbW = _gradient_density_accumulation(Δx, Δy, Δz, mb, ρb, ha, hb, K)
                     gradients_f[j] += SVector{3,T}(∇ρxfW, ∇ρyfW, ∇ρzfW)
                     gradients_b[j] += SVector{3,T}(∇ρxbW, ∇ρybW, ∇ρzbW)
-                    gradients_scalars[j] += _density_accumulation(reference_point, rb, mb, ha, hb, K)
+                    gradients_scalars[j] += _density_accumulation(Δr, mb, ha, hb, K, Val(3))
 
                 else
                     Ab = input.quant[slot][leaf_idx]
-                    ∇AxfW, ∇AyfW, ∇AzfW, ∇AxbW, ∇AybW, ∇AzbW = _gradient_quantity_accumulation(reference_point, rb, mb, ρb, Ab, ha, hb, K)
+                    ∇AxfW, ∇AyfW, ∇AzfW, ∇AxbW, ∇AybW, ∇AzbW = _gradient_quantity_accumulation(Δx, Δy, Δz, mb, ρb, Ab, ha, hb, K)
                     gradients_f[j] += SVector{3,T}(∇AxfW, ∇AyfW, ∇AzfW)
                     gradients_b[j] += SVector{3,T}(∇AxbW, ∇AybW, ∇AzbW)
-                    gradients_scalars[j] += _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ab, ha, hb, K)
+                    gradients_scalars[j] += _quantity_interpolate_accumulation(Δr, mb, ρb, Ab, ha, hb, K, Val(3))
                 end
             end
 
@@ -507,12 +533,12 @@ end
                 Axb = input.quant[Ax_column_idx][leaf_idx]
                 Ayb = input.quant[Ay_column_idx][leaf_idx]
                 Azb = input.quant[Az_column_idx][leaf_idx]
-                ∇AfW, ∇AxbW, ∇AybW, ∇AzbW = _divergence_quantity_accumulation(reference_point, rb, mb, ρb, Axb, Ayb, Azb, ha, hb, K)
+                ∇AfW, ∇AxbW, ∇AybW, ∇AzbW = _divergence_quantity_accumulation(Δx, Δy, Δz, mb, ρb, Axb, Ayb, Azb, ha, hb, K)
                 divergences_f[j] += ∇AfW
                 divergences_b[j] += SVector{3,T}(∇AxbW, ∇AybW, ∇AzbW)
-                Axa = _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Axb, ha, hb, K)
-                Aya = _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ayb, ha, hb, K)
-                Aza = _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Azb, ha, hb, K)
+                Axa = _quantity_interpolate_accumulation(Δr, mb, ρb, Axb, ha, hb, K, Val(3))
+                Aya = _quantity_interpolate_accumulation(Δr, mb, ρb, Ayb, ha, hb, K, Val(3))
+                Aza = _quantity_interpolate_accumulation(Δr, mb, ρb, Azb, ha, hb, K, Val(3))
                 divergences_scalars[j] += SVector{3,T}(Axa, Aya, Aza)
             end
 
@@ -523,12 +549,12 @@ end
                 Axb = input.quant[Ax_column_idx][leaf_idx]
                 Ayb = input.quant[Ay_column_idx][leaf_idx]
                 Azb = input.quant[Az_column_idx][leaf_idx]
-                ∇AxfW, ∇AyfW, ∇AzfW, ∇AxbW, ∇AybW, ∇AzbW = _curl_quantity_accumulation(reference_point, rb, mb, ρb, Axb, Ayb, Azb, ha, hb, K)
+                ∇AxfW, ∇AyfW, ∇AzfW, ∇AxbW, ∇AybW, ∇AzbW = _curl_quantity_accumulation(Δx, Δy, Δz, mb, ρb, Axb, Ayb, Azb, ha, hb, K)
                 curls_f[j] += SVector{3,T}(∇AxfW, ∇AyfW, ∇AzfW)
                 curls_b[j] += SVector{3,T}(∇AxbW, ∇AybW, ∇AzbW)
-                Axa = _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Axb, ha, hb, K)
-                Aya = _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Ayb, ha, hb, K)
-                Aza = _quantity_interpolate_accumulation(reference_point, rb, mb, ρb, Azb, ha, hb, K)
+                Axa = _quantity_interpolate_accumulation(Δr, mb, ρb, Axb, ha, hb, K, Val(3))
+                Aya = _quantity_interpolate_accumulation(Δr, mb, ρb, Ayb, ha, hb, K, Val(3))
+                Aza = _quantity_interpolate_accumulation(Δr, mb, ρb, Azb, ha, hb, K, Val(3))
                 curls_scalars[j] += SVector{3,T}(Axa, Aya, Aza)
             end
         end
