@@ -68,47 +68,36 @@ abstract type AbstractSPHKernel end
 # Dimensionless Kernel
 """
     Smoothed_kernel_function_dimensionless(
-        ::Type{<:AbstractSPHKernel},
-        r::T,
-        h::T,
+        ::Type{K},
+        q::T,
         ::Val{D}
-    ) where {T<:AbstractFloat, D}
+    ) where {K<:AbstractSPHKernel, T<:AbstractFloat, D}
 
-Compute the **dimensionless** kernel value `w(q)` with `q = r/h``
-for a given SPH kernel type in `D` dimensions.
+Compute the **dimensionless** SPH smoothing kernel value `w(q)` for a given kernel type,
+where the dimensionless separation is
+
+```math
+q = r/h .
+```
+This function returns the normalised dimensionless kernel value in D dimensions,
+i.e. the kernel shape K()(q) multiplied by the dimension-dependent normalisation factor.
 
 # Parameters
-- `::Type{<:AbstractSPHKernel}`  
-  The kernel functor type (e.g. `M4_spline`, `C2_Wendland`).
-- `r::T`  
-  Euclidean distance between two particles, precision `T<:AbstractFloat`.
-- `h::T`  
-  Smoothing length (same precision as `r`).
-- `::Val{D}`  
-  Dimension tag: use `Val(1)`, `Val(2)`, or `Val(3)` to select 1D/2D/3D.
+	- ::Type{K}
+Kernel type (e.g. M4_spline, C2_Wendland) with K <: AbstractSPHKernel.
+	- q::T
+Dimensionless distance q = r/h, with T <: AbstractFloat.
+	- ::Val{D}
+Dimension tag. Use Val(1), Val(2), or Val(3).
 
-# Returns
-- `T`  
-  The dimensionless kernel value `w(q)` in the same precision as inputs.
-
-# Examples
-```julia
-# 2D, Float32
-w2f32 = Smoothed_kernel_function_dimensionless(M4_spline, 0.8f0, 0.1f0, Val(2))
-
-# 3D, Float64
-w3f64 = Smoothed_kernel_function_dimensionless(C2_Wendland, 1.2, 0.5, Val(3))
-```
+Returns
+	- :: T
+The dimensionless kernel value w(q) (normalised for D dimensions).
 """
-@inline function Smoothed_kernel_function_dimensionless(::Type{K}, r :: T, h :: T, ::Val{D}) where {K<:AbstractSPHKernel, T<:AbstractFloat, D}
-    q :: T = r / h
+@inline function Smoothed_kernel_function_dimensionless(::Type{K}, q :: T, ::Val{D}) where {K<:AbstractSPHKernel, T<:AbstractFloat, D}
     return KernelFunctionnorm(K, Val(D), T) * K()(q)
 end
 
-@inline function Smoothed_kernel_function_dimensionless(::Type{K}, r :: T, h :: S, d ::Val{D}) where {K<:AbstractSPHKernel, T<:AbstractFloat, S<:AbstractFloat, D}
-    rp, hp = promote(r, h)
-    return Smoothed_kernel_function_dimensionless(K, rp, hp, d)
-end
 
 # Dimensional Kernel
 """
@@ -150,16 +139,21 @@ W3f64 = Smoothed_kernel_function(C2_Wendland, 1.2, 0.5, Val(3))
 ```
 """
 @inline function Smoothed_kernel_function(::Type{K}, r::T, h::T, ::Val{1}) where {K<:AbstractSPHKernel, T<:AbstractFloat}
-    inv_hD = inv(h)
-    return inv_hD * Smoothed_kernel_function_dimensionless(K, r, h, Val(1))
+    invh = inv(h)
+    q = r * invh
+    return invh * Smoothed_kernel_function_dimensionless(K, q, Val(1))
 end
 @inline function Smoothed_kernel_function(::Type{K}, r::T, h::T, ::Val{2}) where {K<:AbstractSPHKernel, T<:AbstractFloat}
-    inv_hD = inv(h * h)
-    return inv_hD * Smoothed_kernel_function_dimensionless(K, r, h, Val(2))
+    invh = inv(h)
+    inv_hD = invh * invh
+    q = r * invh
+    return inv_hD * Smoothed_kernel_function_dimensionless(K, q, Val(2))
 end
 @inline function Smoothed_kernel_function(::Type{K}, r::T, h::T, ::Val{3}) where {K<:AbstractSPHKernel, T<:AbstractFloat}
-    inv_hD = inv(h * h * h)
-    return inv_hD * Smoothed_kernel_function_dimensionless(K, r, h, Val(3))
+    invh = inv(h)
+    inv_hD = invh * invh * invh
+    q = r * invh
+    return inv_hD * Smoothed_kernel_function_dimensionless(K, q, Val(3))
 end
 
 @inline function Smoothed_kernel_function(::Type{K}, r::T, h::S, d::Val{D}) where {K<:AbstractSPHKernel, T<:AbstractFloat, S<:AbstractFloat, D}
@@ -169,56 +163,34 @@ end
 
 """
     Smoothed_kernel_function(
-      ::Type{<:AbstractSPHKernel},
-      ra::AbstractVector{T},
-      rb::AbstractVector{T},
-      h::T
-    ) where {T<:AbstractFloat, D} -> T
+        ::Type{K},
+        ra::NTuple{D,T},
+        rb::NTuple{D,T},
+        h::T
+    ) where {K<:AbstractSPHKernel, T<:AbstractFloat, D}
 
-Compute W(r_a-r_b,h) by first measuring (r_a-r_b) in `D`-dimensions.
+Compute the **physical** SPH smoothing kernel value `W(|ra-rb|, h)` in `D` dimensions
+from two coordinate tuples.
+
+This method is a thin wrapper that:
+1. computes the Euclidean distance `r = |ra - rb|` from `ra` and `rb`, and
+2. dispatches to the scalar-distance kernel implementation
+   `Smoothed_kernel_function(K, r, h, Val(D))`.
 
 # Parameters
-- `::Type{<:AbstractSPHKernel}`  
-  The kernel functor type (e.g. `M4_spline`, `C2_Wendland`).
-
-- `ra, rb::AbstractVector{T}`  
-  Position vectors of equal length `D`, with element type `T<:AbstractFloat`.
-
+- `::Type{K}`  
+  Kernel type with `K <: AbstractSPHKernel` (e.g. `M4_spline`, `C2_Wendland`).
+- `ra::NTuple{D,T}`  
+  Coordinate of point/particle `a` in `D` dimensions.
+- `rb::NTuple{D,T}`  
+  Coordinate of point/particle `b` in `D` dimensions.
 - `h::T`  
-  Smoothing length (same precision `T`).
+  Smoothing length.
 
 # Returns
 - `T`  
-  The kernel value w in the same precision as the inputs.
-
-# Examples
-```julia
-ra = [0.0f0, 0.1f0, 0.2f0]
-rb = [0.1f0, 0.0f0, 0.3f0]
-h  = 0.05f0
-
-Wval = Smoothed_kernel_function(M4_spline, ra, rb, h)
-```
+  The kernel value `W(|ra-rb|, h)` in `D` dimensions.
 """
-@inline function Smoothed_kernel_function(::Type{K}, ra::AbstractVector{T}, rb::AbstractVector{T}, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
-    r2 = zero(T)
-    @inbounds for i in eachindex(ra, rb)
-        Δ = ra[i] - rb[i]
-        r2 += Δ * Δ
-    end
-    r = sqrt(r2)
-    dim = length(ra)
-    return Smoothed_kernel_function(K, r, h, Val(dim))
-end
-
-@inline function Smoothed_kernel_function(::Type{K}, ra::AbstractVector{T}, rb::AbstractVector{S}, h::R) where {K<:AbstractSPHKernel, T<:AbstractFloat, S<:AbstractFloat, R<:AbstractFloat}
-    P = promote_type(T, S, R)
-    rap = P.(ra)    
-    rbp = P.(rb)
-    hp  = P(h)
-    return Smoothed_kernel_function(K, rap, rbp, hp)
-end
-
 @inline function Smoothed_kernel_function(::Type{K}, ra::NTuple{D,T}, rb::NTuple{D,T}, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat, D}
     r2 = zero(T)
     @inbounds for i in eachindex(ra, rb)
@@ -229,234 +201,289 @@ end
     return Smoothed_kernel_function(K, r, h, Val(D))
 end
 
-@inline function Smoothed_kernel_function(::Type{K}, ra::NTuple{D,T}, rb::NTuple{D,S}, h::R) where {K<:AbstractSPHKernel, T<:AbstractFloat, S<:AbstractFloat, R<:AbstractFloat, D}
-    P = promote_type(T, S, R)
-    rap = ntuple(i -> P(ra[i]), D)
-    rbp = ntuple(i -> P(rb[i]), D)
-    hp  = P(h)
-    return Smoothed_kernel_function(K, rap, rbp, hp)
-end
-
-
-
-
-
 # ∇W(ra-rb,h)
-@inline function _smoothed_grad_dimless!(out::AbstractVector{T}, ::Type{K}, rab::AbstractVector{T}, h::T, ::Val{D}) where {K<:AbstractSPHKernel, T<:AbstractFloat, D}
-    r2 = zero(T)
-    @inbounds for i in eachindex(rab)
-        Δ = rab[i]
-        r2 += Δ*Δ
-    end
-  if iszero(r2)
-    fill!(out, zero(T))
-    return out
-  end
-    r = sqrt(r2)
-    q     = r / h
-    coeff = KernelFunctionDiff(K, q) * KernelFunctionnorm(K, Val(D), T)
-
-    @inbounds for i in eachindex(rab)
-        out[i] = (rab[i] / r) * coeff
-    end
-    return out 
-end
-
-@inline function _smoothed_grad_dimless!(out::AbstractVector{T}, ::Type{K}, ra::AbstractVector{T}, rb::AbstractVector{T}, h::T, ::Val{D}) where {K<:AbstractSPHKernel, T<:AbstractFloat, D}
-    r2 = zero(T)
-    @inbounds for i in 1:D
-        Δ = ra[i] - rb[i]
-        r2 += Δ*Δ
-    end
-  if iszero(r2)
-    fill!(out, zero(T))
-    return out
-  end
-    r = sqrt(r2)
-    q     = r / h
-    coeff = KernelFunctionDiff(K, q) * KernelFunctionnorm(K, Val(D), T)
-
-    @inbounds for i in eachindex(out)
-        out[i] = ((ra[i] - rb[i]) / r) * coeff
-    end
-    return out 
-end
-
-@inline function _smoothed_grad_dimless(::Type{K}, rab::NTuple{D,T}, h::T, ::Val{D}) where {K<:AbstractSPHKernel, T<:AbstractFloat, D}
-    r2 = zero(T)
-    @inbounds for i in 1:D
-        r2 += rab[i]^2
-    end
-    if iszero(r2)
-      return ntuple(_ -> zero(T), D)
-    end
-    r = sqrt(r2)
-    q = r / h
-    coeff = KernelFunctionDiff(K, q) * KernelFunctionnorm(K, Val(D), T)
-
-    return ntuple(i -> (rab[i] / r) * coeff, D)
-end
-
-@inline function _smoothed_grad_dimless(::Type{K}, ra::NTuple{D,T}, rb::NTuple{D,T}, h::T, ::Val{D}) where {K<:AbstractSPHKernel, T<:AbstractFloat, D}
-    r2 = zero(T)
-    @inbounds for i in 1:D
-        Δ = ra[i] - rb[i]
-        r2 += Δ*Δ
-    end
-    if iszero(r2)
-      return ntuple(_ -> zero(T), D)
-    end
-    r = sqrt(r2)
-    q     = r / h
-    coeff = KernelFunctionDiff(K, q) * KernelFunctionnorm(K, Val(D), T)
-
-    return ntuple(i -> ((ra[i] - rb[i]) / r) * coeff, D)
-end
-
 """
     Smoothed_gradient_kernel_function_dimensionless(
-      ::Type{<:AbstractSPHKernel},
-      rab::AbstractVector{T},
-      h::T
-    ) where {T<:AbstractFloat} -> Vector{T}
+        ::Type{K},
+        dx::T,
+        h::T
+    ) where {K<:AbstractSPHKernel, T<:AbstractFloat}
 
-Compute the **dimensionless** gradient of the SPH kernel at a displacement `rab` 
-and smoothing length `h`.
+    Smoothed_gradient_kernel_function_dimensionless(
+        ::Type{K},
+        dx::T, dy::T,
+        h::T
+    ) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+
+    Smoothed_gradient_kernel_function_dimensionless(
+        ::Type{K},
+        dx::T, dy::T, dz::T,
+        h::T
+    ) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+
+Compute the **dimensionless gradient** of an SPH kernel using scalar displacement
+components in 1D, 2D, or 3D.
+
+Let `rab = ra - rb` with components `(dx, dy, dz)` and define the dimensionless
+distance `q = |rab| / h`.  
+This function evaluates the gradient of the dimensionless kernel shape function,
+including the dimension-dependent normalisation factor.
+
+The returned value corresponds to
+
+    ∇w(q) = (dw/dq) * (rab / |rab|)
+
+scaled by `KernelFunctionnorm(K, Val(D), T)`, but **does not** include the outer
+physical prefactor `1 / h^D`. That scaling should be applied by higher-level
+routines when constructing the full kernel gradient.
+
+These scalar-component APIs are intended for extremely hot loops and avoid any
+container allocation.
 
 # Parameters
-- `::Type{<:AbstractSPHKernel}`  
-  The kernel functor type (e.g. `M4_spline`, `C2_Wendland`).
-- `rab::AbstractVector{T}`  
-  Displacement vector r_a - r_b, with element type `T<:AbstractFloat`.
-- `h::T`  
-  Smoothing length (same precision as `rab`).
+- `::Type{K}`  
+  SPH kernel type, where `K <: AbstractSPHKernel`.
+- `dx`, `dy`, `dz`  
+  Displacement components between two particles.
+- `h`  
+  Smoothing length.
 
 # Returns
-- `Vector{T}`  
-  A vector of the same length as `rab` containing w
-  in the same floating-point precision.
+- 1D: `T`
+- 2D: `NTuple{2,T}`
+- 3D: `NTuple{3,T}`
 
-# Examples
-```julia
-rab = [0.1f0, -0.2f0, 0.3f0]
-h   = 0.05f0
-grad_dimless = Smoothed_gradient_kernel_function_dimensionless(
-    M4_spline, rab, h
-)
-```
+Dimensionless gradient components. If the separation is zero, all components
+are returned as zero.
 """
-@inline function Smoothed_gradient_kernel_function_dimensionless(::Type{K}, rab::AbstractVector{T}, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
-    dim = length(rab)
-    out = similar(rab)
-    return _smoothed_grad_dimless!(out, K, rab, h, Val(dim))
+@inline function Smoothed_gradient_kernel_function_dimensionless(::Type{K}, dx :: T, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+    if iszero(dx)
+      return zero(T)
+    end
+    r     = dx
+    q     = r / h
+    coeff = KernelFunctionDiff(K, q) * KernelFunctionnorm(K, Val(1), T) / r
+
+    return dx * coeff
 end
 
-@inline function Smoothed_gradient_kernel_function_dimensionless(::Type{K}, ra::AbstractVector{T}, rb::AbstractVector{T}, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
-    dim = length(ra)
-    out = similar(ra)
-    return _smoothed_grad_dimless!(out, K, ra, rb, h, Val(dim))
+@inline function Smoothed_gradient_kernel_function_dimensionless(::Type{K}, dx :: T, dy :: T, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+    r2 = dx * dx + dy * dy
+    if iszero(r2)
+      zeroT = zero(T)
+      return (zeroT, zeroT)
+    end
+    r     = sqrt(r2)
+    invr  = inv(r)
+    q     = r / h
+    coeff = KernelFunctionDiff(K, q) * KernelFunctionnorm(K, Val(2), T) * invr
+
+    return (dx * coeff, dy * coeff)
 end
 
-@inline function Smoothed_gradient_kernel_function_dimensionless(::Type{K}, rab::NTuple{D,T}, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat, D}
-    return _smoothed_grad_dimless(K, rab, h, Val(D))
-end
+@inline function Smoothed_gradient_kernel_function_dimensionless(::Type{K}, dx :: T, dy :: T, dz :: T, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+    r2 = dx * dx + dy * dy + dz * dz
+    if iszero(r2)
+      zeroT = zero(T)
+      return (zeroT, zeroT, zeroT)
+    end
+    r     = sqrt(r2)
+    invr  = inv(r)
+    q     = r / h
+    coeff = KernelFunctionDiff(K, q) * KernelFunctionnorm(K, Val(3), T) * invr
 
-@inline function Smoothed_gradient_kernel_function_dimensionless(::Type{K}, ra::NTuple{D,T}, rb::NTuple{D,T}, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat, D}
-    rab = ntuple(i -> ra[i] - rb[i], D)
-    return _smoothed_grad_dimless(K, rab, h, Val(D))
+    return (dx * coeff, dy * coeff, dz * coeff)
 end
 
 """
     Smoothed_gradient_kernel_function(
-      ::Type{<:AbstractSPHKernel},
-      rab::AbstractVector{T},
-      h::T
-    ) where {T<:AbstractFloat} -> Vector{T}
+        ::Type{<:AbstractSPHKernel},
+        dx::T, [dy::T, dz::T], h::T
+    ) where {T<:AbstractFloat}
 
-Compute the **full** SPH gradient for displacement `rab = ra - rb` and smoothing
-length `h`.  The result is
+Compute the **physical (dimensionful) gradient of the SPH smoothing kernel**
+\\( \\nabla W(\\mathbf{r}, h) \\) in 1D, 2D, or 3D, using **scalar displacement components**
+as input.
 
-    ∇W(r_ab, h) = h^{-(D+1)} · ĥ_{ab} · (dŴ/dq)(q),
+This is the **performance-critical, allocation-free API** intended for hot loops
+(e.g. neighbor interactions, grid interpolation, GPU kernels).
 
-where
+The function internally evaluates the **dimensionless kernel gradient**
+\\( \\nabla w(q) \\) with \\( q = r/h \\), and applies the correct dimensional
+scaling:
 
-- q = ‖rab‖ / h  
-- ĥ_{ab} = rab / ‖rab‖  
-- D = length(rab)
+\\[
+\\nabla W = h^{-(D+1)} \\, \\nabla w
+\\]
+
+where `D` is the spatial dimension.
+
+---
 
 # Parameters
 - `::Type{<:AbstractSPHKernel}`  
-  The kernel functor type (e.g. `M4_spline`, `C2_Wendland`).
-- `rab::AbstractVector{T}`  
-  Displacement vector `ra - rb`, of element type `T<:AbstractFloat`.
+  SPH kernel type (e.g. `M4_spline`, `C2_Wendland`).
+
+- `dx::T`, `dy::T`, `dz::T`  
+  Cartesian displacement components between two particles:
+  - 1D: `dx`
+  - 2D: `(dx, dy)`
+  - 3D: `(dx, dy, dz)`
+
 - `h::T`  
-  Smoothing length (same precision as `rab`).
+  Smoothing length.
+
+All arguments must share the same floating-point type `T`.
 
 # Returns
-- `Vector{T}`  
-  A vector of the same length as `rab`, containing the gradient ∇W(r_ab,h)
-  in the same floating-point precision `T`.
+- **1D:** `T`  
+- **2D:** `(T, T)`  
+- **3D:** `(T, T, T)`  
+
+The physical kernel gradient components in each dimension.
 
 # Examples
 ```julia
-rab = [0.1, -0.2]      # Vector{Float64}
-h   = 0.1
-grad_full = Smoothed_gradient_kernel_function(
-    C2_Wendland, rab, h)
+# 1D
+dWdx = Smoothed_gradient_kernel_function(M4_spline, dx, h)
+
+# 2D
+dWdx, dWdy = Smoothed_gradient_kernel_function(M4_spline, dx, dy, h)
+
+# 3D
+dWdx, dWdy, dWdz = Smoothed_gradient_kernel_function(M4_spline, dx, dy, dz, h)
 ```
 """
-@inline function Smoothed_gradient_kernel_function(::Type{K}, rab::AbstractVector{T}, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
-    D = length(rab)
-    inv_hDp1 = inv(h^(D+1))
-    return inv_hDp1 * Smoothed_gradient_kernel_function_dimensionless(K, rab, h)
+@inline function Smoothed_gradient_kernel_function(::Type{K}, dx :: T, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+    invh = inv(h)
+    inv_hDp1 = invh * invh
+    ws = Smoothed_gradient_kernel_function_dimensionless(K, dx, h)
+    return inv_hDp1 * ws
 end
 
-@inline function Smoothed_gradient_kernel_function(::Type{K}, rab::AbstractVector{T}, h::S) where {K<:AbstractSPHKernel, T<:AbstractFloat, S<:AbstractFloat}
-    P = promote_type(T, S)
-    rabp = P.(rab)    
-    hp  = P(h)
-    return Smoothed_gradient_kernel_function(K, rabp, hp)
+@inline function Smoothed_gradient_kernel_function(::Type{K}, dx :: T, dy :: T, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+    invh = inv(h)
+    inv_hDp1 = invh * invh * invh
+    gx, gy = Smoothed_gradient_kernel_function_dimensionless(K, dx, dy, h)
+    return (inv_hDp1 * gx, inv_hDp1 * gy)
 end
 
-@inline function Smoothed_gradient_kernel_function(::Type{K}, ra::AbstractVector{T}, rb::AbstractVector{T}, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
-    D = length(ra)
-    inv_hDp1 = inv(h^(D+1))
-    return inv_hDp1 * Smoothed_gradient_kernel_function_dimensionless(K, ra, rb, h)
+@inline function Smoothed_gradient_kernel_function(::Type{K}, dx :: T, dy :: T, dz :: T, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+    invh = inv(h)
+    inv_hDp1 = invh * invh * invh * invh
+    gx, gy, gz = Smoothed_gradient_kernel_function_dimensionless(K, dx, dy, dz, h)
+    return (inv_hDp1 * gx, inv_hDp1 * gy, inv_hDp1 * gz)
 end
 
-@inline function Smoothed_gradient_kernel_function(::Type{K}, ra::AbstractVector{T}, rb::AbstractVector{S}, h::R) where {K<:AbstractSPHKernel, T<:AbstractFloat, S<:AbstractFloat, R<:AbstractFloat}
-    P = promote_type(T, S, R)
-    rap = P.(ra)    
-    rbp = P.(rb)  
-    hp  = P(h)
-    return Smoothed_gradient_kernel_function(K, rap, rbp, hp)
+"""
+    Smoothed_gradient_kernel_function(
+        ::Type{K},
+        rab::NTuple{2,T},
+        h::T
+    ) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+
+    Smoothed_gradient_kernel_function(
+        ::Type{K},
+        rab::NTuple{3,T},
+        h::T
+    ) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+
+Compute the **physical SPH kernel gradient** ∇W using a displacement tuple
+`rab = ra - rb` in 2D or 3D.
+
+This is a **thin convenience wrapper** that destructures the displacement tuple
+into scalar components and forwards the computation to the corresponding
+scalar-based kernel implementation. No additional arithmetic, memory allocation,
+or approximation is introduced at this level.
+
+Internally, the gradient is evaluated as
+
+    ∇W = (1 / h^{D+1}) ∇w(q),   with q = |rab| / h
+
+where `∇w(q)` is the dimensionless kernel gradient and `D` is the spatial
+dimension.
+
+# Parameters
+- `::Type{K}`  
+  SPH kernel type, where `K <: AbstractSPHKernel`.
+- `rab::NTuple{D,T}`  
+  Displacement vector between two particles (`ra - rb`), with `D = 2` or `3`.
+- `h::T`  
+  Smoothing length.
+
+# Returns
+- `NTuple{D,T}`  
+  Physical kernel gradient components in `D` dimensions.
+"""
+@inline function Smoothed_gradient_kernel_function(::Type{K}, rab::NTuple{2,T}, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+    dx, dy = rab
+    return Smoothed_gradient_kernel_function(K, dx, dy, h)
 end
 
-@inline function Smoothed_gradient_kernel_function(::Type{K}, rab::NTuple{D,T}, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat, D}
-    inv_hDp1 = inv(h^(D+1))
-    ws = Smoothed_gradient_kernel_function_dimensionless(K, rab, h)
-    return ntuple(i -> inv_hDp1 * ws[i], D)
+@inline function Smoothed_gradient_kernel_function(::Type{K}, rab::NTuple{3,T}, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+    dx, dy, dz = rab
+    return Smoothed_gradient_kernel_function(K, dx, dy, dz, h)
 end
 
-@inline function Smoothed_gradient_kernel_function(::Type{K}, rab::NTuple{D,T}, h::S) where {K<:AbstractSPHKernel, T<:AbstractFloat, S<:AbstractFloat, D}
-    P = promote_type(T, S)
-    rabp = ntuple(i -> convert(P, rab[i]), D)
-    hp   = convert(P, h)
-    return Smoothed_gradient_kernel_function(K, rabp, hp)
+"""
+    Smoothed_gradient_kernel_function(
+        ::Type{K},
+        ra::NTuple{2,T},
+        rb::NTuple{2,T},
+        h::T
+    ) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+
+    Smoothed_gradient_kernel_function(
+        ::Type{K},
+        ra::NTuple{3,T},
+        rb::NTuple{3,T},
+        h::T
+    ) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+
+Compute the **physical SPH kernel gradient** ∇W between two particle positions
+`ra` and `rb` in 2D or 3D.
+
+This function computes the displacement `rab = ra - rb` component-wise and
+forwards the calculation to the scalar-based kernel gradient implementation.
+It introduces no additional approximation or memory allocation beyond the
+coordinate subtraction.
+
+Internally, the gradient is evaluated as
+
+    ∇W(ra - rb, h) = (1 / h^{D+1}) ∇w(q),   with q = |ra - rb| / h
+
+where `∇w(q)` is the dimensionless kernel gradient and `D` is the spatial
+dimension.
+
+# Parameters
+- `::Type{K}`  
+  SPH kernel type, where `K <: AbstractSPHKernel`.
+- `ra::NTuple{D,T}`  
+  Position of particle *a*.
+- `rb::NTuple{D,T}`  
+  Position of particle *b*.
+- `h::T`  
+  Smoothing length.
+
+# Returns
+- `NTuple{D,T}`  
+  Physical kernel gradient components in `D` dimensions.
+
+"""
+@inline function Smoothed_gradient_kernel_function(::Type{K}, ra::NTuple{2,T}, rb::NTuple{2,T}, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+    rax, ray = ra
+    rbx, rby = rb
+    dx = rax - rbx
+    dy = ray - rby
+    return Smoothed_gradient_kernel_function(K, dx, dy, h)
 end
 
-@inline function Smoothed_gradient_kernel_function(::Type{K}, ra::NTuple{D,T}, rb::NTuple{D,T}, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat, D}
-    inv_hDp1 = inv(h^(D+1))
-    ws = Smoothed_gradient_kernel_function_dimensionless(K, ra, rb, h)
-    return ntuple(i -> inv_hDp1 * ws[i], D)
+@inline function Smoothed_gradient_kernel_function(::Type{K}, ra::NTuple{3,T}, rb::NTuple{3,T}, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+    rax, ray, raz = ra
+    rbx, rby, rbz = rb
+    dx = rax - rbx
+    dy = ray - rby
+    dz = raz - rbz
+    return Smoothed_gradient_kernel_function(K, dx, dy, dz, h)
 end
-
-@inline function Smoothed_gradient_kernel_function(::Type{K}, ra::NTuple{D,T}, rb::NTuple{D,S}, h::R) where {K<:AbstractSPHKernel, T<:AbstractFloat, S<:AbstractFloat, R<:AbstractFloat, D}
-    P = promote_type(T, S, R)
-    rap = ntuple(i -> convert(P, ra[i]), D)
-    rbp = ntuple(i -> convert(P, rb[i]), D)
-    hp   = convert(P, h)
-    return Smoothed_gradient_kernel_function(K, rap, rbp, hp)
-end
-
 

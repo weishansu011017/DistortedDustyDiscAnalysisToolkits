@@ -32,36 +32,41 @@ end
 
 """
     LOSint_Smoothed_kernel_function_dimensionless(
-        ::Type{<:AbstractSPHKernel},
-        r::T,
-        h::T,
-        ::Val{D},
-    ) -> T
+        ::Type{K},
+        qxy::T,
+    ) where {K<:AbstractSPHKernel, T<:AbstractFloat}
 
-Return the **dimension-less line-of-sight integral**
+Evaluate the **dimensionless line-of-sight (LOS) integrated SPH kernel**
+for a given transverse separation `qxy`.
 
-    I(q_xy) = ∫_{-R}^{R} Ẇ( √(q_xy² + q_z²) ) dq_z        (1)
+This function returns the precomputed or tabulated value of the LOS-integrated
+kernel shape function,
 
-already multiplied by the normalization constant **Cᴰ** that belongs to
-the *original* spatial dimension **D**.
+    I(q_xy) = ∫ w(√(q_xy² + q_z²)) dq_z ,
 
-* `D` is the kernel’s original dimension (before the LOS integration).  
-  – `Val(3)` ⇒ a 3-D kernel projected onto 2-D  
-  – `Val(2)` ⇒ a 2-D kernel projected onto 1-D  
-* `r` – in-plane distance ‖rₐ − r_b‖  
-* `h` – smoothing length (same precision as `r`)
+where `q_xy = r_xy / h` is the dimensionless projected distance perpendicular
+to the line of sight. The integration is truncated at the kernel support radius.
 
-The function returns zero if `q_xy = r/h` is outside the kernel support.
+If `qxy` exceeds the kernel support (`qxy ≥ q_max`), the function returns zero.
 
-### Example
-```julia
-# Dimension-less LOS integral of M4 spline with Float32 precision
-I = LOSint_Smoothed_kernel_function_dimensionless(
-        M4_spline, 0.8f0, 0.1f0, Val(3))
-```
+# Parameters
+- `::Type{K}`  
+  SPH kernel type, where `K <: AbstractSPHKernel`.
+- `qxy::T`  
+  Dimensionless projected (transverse) separation, `qxy = r_xy / h`.
+
+# Returns
+- `T`  
+  Dimensionless LOS-integrated kernel value.
+
+# Notes
+- This function is **dimensionless** and does not include any physical
+  prefactors involving `h`.
+- The support cutoff is determined by `KernelFunctionValid(K, T)`.
+- Intended for use in column-density or projected-quantity calculations.
+- Performs no heap allocation and is suitable for hot loops.
 """
-@inline function LOSint_Smoothed_kernel_function_dimensionless(::Type{K}, r::T, h::T, ::Val{D}) where {K<:AbstractSPHKernel, T<:AbstractFloat, D}
-    qxy = r / h
+@inline function LOSint_Smoothed_kernel_function_dimensionless(::Type{K}, qxy::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
     qxy ≥ KernelFunctionValid(K, T) && return zero(T)
     Iq = lookup_LOS(K, qxy)
     return Iq
@@ -69,92 +74,102 @@ end
 
 """
     LOSint_Smoothed_kernel_function(
-      ::Type{<:AbstractSPHKernel},
-      r::T,
-      h::T,
-      ::Val{D}
-    ) -> T
+        ::Type{<:AbstractSPHKernel},
+        r::T,
+        h::T
+    ) where {T<:AbstractFloat}
 
-Compute the **full** (dimensional) line-of-sight integrated SPH kernel:
+Evaluate the **line-of-sight (LOS) integrated SPH kernel** at a projected
+(semi-2D) distance `r`.
 
-    W_LOS(r,h) = h^(−D) · ∫ Ẇ(√(q_xy² + q_z²)) dq_z
+This function evaluates the kernel obtained by **integrating a 3D SPH kernel
+along the line-of-sight direction (z)**, i.e.
 
-where
-- `q_xy = r / h`
-- `R    = KernelFunctionValid(K, T)`
-- `Ẇ(q) = K()(q)` is the dimensionless kernel shape
-- `D`   is the compile-time dimension tag (`Val{D}`)
+    I(r_xy, h) = ∫ W(√(r_xy² + z²), see h) dz ,
+
+where `r = r_xy` is the distance in the plane perpendicular to the LOS.
+Internally, the computation is performed using the dimensionless projected
+coordinate `qxy = r / h`, followed by the appropriate physical scaling.
+
+⚠️ **Important:**  
+This function is only valid for quantities that are explicitly defined as
+**integrals along the z-direction** (e.g. column density, projected mass,
+LOS-integrated scalar fields). It must **not** be used for full 3D kernel
+evaluations or force/gradient calculations.
 
 # Parameters
 - `::Type{<:AbstractSPHKernel}`  
-  The kernel functor type (e.g. `M4_spline`, `C2_Wendland`).
+  SPH kernel type.
 - `r::T`  
-  In-plane distance ‖rₐ − r_b‖.
+  Projected (transverse) distance in the plane orthogonal to the line of sight
+  (i.e. √(dx² + dy²)).
 - `h::T`  
   Smoothing length.
-- `::Val{D}`  
-  Dimension before integration (1, 2, or 3).
 
 # Returns
 - `T`  
-  The LOS-integrated kernel value, including the factor `h^(−D)`, in precision `T`.
+  LOS-integrated kernel value with physical units (includes the `1/h` scaling).
 
-# Example
-```julia
-val = LOSint_Smoothed_kernel_function(
-    C2_Wendland, 1.2f0, 0.5f0, Val(3)
-)
-```
 """
-@inline function LOSint_Smoothed_kernel_function(::Type{K}, r::T, h::T, ::Val{D}) where {K<:AbstractSPHKernel, T<:AbstractFloat, D}
-
-    inv_hDminus1 = inv(h^(D-1))         
-    I_dimless = LOSint_Smoothed_kernel_function_dimensionless(K, r, h, Val(D))
-    return inv_hDminus1 * I_dimless
+@inline function LOSint_Smoothed_kernel_function(::Type{K}, r::T, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+    invh = inv(h)
+    qxy = r * invh
+    I_dimless = LOSint_Smoothed_kernel_function_dimensionless(K, qxy)
+    return invh * I_dimless
 end
 
-@inline function LOSint_Smoothed_kernel_function(::Type{K}, r::T, h::S, d::Val{D}) where {K<:AbstractSPHKernel, T<:AbstractFloat, S<:AbstractFloat, D}
+@inline function LOSint_Smoothed_kernel_function(::Type{K}, r::T, h::S) where {K<:AbstractSPHKernel, T<:AbstractFloat, S<:AbstractFloat}
     rp, hp = promote(r, h)
-    return LOSint_Smoothed_kernel_function(K, rp, hp, d)
+    return LOSint_Smoothed_kernel_function(K, rp, hp)
 end
 
-@inline function LOSint_Smoothed_kernel_function(::Type{K}, ra::AbstractVector{T}, rb::AbstractVector{T}, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
-    r2 = zero(T)
-    @inbounds for i in eachindex(ra, rb)
-        Δ = ra[i] - rb[i]
-        r2 += Δ * Δ
-    end
+"""
+    LOSint_Smoothed_kernel_function(
+        ::Type{<:AbstractSPHKernel},
+        ra::NTuple{2,T},
+        rb::NTuple{2,T},
+        h::T
+    ) where {T<:AbstractFloat}
+
+Evaluate the **line-of-sight (LOS) integrated SPH kernel** using projected
+2D coordinates of two points.
+
+This method computes the projected separation
+
+    r = √((xₐ − x_b)² + (yₐ − y_b)²)
+
+in the plane perpendicular to the line of sight, and evaluates the
+LOS-integrated kernel value
+
+    I(r, h) = ∫ W(√(r² + z²), h) dz .
+
+⚠️ **Important:**  
+This function is only valid for kernels that have been **explicitly integrated
+along the z-direction**. The input coordinates `ra` and `rb` must therefore
+represent **2D projected positions (x, y)**. Any z-coordinate information is
+assumed to have already been integrated out and must not be supplied here.
+
+# Parameters
+- `::Type{<:AbstractSPHKernel}`  
+  SPH kernel type.
+- `ra::NTuple{2,T}`  
+  Projected 2D position `(x, y)` of the evaluation point.
+- `rb::NTuple{2,T}`  
+  Projected 2D position `(x, y)` of the source particle.
+- `h::T`  
+  Smoothing length.
+
+# Returns
+- `T`  
+  LOS-integrated kernel value with physical units (includes the `1/h` scaling).
+"""
+@inline function LOSint_Smoothed_kernel_function(::Type{K}, ra::NTuple{2,T}, rb::NTuple{2,T}, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat}
+    rax, ray = ra
+    rbx, rby = rb
+    dx = rax - rbx
+    dy = ray - rby
+    r2 = dx * dx + dy * dy
     r = sqrt(r2)
-    dim = length(ra) + 1
-    inv_hDminus1 = inv(h^(dim-1))         
-    I_dimless = LOSint_Smoothed_kernel_function_dimensionless(K, r, h, Val(dim))
-    return inv_hDminus1 * I_dimless
+    return LOSint_Smoothed_kernel_function(K, r, h) 
 end
 
-@inline function LOSint_Smoothed_kernel_function(::Type{K}, ra::AbstractVector{T}, rb::AbstractVector{S}, h::R) where {K<:AbstractSPHKernel, T<:AbstractFloat, S<:AbstractFloat, R<:AbstractFloat}
-    P = promote_type(T, S, R)
-    rap = P.(ra)    
-    rbp = P.(rb)
-    hp  = P(h)
-    return LOSint_Smoothed_kernel_function(K, rap, rbp, hp)
-end
-
-@inline function LOSint_Smoothed_kernel_function(::Type{K}, ra::NTuple{D,T}, rb::NTuple{D,T}, h::T) where {K<:AbstractSPHKernel, T<:AbstractFloat, D}
-    r2 = zero(T)
-    @inbounds for i in eachindex(ra, rb)
-        Δ = ra[i] - rb[i]
-        r2 += Δ * Δ
-    end
-    r = sqrt(r2)
-    inv_hDminus1 = inv(h^(D))         
-    I_dimless = LOSint_Smoothed_kernel_function_dimensionless(K, r, h, Val(D + 1))
-    return inv_hDminus1 * I_dimless
-end
-
-@inline function LOSint_Smoothed_kernel_function(::Type{K}, ra::NTuple{D,T}, rb::NTuple{D,S}, h::R) where {K<:AbstractSPHKernel, T<:AbstractFloat, S<:AbstractFloat, R<:AbstractFloat, D}
-    P = promote_type(T, S, R)
-    rap = ntuple(i -> P(ra[i]), D)
-    rbp = ntuple(i -> P(rb[i]), D)
-    hp  = P(h)
-    return LOSint_Smoothed_kernel_function(K, rap, rbp, hp)
-end
