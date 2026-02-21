@@ -14,7 +14,7 @@ using .Threads
 using Statistics
 using LinearAlgebra
 using StaticArrays
-
+using PhantomRevealer.BatchEigvals
 
 # Growth rate estimation through Chen & Lin (2021)
 include(joinpath(@__DIR__, "growth_rate.jl"))

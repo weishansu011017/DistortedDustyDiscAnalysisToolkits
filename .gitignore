@@ -52,3 +52,5 @@ snap*.hdf5
 
 .local/*
 build/*
+lapack
+temp/*

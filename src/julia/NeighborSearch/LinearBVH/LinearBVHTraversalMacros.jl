@@ -1,24 +1,10 @@
 """
-    @_lbvh_gather_traversal(LBVH, reference_point, radius2, leaf_hit)
+    @LBVH_gather_traversal(LBVH, reference_point, radius2, leaf_hit)
 
-Emit a stackless LBVH traversal (depth-first, preorder) using the BRT `left` + `escape`
-tables, intended for **gather-style** queries.
+Stackless DFS traversal over a LinearBVH/BinaryRadixTree using
+`left` + `escape` links (no explicit stack, no recursion).
 
-The macro expands into a loop that visits unified node IDs starting from `brt.root`:
-
-- **Leaf node** (`is_leaf_id(node, nleaf)`):
-  - Convert unified node ID → leaf index via `leaf_index(node, nleaf)` (1..nleaf).
-  - Compute squared distance `d2 = _dist2_to_aabb(leaf_min, leaf_max, reference_point, leaf_idx)`.
-  - If `d2 <= radius2`, execute `leaf_hit` with `leaf_idx` available in a local `let` block.
-  - Advance to `node = escape[node]`.
-
-- **Internal node**:
-  - Convert unified node ID → internal index via `internal_index(node)` (1..ninternal).
-  - Compute `d2_node = _dist2_to_aabb(node_min, node_max, reference_point, node_idx)`.
-  - If `d2_node > radius2`, prune subtree by `node = escape[node]`.
-  - Otherwise descend by `node = left[node]`.
-
-Degenerate tree (`brt.root == 0`) falls back to brute-force over all leaves `1:nleaf`.
+This is the **gather** variant: the pruning radius is given by the `radius2` input.
 
 # Arguments
 - `LBVH`:
@@ -31,7 +17,7 @@ Degenerate tree (`brt.root == 0`) falls back to brute-force over all leaves `1:n
 - `leaf_hit`:
   An expression executed on each accepted leaf; inside it, local variables `leaf_idx` (1..nleaf) and `p2leaf_d2` are available.
 """
-macro _lbvh_gather_traversal(LBVH, reference_point, radius2, leafsym, d2sym, leaf_hit)
+macro LBVH_gather_traversal(LBVH, reference_point, radius2, leafsym, d2sym, leaf_hit)
     # hygiene: private/local variable declaration
     node_min_       = gensym(:node_min)
     node_max_       = gensym(:node_max)
@@ -118,9 +104,9 @@ macro _lbvh_gather_traversal(LBVH, reference_point, radius2, leafsym, d2sym, lea
 end
 
 """
-    @_lbvh_scatter_traversal(LBVH, reference_point, Kvalid, leaf_hit)
+    @LBVH_scatter_traversal(LBVH, reference_point, Kvalid, leaf_hit)
 
-Internal macro: stackless DFS traversal over a LinearBVH/BinaryRadixTree using
+Stackless DFS traversal over a LinearBVH/BinaryRadixTree using
 `left` + `escape` links (no explicit stack, no recursion).
 
 This is the **scatter** variant: the pruning radius is **node-dependent**.
@@ -134,7 +120,7 @@ For each internal node, subtree pruning uses `r = Kvalid * node_hmax[node_idx]`.
 - `leaf_hit`: 
    An expression executed on each accepted leaf; inside it, local variables `leaf_idx` (1..nleaf), `p2leaf_d2` and `hb` are available.
 """
-macro _lbvh_scatter_traversal(LBVH, reference_point, Kvalid, leafsym, d2sym, hbsym, leaf_hit)
+macro LBVH_scatter_traversal(LBVH, reference_point, Kvalid, leafsym, d2sym, hbsym, leaf_hit)
     # hygiene: private/local variable declaration
     node_min_       = gensym(:node_min)
     node_max_       = gensym(:node_max)
@@ -240,9 +226,9 @@ macro _lbvh_scatter_traversal(LBVH, reference_point, Kvalid, leafsym, d2sym, hbs
 end
 
 """
-    @_lbvh_symmetric_traversal(LBVH, reference_point, Kvalid, radius2, leaf_hit)
+    @LBVH_symmetric_traversal(LBVH, reference_point, Kvalid, radius2, leaf_hit)
 
-Internal macro: stackless DFS traversal over a LinearBVH/BinaryRadixTree using
+Stackless DFS traversal over a LinearBVH/BinaryRadixTree using
 `left` + `escape` links (no explicit stack, no recursion).
 
 This is the **symmetric** variant: each candidate uses a per-node acceptance radius
@@ -261,7 +247,7 @@ SPH smoothing-radius scale (`Kvalid*h`).
 - `leaf_hit`: 
    An expression executed on each accepted leaf; inside it, local variables `leaf_idx` (1..nleaf), `p2leaf_d2` and `hb` are available.
 """
-macro _lbvh_symmetric_traversal(LBVH, reference_point, Kvalid, radius2, leafsym, d2sym, hbsym, leaf_hit)
+macro LBVH_symmetric_traversal(LBVH, reference_point, Kvalid, radius2, leafsym, d2sym, hbsym, leaf_hit)
     # hygiene: private/local variable declaration
     node_min_       = gensym(:node_min)
     node_max_       = gensym(:node_max)

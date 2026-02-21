@@ -26,7 +26,7 @@
     leaf_idx    :: Int = zero(Int)
     p2leaf_d2   :: T   = zero(T)
 
-    NeighborSearch.@_lbvh_gather_traversal LBVH reference_point radius2 leaf_idx p2leaf_d2 begin
+    NeighborSearch.@LBVH_gather_traversal LBVH reference_point radius2 leaf_idx p2leaf_d2 begin
         ########### Found a neighbor, do accumulation ###########
         @inbounds begin
             rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
@@ -100,7 +100,7 @@ end
     p2leaf_d2   :: T   = zero(T)
     hb          :: T   = zero(T)
 
-    NeighborSearch.@_lbvh_scatter_traversal LBVH reference_point Kvalid leaf_idx p2leaf_d2 hb begin
+    NeighborSearch.@LBVH_scatter_traversal LBVH reference_point Kvalid leaf_idx p2leaf_d2 hb begin
         ########### Found a neighbor, do accumulation ###########
         @inbounds begin
             rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])
@@ -176,7 +176,7 @@ end
     p2leaf_d2   :: T   = zero(T)
     hb          :: T   = zero(T)
 
-    NeighborSearch.@_lbvh_symmetric_traversal LBVH reference_point Kvalid radius2 leaf_idx p2leaf_d2 hb begin
+    NeighborSearch.@LBVH_symmetric_traversal LBVH reference_point Kvalid radius2 leaf_idx p2leaf_d2 hb begin
         ########### Found a neighbor, do accumulation ###########
         @inbounds begin
             rb = (input.x[leaf_idx], input.y[leaf_idx], input.z[leaf_idx])

@@ -10,6 +10,10 @@ using Reexport
 include(joinpath(@__DIR__, "julia", "Tools", "Tools.jl"))
 @reexport using .Tools
 
+## Handwrite Eigenvalues solver
+include(joinpath(@__DIR__, "julia", "BatchEigvals", "BatchEigvals.jl"))
+@reexport using .BatchEigvals
+
 ## ParticleDataFrame
 include(joinpath(@__DIR__, "julia", "Particles", "Particles.jl"))
 @reexport using .Particles
@@ -48,13 +52,6 @@ include(joinpath(@__DIR__, "julia", "ExtDummy", "CUDAExtDummy.jlh"))
 include(joinpath(@__DIR__, "julia", "ExtDummy", "MetalExtDummy.jlh"))        
 @reexport using .MetalExtDummy
 
-
-
-
-
-function _init_Core()      
-    init_QR8buffer_bufferl!()        
-end
 ################################################
 
 
@@ -68,9 +65,5 @@ Get the folder of currently loaded PhantomRevealer
 """
 function get_PhantomRevealer_path()
     return dirname(dirname(pathof(PhantomRevealer)))
-end
-
-function __init__()         
-    _init_Core()     
 end
 end
