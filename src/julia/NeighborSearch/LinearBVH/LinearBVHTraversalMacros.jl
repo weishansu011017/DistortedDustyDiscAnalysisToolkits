@@ -64,7 +64,7 @@ macro LBVH_gather_traversal(LBVH, reference_point, radius2, leafsym, d2sym, leaf
         # No internal node: brute force leaves
         if iszero($root_)
             @inbounds for $leaf_idx_ in 1:$nleaf_
-                $d2_ = _dist2_to_aabb($leaf_min_, $leaf_max_, $rp_, $leaf_idx_)
+                $d2_ = _squared_distance_point_aabb($leaf_min_, $leaf_max_, $rp_, $leaf_idx_)
                 if $d2_ <= $r2_
                     $leafsym_ = $leaf_idx_
                     $d2sym_   = $d2_
@@ -77,7 +77,7 @@ macro LBVH_gather_traversal(LBVH, reference_point, radius2, leafsym, d2sym, leaf
                 # Leaf: process then jump by escape
                 if is_leaf_id($node_, $nleaf_)
                     $leaf_idx_ = leaf_index($node_, $nleaf_)
-                    $d2_ = _dist2_to_aabb($leaf_min_, $leaf_max_, $rp_, $leaf_idx_)
+                    $d2_ = _squared_distance_point_aabb($leaf_min_, $leaf_max_, $rp_, $leaf_idx_)
                     if $d2_ <= $r2_
                         $leafsym_ = $leaf_idx_
                         $d2sym_   = $d2_
@@ -89,7 +89,7 @@ macro LBVH_gather_traversal(LBVH, reference_point, radius2, leafsym, d2sym, leaf
 
                 # Internal: AABB reject => prune subtree
                 $node_idx_ = internal_index($node_)
-                $d2_node_ = _dist2_to_aabb($node_min_, $node_max_, $rp_, $node_idx_)
+                $d2_node_ = _squared_distance_point_aabb($node_min_, $node_max_, $rp_, $node_idx_)
                 if $d2_node_ > $r2_
                     @inbounds $node_ = $escape_[Int($node_)]
                     continue
@@ -178,7 +178,7 @@ macro LBVH_scatter_traversal(LBVH, reference_point, Kvalid, leafsym, d2sym, hbsy
                 $hb_    = $leaf_h_[$leaf_idx_]
                 $r_     = $Kvalid_ * $hb_
                 $r2_    = $r_ * $r_
-                $d2_ = _dist2_to_aabb($leaf_min_, $leaf_max_, $rp_, $leaf_idx_)
+                $d2_ = _squared_distance_point_aabb($leaf_min_, $leaf_max_, $rp_, $leaf_idx_)
                 if $d2_ <= $r2_
                     $leafsym_ = $leaf_idx_
                     $d2sym_   = $d2_
@@ -195,7 +195,7 @@ macro LBVH_scatter_traversal(LBVH, reference_point, Kvalid, leafsym, d2sym, hbsy
                     $hb_    = $leaf_h_[$leaf_idx_]
                     $r_     = $Kvalid_ * $hb_
                     $r2_    = $r_ * $r_
-                    $d2_ = _dist2_to_aabb($leaf_min_, $leaf_max_, $rp_, $leaf_idx_)
+                    $d2_ = _squared_distance_point_aabb($leaf_min_, $leaf_max_, $rp_, $leaf_idx_)
                     if $d2_ <= $r2_
                         $leafsym_ = $leaf_idx_
                         $d2sym_   = $d2_
@@ -211,7 +211,7 @@ macro LBVH_scatter_traversal(LBVH, reference_point, Kvalid, leafsym, d2sym, hbsy
                 $hb_    = $node_hmax_[$node_idx_]
                 $r_     = $Kvalid_ * $hb_
                 $r2_    = $r_ * $r_
-                $d2_node_ = _dist2_to_aabb($node_min_, $node_max_, $rp_, $node_idx_)
+                $d2_node_ = _squared_distance_point_aabb($node_min_, $node_max_, $rp_, $node_idx_)
                 if $d2_node_ > $r2_
                     @inbounds $node_ = $escape_[Int($node_)]
                     continue
@@ -307,7 +307,7 @@ macro LBVH_symmetric_traversal(LBVH, reference_point, Kvalid, radius2, leafsym, 
                 $hb_    = $leaf_h_[$leaf_idx_]
                 $r_     = $Kvalid_ * $hb_
                 $r2_    = max($radius2_, $r_ * $r_)
-                $d2_ = _dist2_to_aabb($leaf_min_, $leaf_max_, $rp_, $leaf_idx_)
+                $d2_ = _squared_distance_point_aabb($leaf_min_, $leaf_max_, $rp_, $leaf_idx_)
                 if $d2_ <= $r2_
                     $leafsym_ = $leaf_idx_
                     $d2sym_   = $d2_
@@ -324,7 +324,7 @@ macro LBVH_symmetric_traversal(LBVH, reference_point, Kvalid, radius2, leafsym, 
                     $hb_    = $leaf_h_[$leaf_idx_]
                     $r_     = $Kvalid_ * $hb_
                     $r2_    = max($radius2_, $r_ * $r_)
-                    $d2_ = _dist2_to_aabb($leaf_min_, $leaf_max_, $rp_, $leaf_idx_)
+                    $d2_ = _squared_distance_point_aabb($leaf_min_, $leaf_max_, $rp_, $leaf_idx_)
                     if $d2_ <= $r2_
                         $leafsym_ = $leaf_idx_
                         $d2sym_   = $d2_
@@ -340,7 +340,7 @@ macro LBVH_symmetric_traversal(LBVH, reference_point, Kvalid, radius2, leafsym, 
                 $hb_    = $node_hmax_[$node_idx_]
                 $r_     = $Kvalid_ * $hb_
                 $r2_    = max($radius2_, $r_ * $r_)
-                $d2_node_ = _dist2_to_aabb($node_min_, $node_max_, $rp_, $node_idx_)
+                $d2_node_ = _squared_distance_point_aabb($node_min_, $node_max_, $rp_, $node_idx_)
                 if $d2_node_ > $r2_
                     @inbounds $node_ = $escape_[Int($node_)]
                     continue

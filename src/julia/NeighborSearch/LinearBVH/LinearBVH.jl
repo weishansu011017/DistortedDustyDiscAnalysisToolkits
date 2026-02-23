@@ -159,7 +159,7 @@ function _build_internal_aabb!(LBVH::LinearBVH{D}, visited :: AtomicMemory{UInt3
 end
 
 # Toolbox
-@inline function _dist2_to_aabb(aabb_min :: NTuple{D, VF} , aabb_max :: NTuple{D, VF}, point :: NTuple{D, TF}, idx :: Int) where {D,TF <: AbstractFloat, VF <: AbstractVector{TF}}
+@inline function _squared_distance_point_aabb(aabb_min :: NTuple{D, VF} , aabb_max :: NTuple{D, VF}, point :: NTuple{D, TF}, idx :: Int) where {D,TF <: AbstractFloat, VF <: AbstractVector{TF}}
     # Contract:
     # - `idx` must index the provided AABB arrays directly.
     #   i.e. `idx ∈ 1:length(aabb_min[d])` for all d.
