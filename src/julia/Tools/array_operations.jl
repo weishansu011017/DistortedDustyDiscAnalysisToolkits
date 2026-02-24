@@ -176,3 +176,27 @@ function invert_order(order :: V) where {TI <: Integer, V <: AbstractVector{TI}}
     return invorder
 end
 
+"""
+    maxabs(array::A) where {T<:Complex, A<:AbstractArray{T}}
+
+Compute the maximum absolute value of a complex array using a single-pass
+squared-magnitude reduction:
+
+    ‖A‖ₘₐₓ = maxᵢ |aᵢ| = √( maxᵢ abs2(aᵢ) )
+
+# Parameters
+- `array::AbstractArray{T}`: Complex-valued array (`T <: Complex`).
+
+# Returns
+- `Real`: The maximum absolute value of the elements of `array`,
+  with type `Base._realtype(T)`.
+"""
+@inline function maxabs(array :: A) where {T <: Complex, A <: AbstractArray{T}}
+    RT = Base._realtype(T)
+    max2 = zero(RT)
+    @inbounds @simd for z in array
+        absz2 = abs2(z)
+        max2 = ifelse(absz2 > max2, absz2, max2)
+    end
+    return sqrt(max2)
+end

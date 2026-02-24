@@ -44,16 +44,12 @@ function ClassicalSIGrowthRateInput(St      ::  T,
 end
 
 @inline function _realλ_max(M :: MMatrix{N, N, ComplexF64}) where {N}
-    # buf  = _QR8buffer_pool[Threads.threadid()]
-
-    # buf.reflector .= LinearAlgebra.LAPACK.geev!('N','N',M)[1]
-
-    eigenvalues = beigvals!(M)
+    eigenvalues = tiny_eigvals!(M)
 
     λmax = -Inf
     @inbounds @simd for k = SOneTo(N)
         r = real(eigenvalues[k])
-        λmax = r > λmax ? r : λmax
+        λmax = ifelse(r > λmax, r, λmax)
     end
     return λmax
 end

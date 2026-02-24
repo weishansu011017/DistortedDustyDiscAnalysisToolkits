@@ -11,8 +11,8 @@ include(joinpath(@__DIR__, "julia", "Tools", "Tools.jl"))
 @reexport using .Tools
 
 ## Handwrite Eigenvalues solver
-include(joinpath(@__DIR__, "julia", "BatchEigvals", "BatchEigvals.jl"))
-@reexport using .BatchEigvals
+include(joinpath(@__DIR__, "julia", "TinyEigvals", "TinyEigvals.jl"))
+@reexport using .TinyEigvals
 
 ## ParticleDataFrame
 include(joinpath(@__DIR__, "julia", "Particles", "Particles.jl"))
