@@ -40,8 +40,6 @@ function tiny_eigvals! end
 for N in 1:15
     @eval begin
         function tiny_eigvals!(M::MMatrix{$N,$N,T}) where {T<:Complex}
-            W    = zero(MVector{$N,T})
-
             # WORK: length 2N
             work  = zero(MVector{$(2N) ,T})
 
@@ -55,14 +53,8 @@ for N in 1:15
             # tau stored in work[itau : itau+N-1], scratch in work[iwrk : end]
             _hessenberg_reduce!(M, ilo, ihi, work)
 
-            # Step 3: QR/Schur eigenvalues (ZHSEQR('E','N')-like)
-            _schur_eigvals!(M, ilo, ihi, W, work)
-
-            # Step 4: undo scaling on eigenvalues
-            _unscale!(W, s)
-
-            # Output: using Tuple to escape
-            Wout = Tuple(W)
+            # Step 3: QR/Schur eigenvalues (ZHSEQR('E','N')-like) & Step 4: undo scaling on eigenvalues
+            Wout = _schur_eigvals!(M, ilo, ihi, s, work)
             return Wout
         end
     end

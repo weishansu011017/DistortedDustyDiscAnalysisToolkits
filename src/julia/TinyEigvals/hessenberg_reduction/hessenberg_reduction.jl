@@ -24,7 +24,9 @@ end
     br = real(b); bi = imag(b)
 
     if br == 0 && bi == 0
-        return T(ar/br, ai/br)  # will produce Inf/NaN like Base; keeps behavior explicit
+        RT = Base._realtype(T)
+        nan = RT(NaN)
+        return T(nan, nan)
     end
 
     if abs(br) >= abs(bi)
@@ -104,7 +106,8 @@ end
     # Rare pathological case: α == beta (denom == 0). Keep behavior explicit.
     # In well-behaved Hessenberg reduction this should basically never trigger.
     if dr == zero(RT) && di == zero(RT)
-        invden = one(T) / T(dr, di)  # produces Inf/NaN like Base (rare path)
+        nan = RT(NaN)
+        invden = T(nan, nan)
     else
         adr = abs(dr)
         adi = abs(di)

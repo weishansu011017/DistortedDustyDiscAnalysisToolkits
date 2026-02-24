@@ -1,55 +1,47 @@
-@inline function _schur_eigvals!(M :: MMatrix{N, N, T}, ilo :: Int, ihi :: Int, W :: MVector{N, T}, work :: MVector{L, T}) where {N, L, T <: Complex}
-
+@inline function _schur_eigvals!(M :: MMatrix{N, N, T}, ilo :: Int, ihi :: Int, α :: RT, work :: MVector{L, T}) where {N, L, RT <: AbstractFloat, T <: Complex{RT}}
     # ----------------------------------------------------------------------
-    # _schur_eigvals! : small-N Hessenberg QR eigenvalue iteration
+    # _schur_eigvals_scaled! : small-N Hessenberg QR eigenvalue iteration (eigs-only)
     #
     # Intended LAPACK correspondence:
-    #   - Implements the small-matrix branch of ZHSEQR (N <= NTINY=15) where
-    #     ZHSEQR delegates to ZLAHQR for QR iteration/deflation on a Hessenberg H.
+    #   - Implements the small-matrix branch of ZHSEQR (N <= NTINY=15) where ZHSEQR
+    #     delegates to ZLAHQR for QR iteration/deflation on a Hessenberg matrix H.
     #
     # Assumptions / contracts:
-    #   - M is an upper Hessenberg matrix H.
-    #   - Balancing/permutation (ZGEBAL) has already isolated eigenvalues outside
-    #     the active window [ilo, ihi], i.e. H is upper triangular in 1:ilo-1 and
-    #     ihi+1:N, and those diagonal entries are already converged eigenvalues.
+    #   - M is an upper Hessenberg matrix H on entry (after ZGEHRD-like reduction).
+    #   - Balancing/permutation (ZGEBAL) has already isolated eigenvalues outside the
+    #     active window [ilo, ihi], i.e. H is upper triangular in 1:ilo-1 and ihi+1:N.
+    #   - This routine may overwrite M inside the active window during QR steps.
     #
     # Output behavior (eigenvalues-only):
-    #   - Only eigenvalues are produced in W. We do not compute/accumulate Schur
-    #     vectors (WANTZ=false) and do not require the full Schur form (WANTT=false).
-    #   - In LAPACK ZLAHQR terminology, updates are restricted to the active window:
-    #       I1 = Lsplit, I2 = i  (as in the eigenvalues-only path).
+    #   - We do NOT compute Schur vectors (WANTZ=false) and do NOT form the full Schur
+    #     form (WANTT=false). Only eigenvalues are produced.
+    #   - Eigenvalues are returned as an `NTuple{N,T}`; in the normal path we return
+    #     `diag(M)` after convergence/deflation (optionally scaled by `invα`).
     #
     # Algorithm overview (ZLAHQR core):
-    #   1) Copy isolated eigenvalues outside [ilo, ihi] into W (ZHSEQR wrapper step).
-    #   2) Hessenberg housekeeping:
-    #        - clear entries below the first subdiagonal in the active region
+    #   1) Hessenberg housekeeping in the active region:
+    #        - clear entries below the first subdiagonal
     #        - normalize phases so H(k,k-1) are real (>=0)
-    #   3) Deflation loop from bottom to top:
+    #   2) Deflation loop from bottom to top:
     #        - find negligible subdiagonal (deflation split) using ZLAHQR criteria
     #          (including Ahues–Tisseur conservative test)
-    #        - if a 1×1 block splits off, record W[i] = H[i,i] and shrink i
+    #        - if a 1×1 block splits off, shrink the active index `i`
     #        - otherwise choose shift μ (Wilkinson / exceptional), choose start row m,
     #          and apply one implicit single-shift Hessenberg QR step (bulge chasing)
     #        - re-normalize bottom subdiagonal phase to remain real
+    #   3) On success, eigenvalues are taken from the diagonal entries H(k,k).
     #
     # Failure policy:
-    #   - LAPACK would return INFO>0 on nonconvergence; here we DO NOT throw any error. Instead, NaN will be written in `W`
+    #   - LAPACK returns INFO>0 on nonconvergence. Here we DO NOT throw; instead we
+    #     return a tuple filled with NaNs to mark failure.
     # ----------------------------------------------------------------------
-
-    # [ZHSEQR] "copy eigenvalues isolated by ZGEBAL"
-    #   IF( ILO.GT.1 ) CALL ZCOPY( ILO-1, H, LDH+1, W, 1 )
-    #   IF( IHI.LT.N ) CALL ZCOPY( N-IHI, H(IHI+1,IHI+1), LDH+1, W(IHI+1), 1 )
-    _copy_isolated_eigvals!(W, M, ilo, ihi)
-
+    invα = inv(α)
     @inbounds begin
         # [ZHSEQR] Quick return if possible:
         #   IF( ILO.EQ.IHI ) THEN W(ILO)=H(ILO,ILO); RETURN
         # Also handle degenerate "empty active window" (ilo>ihi).
         if ilo ≥ ihi
-            if ilo == ihi
-                W[ilo] = M[ilo, ilo]
-            end
-            return nothing
+            return ntuple(k -> M[k,k] * invα, Val(N))
         end
 
         # ------------------------------------------------------------------
@@ -106,7 +98,6 @@
 
                 # (B) If a 1×1 block split off at the bottom, record eigenvalue and shrink
                 if Lsplit >= i
-                    W[i] = M[i, i]
                     kdefl = 0
                     i = Lsplit - 1
                     converged = true
@@ -131,17 +122,13 @@
             end
 
             if !converged
-                RT = Base._realtype(T)
                 nan = RT(NaN)
                 bad = T(nan, nan)
-                @inbounds for i in 1:N
-                    W[i] = bad
-                end
-                return nothing
+                return ntuple(_ -> bad, Val(N))
             end
         end
     end
-    return nothing
+    return ntuple(k -> M[k,k] * invα, Val(N))
 end
 
 # Toolbox
