@@ -37,9 +37,41 @@ None.
 """
 function tiny_eigvals! end
 
+"""
+    tiny_eigvals(M::SMatrix{N,N,T}) where {N, T<:Complex}
+
+Compute the eigenvalues of a tiny complex square matrix `M` (compile-time size `N`)
+without modifying the input, by copying `M` into a mutable `MMatrix` workspace and
+running [`tiny_eigvals!`](@ref) on that workspace. This provides a convenience API
+for immutable static matrices.
+
+This method is specialized for `N ≤ 15` (methods are generated for each `N ∈ 1:15`)
+and returns the eigenvalues as a `Tuple{Vararg{T,N}}` to keep the return type
+`isbits`. The input `M` is **not** modified.
+
+# Parameters
+- `M::SMatrix{N,N,T}`: Input matrix (not modified). `T` must be a complex type.
+
+# Keyword Arguments
+None.
+
+# Returns
+- `Wout::Tuple{Vararg{T,N}}`: Eigenvalues of `M` as a length-`N` tuple.
+
+# Notes
+- Supported sizes: `1 ≤ N ≤ 15`. For other sizes, no method is defined; use
+  `LinearAlgebra.eigvals` (LAPACK-backed) instead.
+- Internally allocates a mutable `MMatrix{N,N,T}` copy of `M`. This is required
+  because the pipeline overwrites the matrix in-place.
+- The algorithm stages are identical to `tiny_eigvals!`: scaling, balancing,
+  Hessenberg reduction, QR/Schur eigenvalues, and unscaling.
+"""
+function tiny_eigvals end
+
+
 for N in 1:15
     @eval begin
-        function tiny_eigvals!(M::MMatrix{$N,$N,T}) where {T<:Complex}
+        @inline function tiny_eigvals!(M::MMatrix{$N, $N, T}) where {T <: Complex}
             # WORK: length 2N
             work  = zero(MVector{$(2N) ,T})
 
@@ -55,6 +87,22 @@ for N in 1:15
 
             # Step 3: QR/Schur eigenvalues (ZHSEQR('E','N')-like) & Step 4: undo scaling on eigenvalues
             Wout = _schur_eigvals!(M, ilo, ihi, s, work)
+            return Wout
+        end
+        function tiny_eigvals(M::MMatrix{$N, $N, T}) where {T <: Complex}
+            Mmod = zero(MMatrix{$N, $N, T})
+            @inbounds begin
+                Mmod .= M
+            end
+            Wout = tiny_eigvals!(Mmod)
+            return Wout
+        end
+        function tiny_eigvals(M::SMatrix{$N, $N, T}) where {T <: Complex}
+            Mmod = zero(MMatrix{$N, $N, T})
+            @inbounds begin
+                Mmod .= M
+            end
+            Wout = tiny_eigvals!(Mmod)
             return Wout
         end
     end

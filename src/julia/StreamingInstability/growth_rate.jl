@@ -154,8 +154,8 @@ Allowed an vector entrence for Κx and Κz to estimate the growth rate.
     else
         M = zero(MMatrix{8, 8, ComplexF64})
         @inbounds for j in eachindex(Κzs), i in eachindex(Κxs)
-            Κx = Κxs
-            Κz = Κzs
+            Κx = Κxs[i]
+            Κz = Κzs[j]
             A = -im*Κx*ωx
             B = -im*Κx*vx
             if any(x -> !isfinite(x), (Κx, Κz, A, B))
