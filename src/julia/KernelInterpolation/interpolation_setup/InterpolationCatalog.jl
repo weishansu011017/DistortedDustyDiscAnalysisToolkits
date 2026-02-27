@@ -111,23 +111,55 @@ normalization; all others default to enabled.
     deterministic, expanded order.
 
 """
-function InterpolationCatalog(
-    scalar_names::NTuple{N,Symbol}, scalar_slots::NTuple{N,Int},
-    grad_names::NTuple{G,Symbol}, grad_slots::NTuple{G,Int},
-    div_names::NTuple{D,Symbol}, div_slots::NTuple{D,NTuple{3,Int}},
-    curl_names::NTuple{C,Symbol}, curl_slots::NTuple{C,NTuple{3,Int}},
-) where {N,G,D,C}
+function InterpolationCatalog(;
+    scalar_names::Tuple{Vararg{Symbol}} = (),
+    scalar_slots::Tuple{Vararg{Int}} = (),
+    grad_names::Tuple{Vararg{Symbol}} = (),
+    grad_slots::Tuple{Vararg{Int}} = (),
+    div_names::Tuple{Vararg{Symbol}} = (),
+    div_slots::Tuple{Vararg{NTuple{3,Int}}} = (),
+    curl_names::Tuple{Vararg{Symbol}} = (),
+    curl_slots::Tuple{Vararg{NTuple{3,Int}}} = (),
+)
+    N = length(scalar_names)
+    G = length(grad_names)
+    D = length(div_names)
+    C = length(curl_names)
+
+    length(scalar_slots) == N || throw(DimensionMismatch("scalar_slots length $(length(scalar_slots)) != scalar_names length $N"))
+    length(grad_slots)   == G || throw(DimensionMismatch("grad_slots length $(length(grad_slots)) != grad_names length $G"))
+    length(div_slots)    == D || throw(DimensionMismatch("div_slots length $(length(div_slots)) != div_names length $D"))
+    length(curl_slots)   == C || throw(DimensionMismatch("curl_slots length $(length(curl_slots)) != curl_names length $C"))
+
     L = N + 3G + D + 3C
     ordered = _ordered_quantity_names(Val(L), scalar_names, grad_names, div_names, curl_names)
     scalar_norm = _shepard_normalization_flag(scalar_names)
+
     return InterpolationCatalog{N,G,D,C,L}(
-        scalar_names, scalar_slots, scalar_norm, 
+        scalar_names, scalar_slots, scalar_norm,
         grad_names, grad_slots,
         div_names, div_slots,
         curl_names, curl_slots,
         ordered
     )
 end
+# function InterpolationCatalog(
+#     scalar_names::NTuple{N,Symbol}, scalar_slots::NTuple{N,Int},
+#     grad_names::NTuple{G,Symbol}, grad_slots::NTuple{G,Int},
+#     div_names::NTuple{D,Symbol}, div_slots::NTuple{D,NTuple{3,Int}},
+#     curl_names::NTuple{C,Symbol}, curl_slots::NTuple{C,NTuple{3,Int}},
+# ) where {N,G,D,C}
+#     L = N + 3G + D + 3C
+#     ordered = _ordered_quantity_names(Val(L), scalar_names, grad_names, div_names, curl_names)
+#     scalar_norm = _shepard_normalization_flag(scalar_names)
+#     return InterpolationCatalog{N,G,D,C,L}(
+#         scalar_names, scalar_slots, scalar_norm, 
+#         grad_names, grad_slots,
+#         div_names, div_slots,
+#         curl_names, curl_slots,
+#         ordered
+#     )
+# end
 
 scalar_index(cat::InterpolationCatalog, name::Symbol) =
     cat.scalar_slots[findfirst(==(name), cat.scalar_names)]

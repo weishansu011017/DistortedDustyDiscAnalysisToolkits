@@ -156,11 +156,11 @@ function build_input(data::ParticleDataFrame,
         ntuple(i -> column_index[comps[i]], 3)
     end for name in curls)
 
-    catalog = InterpolationCatalog(
-        scalar_names, scalar_slots,
-        grad_names, grad_slots,
-        div_names, div_slots,
-        curl_names, curl_slots
+    catalog = InterpolationCatalog(;
+        scalar_names = scalar_names, scalar_slots = scalar_slots,
+        grad_names = grad_names, grad_slots = grad_slots,
+        div_names = div_names, div_slots = div_slots,
+        curl_names = curl_names, curl_slots = curl_slots
     )
 
     return input, catalog
@@ -299,11 +299,11 @@ function build_input(data::ParticleDataFrame,
         ntuple(i -> column_index[comps[i]], 3)
     end for name in curls)
 
-    catalog = InterpolationCatalog(
-        scalar_names, scalar_slots,
-        grad_names, grad_slots,
-        div_names, div_slots,
-        curl_names, curl_slots
+    catalog = InterpolationCatalog(;
+        scalar_names = scalar_names, scalar_slots = scalar_slots,
+        grad_names = grad_names, grad_slots = grad_slots,
+        div_names = div_names, div_slots = div_slots,
+        curl_names = curl_names, curl_slots = curl_slots
     )
 
     return input, catalog

@@ -54,8 +54,6 @@ Immutable SPH input container for read-only interpolation queries.
 
 This struct is designed for fast and safe interpolation on CPU and GPU. It contains all the necessary SPH quantities. The `quant` field holds `NCOLUMN` scalar fields (e.g., pressure, temperature) in a tuple.
 
-**This struct is fully isbits and read-only** — all internal data should be pre-filled and never mutated. Intended for bulk interpolation kernels.
-
 # Type Parameters
 - `T`: Floating-point type (e.g., `Float32` or `Float64`).
 - `V`: An `AbstractVector{T}`, the vector type used throughout.
@@ -65,7 +63,7 @@ This struct is designed for fast and safe interpolation on CPU and GPU. It conta
 # Fields
 - `Npart::Int64` — Number of active (valid) particles within the batch.
 - `ha::T` — Target smoothing length for the reference point.
-- `smoothed_kernel::Type{K}` — SPH kernel function instance.
+- `smoothed_kernel::K` — SPH kernel function instance.
 - `x, y, z::V` — Particle positions in Cartesian coordinates.
 - `m::V` — Particle masses.
 - `h::V` — Particle smoothing lengths.
@@ -97,6 +95,53 @@ function Adapt.adapt_structure(to, x :: ITPINPUT) where {T<:AbstractFloat, V<:Ab
         ntuple(i->Adapt.adapt(to, x.quant[i]), NCOLUMN)
     )
 end
+
+# Basic constructor
+"""
+    InterpolationInput(
+        x::V, y::V, z::V, m::V, h::V, ρ::V,
+        quant::NTuple{NCOLUMN, V};
+        smoothed_kernel::Type{K}=M5_spline
+    ) where {NCOLUMN, T<:AbstractFloat, V<:AbstractVector{T}, K<:AbstractSPHKernel}
+
+Construct an `InterpolationInput{T,V,K,NCOLUMN}` from per-particle arrays.
+
+This constructor validates that all provided arrays have the same particle count and then returns a input container for SPH single-point interpolation kernels.
+
+# Parameters
+- `x::V`: Particle x-coordinates.
+- `y::V`: Particle y-coordinates.
+- `z::V`: Particle z-coordinates.
+- `m::V`: Particle masses.
+- `h::V`: Particle smoothing lengths.
+- `ρ::V`: Particle densities.
+- `quant::NTuple{NCOLUMN, V}`: Tuple of `NCOLUMN` scalar fields, each a per-particle vector of length `Npart`.
+
+# Keyword Arguments
+- `smoothed_kernel::Type{K}=M5_spline`: Kernel *type* used to build the stored kernel instance via `smoothed_kernel()`.
+
+# Returns
+- `InterpolationInput{T,V,K,NCOLUMN}`: An immutable container holding the validated particle data and a kernel instance.
+
+"""
+function InterpolationInput(x :: V, y :: V, z :: V, m :: V, h :: V, ρ :: V, quant :: NTuple{NCOLUMN, V}; smoothed_kernel::Type{K}=M5_spline) where {NCOLUMN, T <: AbstractFloat, V <: AbstractVector{T}, K <: AbstractSPHKernel}
+    # Verified whether all the column has the same particle
+    Npart = length(m)
+    length(x) == Npart || throw(DimensionMismatch("x length $(length(x)) != Nparticles $Npart"))
+    length(y) == Npart || throw(DimensionMismatch("y length $(length(y)) != Nparticles $Npart"))
+    length(z) == Npart || throw(DimensionMismatch("z length $(length(z)) != Nparticles $Npart"))
+    length(h) == Npart || throw(DimensionMismatch("h length $(length(h)) != Nparticles $Npart"))
+    length(ρ) == Npart || throw(DimensionMismatch("ρ length $(length(ρ)) != Nparticles $Npart"))
+    @inbounds for j in 1:NCOLUMN
+        length(quant[j]) == Npart || throw(DimensionMismatch("quant[$j] length $(length(quant[j])) != Nparticles length $Npart"))
+    end
+
+    input = InterpolationInput{T, V, K, NCOLUMN}(
+        Npart, smoothed_kernel(), x, y, z, m, h, ρ, quant
+    )
+    return input
+end
+
 
 # Some useful function 
 ## Get "Valid" range of data (the other would be 0)
