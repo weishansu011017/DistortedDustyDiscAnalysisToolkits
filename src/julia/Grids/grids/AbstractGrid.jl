@@ -32,3 +32,19 @@ stored arrays or values.
 - `Type{TF}`: The floating-point element type parameter of the grid type.
 """
 @inline datatype(::Type{GRID}) where {TF <: AbstractFloat, GRID <: AbstractGrid{TF}} = TF
+
+"""
+    datatype(::GRID) where {TF<:AbstractFloat, GRID<:AbstractGrid{TF}}
+
+Return the floating-point element type parameter `TF` of an `AbstractGrid{TF}` instance.
+
+This method extracts `TF` purely from the parametric type, without inspecting any
+stored arrays or values.
+
+# Parameters
+- `::GRID`: An grid with concrete grid type `GRID <: AbstractGrid{TF}`.
+
+# Returns
+- `Type{TF}`: The floating-point element type parameter of the grid type.
+"""
+@inline datatype(:: GRID) where {TF <: AbstractFloat, GRID <: AbstractGrid{TF}} = TF
