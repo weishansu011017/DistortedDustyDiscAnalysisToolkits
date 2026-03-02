@@ -185,30 +185,23 @@ launches the interpolation kernel, and copies results back to host memory.
 function PhantomRevealer.GeneralGrid_interpolation(:: CUDAComputeBackend, grid_template::GeneralGrid{D}, input::ITPINPUT, catalog::InterpolationCatalog{N, G, Div, C, L}, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {D, N, G, Div, C, L, T <: AbstractFloat, ITPINPUT <: InterpolationInput{T}, ITPSTRATEGY <: AbstractInterpolationStrategy}
     grids, LBVH, names, catalog_consice, p = PhantomRevealer.initialize_interpolation(PhantomRevealer.CPUComputeBackend(), grid_template, input, catalog)
     # To CuVector
-    @info "Copying interpolated grids to device memory..."
-    @time begin
+    @info "     SPH Interpolation: Copying interpolated grids to device memory..."
     input_Cu = to_CuVector(input)
     grids_Cu = ntuple(i -> to_CuVector(grids[i]), Val(L))
     LBVH_Cu = to_CuVector(LBVH)
-    end
-    @info "End copying interpolated grids to device memory."
+    @info "     SPH Interpolation: End copying interpolated grids to device memory."
 
     npoints = length(grid_template)
-    @info"Start interpolation..."
-    @time begin
+    @info "     SPH Interpolation: Start interpolation..."
     @cuda threads=(256,) blocks=(cld(npoints, 256)) _general_grid_interpolation_kernel!(grids_Cu, input_Cu, catalog_consice, LBVH_Cu, itp_strategy)
     CUDA.synchronize()
-    end
-    @info"End interpolation."
-    @info "Copying interpolated grids back to host memory..."
-    @time begin
+    @info "     SPH Interpolation: End interpolation."
+    @info "     SPH Interpolation: Copying interpolated grids back to host memory..."
     grids_result = ntuple(i -> PhantomRevealer.to_HostVector(grids_Cu[i]), Val(L))
-    end
-    @info "End copying interpolated grids back to host memory."
+    @info "     SPH Interpolation: End copying interpolated grids back to host memory."
 
     # Reorder grids back to original order
-    @info "Reordering output grids back to original order..."
-    @time begin
+    @info "     SPH Interpolation: Reordering output grids back to original order..."
     # Reorder coor
     refV = grids_result[1].grid               
     shared_coor = ntuple(d -> begin
@@ -222,9 +215,8 @@ function PhantomRevealer.GeneralGrid_interpolation(:: CUDAComputeBackend, grid_t
     for grid in grids_result
         Base.invpermute!(grid.grid, p)
     end
-    end
     grids = ntuple(i -> GeneralGrid(grids_result[i].grid, shared_coor), Val(L))
-    @info "End reordering output grids..."
+    @info "     SPH Interpolation: End reordering output grids..."
 
     return GridBundle(grids, names)
 end

@@ -175,30 +175,23 @@ launches the interpolation kernel, and copies results back to host memory.
 function PhantomRevealer.GeneralGrid_interpolation(::MetalComputeBackend, grid_template::GeneralGrid{D}, input::ITPINPUT, catalog::InterpolationCatalog{N, G, Div, C, L}, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {D, N, G, Div, C, L, T <: AbstractFloat, ITPINPUT <: InterpolationInput{T}, ITPSTRATEGY <: AbstractInterpolationStrategy}
     grids, LBVH, names, catalog_consice, p = PhantomRevealer.initialize_interpolation(PhantomRevealer.CPUComputeBackend(), grid_template, input, catalog)
     # To MtlVector
-    @info "Copying interpolated grids to device memory..."
-    @time begin
+    @info "     SPH Interpolation: Copying interpolated grids to device memory..."
     input_Mtl = to_MtlVector(input)
     grids_Mtl = ntuple(i -> to_MtlVector(grids[i]), Val(L))
     LBVH_Mtl = to_MtlVector(LBVH)
-    end
-    @info "End copying interpolated grids to device memory."
+    @info "     SPH Interpolation: End copying interpolated grids to device memory."
 
     npoints = length(grid_template)
-    @info"Start interpolation..."
-    @time begin
+    @info"      SPH Interpolation: Start interpolation..."
     @metal threads=(256,) groups=(cld(npoints, 256)) _general_grid_interpolation_kernel!(grids_Mtl, input_Mtl, catalog_consice, LBVH_Mtl, itp_strategy)
     Metal.synchronize()
-    end
-    @info"End interpolation."
-    @info "Copying interpolated grids back to host memory..."
-    @time begin
+    @info "     SPH Interpolation: End interpolation."
+    @info "     SPH Interpolation: Copying interpolated grids back to host memory..."
     grids_result = ntuple(i -> PhantomRevealer.to_HostVector(grids_Mtl[i]), Val(L))
-    end
-    @info "End copying interpolated grids back to host memory."
+    @info "     SPH Interpolation: End copying interpolated grids back to host memory."
 
     # Reorder grids back to original order
-    @info "Reordering output grids back to original order..."
-    @time begin
+    @info "     SPH Interpolation: Reordering output grids back to original order..."
     # Reorder coor
     refV = grids_result[1].grid               
     shared_coor = ntuple(d -> begin
@@ -212,9 +205,8 @@ function PhantomRevealer.GeneralGrid_interpolation(::MetalComputeBackend, grid_t
     for grid in grids_result
         Base.invpermute!(grid.grid, p)
     end
-    end
     grids = ntuple(i -> GeneralGrid(grids_result[i].grid, shared_coor), Val(L))
-    @info "End reordering output grids..."
+    @info "     SPH Interpolation: End reordering output grids..."
 
     return GridBundle(grids, names)
 end
