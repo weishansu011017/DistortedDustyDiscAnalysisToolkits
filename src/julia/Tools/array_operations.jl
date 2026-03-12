@@ -5,7 +5,7 @@ Useful operations for array
 """
 
 """
-    meshgrid(arrays :: AbstractVector...)
+    meshgrid(arrays :: Vararg{AbstractVector{T}, N})
 
 Create N meshgrid arrays from N 1D coordinate vectors.
 
@@ -28,10 +28,15 @@ y = LinRange(0, 2π, 301)
 X, Y = meshgrid(x, y)
 ```
 """
-function meshgrid(arrays :: AbstractVector...)
-    nd = length(arrays)
-    grids = ntuple(i->repeat(reshape(arrays[i], ntuple(d->d==i ? length(arrays[i]) : 1,nd)...),ntuple(d->d==i ? 1 : length(arrays[d]), nd)...), nd)
-    return grids 
+function meshgrid(arrays :: Vararg{AbstractVector{T}, N}) where {T <: Real, N}
+    lens = ntuple(i -> length(arrays[i]), N)
+    onesN = ntuple(_ -> 1, N)
+
+    return ntuple(i -> begin
+        shape = Base.setindex(onesN, lens[i], i)
+        reps  = Base.setindex(lens, 1, i)
+        repeat(reshape(arrays[i], shape...), reps...)
+    end, N)
 end
 
 """
