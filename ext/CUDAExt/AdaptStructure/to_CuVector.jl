@@ -58,6 +58,14 @@ function PhantomRevealer.to_CuVector(grid :: GeneralGrid{D, TF, VG, VC}) where {
     )
 end
 
+function PhantomRevealer.to_CuVector(grid :: GeneralLineGrid{D, TF, VG, VC}) where {D, TF <: AbstractFloat, VG <: AbstractVector{TF}, VC <: NTuple{D, Vector{TF}}}
+    return GeneralLineGrid{D, TF, CuVector{TF}, NTuple{D, CuVector{TF}}}(
+        CuVector{TF}(grid.grid),
+        ntuple(i -> CuVector{TF}(grid.origin[i]), D),
+        ntuple(i -> CuVector{TF}(grid.direction[i]), D)
+    )
+end
+
 function PhantomRevealer.to_CuVector(grid :: StructuredGrid{D, TF, V, A}) where {D, TF <: AbstractFloat, V <: AbstractVector{TF}, A <: AbstractArray{TF, D}}
     return StructuredGrid{D, TF, CuVector{TF}, CuArray{TF, D}}(
         CuArray{TF, D}(grid.grid),

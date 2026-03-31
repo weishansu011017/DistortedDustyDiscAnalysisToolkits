@@ -58,6 +58,14 @@ function PhantomRevealer.to_HostVector(grid :: GeneralGrid{D, TF, VG, VC}) where
     )
 end
 
+function PhantomRevealer.to_HostVector(grid :: GeneralLineGrid{D, TF, VG, VC}) where {D, TF <: Float32, VG <: MtlVector{TF}, VC <: NTuple{D, MtlVector{TF}}}
+    return GeneralLineGrid{D, Float32, Vector{Float32}, NTuple{D, Vector{Float32}}}(
+        Vector{Float32}(grid.grid),
+        ntuple(i -> Vector{Float32}(grid.origin[i]), D),
+        ntuple(i -> Vector{Float32}(grid.direction[i]), D)
+    )
+end
+
 function PhantomRevealer.to_HostVector(grid :: StructuredGrid{D, TF, V, A}) where {D, TF <: Float32, V <: MtlVector{TF}, A <: MtlArray{TF, D}}
     return StructuredGrid{D, Float32, Vector{Float32}, Array{Float32, D}}(
         Array{Float32, D}(grid.grid),

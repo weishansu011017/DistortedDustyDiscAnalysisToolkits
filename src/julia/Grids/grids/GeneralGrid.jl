@@ -69,7 +69,7 @@ Note that the coordinate type also changes accordingly.
 """
 function Base.similar(grid::GeneralGrid{3,TF}, ::Type{T}) where {TF<:AbstractFloat,T<:AbstractFloat}
     new_grid = similar(grid.grid, T)
-    new_coor = ntuple(i -> similar(grid.coor[i]), 3)
+    new_coor = ntuple(i -> similar(grid.coor[i], T), 3)
 
     @inbounds @simd for i in eachindex(new_grid)
         @inbounds begin
@@ -103,7 +103,7 @@ Note that the coordinate type also changes accordingly.
 """
 function Base.similar(grid::GeneralGrid{2,TF}, ::Type{T}) where {TF<:AbstractFloat,T<:AbstractFloat}
     new_grid = similar(grid.grid, T)
-    new_coor = ntuple(i -> similar(grid.coor[i]), 2)
+    new_coor = ntuple(i -> similar(grid.coor[i], T), 2)
 
     @inbounds @simd for i in eachindex(new_grid)
         @inbounds begin
@@ -206,7 +206,7 @@ Each returned `GeneralGrid` contains:
 
 with `start:stop` defined by the batch index `b`.
 """
-function batch_GeneralGrid(grid::GeneralGrid{D,TF,VG,VC}, batch_size::Int) where {D, TF<:AbstractFloat, VG<:AbstractVector{TF}, VC<:AbstractVector{NTuple{D,TF}}}
+function batch_GeneralGrid(grid::GeneralGrid{D,TF,VG,VC}, batch_size::Int) where {D, TF<:AbstractFloat, VG<:AbstractVector{TF}, VC<:NTuple{D,VG}}
     npoints = length(grid)
     num_batches = cld(npoints, batch_size)
 
@@ -247,6 +247,16 @@ end
 
 
 # Constructors
+function GeneralGrid(grid::VG, coor::VC) where {D,TF<:AbstractFloat,VG<:AbstractVector{TF},VC<:NTuple{D,VG}}
+    N = length(grid)
+
+    @inbounds for d in 1:D
+        length(coor[d]) == N || throw(ArgumentError("coor[$d] length mismatch"))
+    end
+
+    return GeneralGrid{D,TF,VG,VC}(grid, coor)
+end
+
 """
     GeneralGrid(x::V, y::V, z::V) where {T<:AbstractFloat, V<:AbstractVector{T}}
 
@@ -283,7 +293,7 @@ resampling passes.
 - `x, y::AbstractVector{T}`: Particle positions along each axis.
 
 # Returns
-- `GeneralGrid{3, T, Vector{T}, NTuple{2, Vector{T}}}`: Grid with zeroed values
+- `GeneralGrid{2, T, Vector{T}, NTuple{2, Vector{T}}}`: Grid with zeroed values
   and `(x, y)` coordinate tuples.
 """
 function GeneralGrid(x :: V, y :: V) where {T <: AbstractFloat, V <: AbstractVector{T}}
@@ -292,5 +302,5 @@ function GeneralGrid(x :: V, y :: V) where {T <: AbstractFloat, V <: AbstractVec
 
     coords = (x, y)
     vals = zeros(T, N)
-    return GeneralGrid{2, T, Vector{T}, NTuple{3, Vector{T}}}(vals, coords)
+    return GeneralGrid{2, T, Vector{T}, NTuple{2, Vector{T}}}(vals, coords)
 end
