@@ -17,7 +17,7 @@
 #     • Density, number density, and quantity interpolation (3D) against
 #       O(N²) brute-force baselines for all three strategies (Gather,
 #       Scatter, Symmetric).
-#     • LOS column-density integration (2D projection).
+#     • Line-integrated column-density integration.
 #
 #  3. Physical sanity checks
 #     • Divergence and curl of a uniform vector field must vanish to
@@ -36,7 +36,7 @@ using PhantomRevealer.KernelInterpolation: _density_kernel, _number_density_kern
     _quantity_interpolate_kernel,
     _divergence_quantity_interpolate_kernel,
     _curl_quantity_interpolate_kernel,
-    _LOS_density_kernel
+    _line_integrated_density_kernel
 
 # ========================== Module aliases ================================== #
 
@@ -189,21 +189,22 @@ end
     end
 end
 
-# ── 2b. Traversal — LOS column density ──────────────────────────────── #
+# ── 2b. Traversal — line-integrated column density ─────────────────── #
 
-# @testset "Traversal interpolation — LOS column density" begin
-#     rng = MersenneTwister(0xF00D)
-#     input, LBVH = random_input_LOS(rng, 150)
-#     reference_point = (0.2, 0.8)
-#     ha = 0.08
+@testset "Traversal interpolation — line-integrated column density" begin
+    rng = MersenneTwister(0xF00D)
+    input, LBVH = random_input_line_integrated(rng, 150)
+    origin = (0.2, 0.8, 0.0)
+    direction = (0.0, 0.0, 1.0)
+    ha = 0.08
 
-#     for strategy in (itpGather, itpScatter, itpSymmetric)
-#         ρ_LOS = strategy === itpScatter ?
-#             _LOS_density_kernel(input, reference_point, LBVH, strategy) :
-#             _LOS_density_kernel(input, reference_point, ha, LBVH, strategy)
-#         @test ρ_LOS ≈ brute_LOS_density(input, reference_point, ha, strategy) atol=1e-10 rtol=1e-8
-#     end
-# end
+    for strategy in (itpGather, itpScatter, itpSymmetric)
+        Sigma = strategy === itpScatter ?
+            _line_integrated_density_kernel(input, origin, direction, LBVH, strategy) :
+            _line_integrated_density_kernel(input, origin, direction, ha, LBVH, strategy)
+        @test Sigma ≈ brute_line_integrated_density(input, origin, direction, ha, strategy) atol=1e-10 rtol=1e-8
+    end
+end
 
 # ── 3. Divergence & curl vanish for uniform field ────────────────────── #
 

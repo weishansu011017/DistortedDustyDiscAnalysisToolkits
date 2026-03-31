@@ -15,7 +15,7 @@
 #  5. Gradient kernel — `Smoothed_gradient_kernel_function` matches finite-
 #     difference approximation.
 #  6. LOS-integrated kernel — numerical column-integral of M4 matches the
-#     tabulated `LOSint_Smoothed_kernel_function`.
+#     tabulated `line_integrated_kernel_function`.
 #
 #  Reference formulas
 #  ──────────────────
@@ -204,8 +204,8 @@ end
 
 #     r = sqrt((ra[1] - rb[1])^2 + (ra[2] - rb[2])^2)
 
-#     Wlos_rh = LOSint_Smoothed_kernel_function(typeof(kern), r, h)
-#     Wlos_pts = LOSint_Smoothed_kernel_function(typeof(kern), ra, rb, h)
+#     Wlos_rh = line_integrated_kernel_function(typeof(kern), r, h)
+#     Wlos_pts = line_integrated_kernel_function(typeof(kern), ra, rb, h)
 
 #     @test Wlos_rh ≈ Wlos_pts  atol = 1e-14
 # end

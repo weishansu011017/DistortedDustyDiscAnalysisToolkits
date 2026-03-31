@@ -1,117 +1,42 @@
-## LOS density interpolation (Column / Surface density)
-@inline function _LOS_density_accumulation(Δr :: T, mb :: T, h :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel, }
+## Line-integrated density interpolation (Column / Surface density)
+@inline function _line_integrated_density_accumulation(Δr :: T, mb :: T, h :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
     Ktyp = typeof(smoothed_kernel)
-    W = LOSint_Smoothed_kernel_function(Ktyp, Δr, h)
+    W = line_integrated_kernel_function(Ktyp, Δr, h)
     return mb * W
 end
 
-@inline function _LOS_density_accumulation(ra::NTuple{2, T}, rb::NTuple{2, T}, mb :: T, h :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
+@inline function _line_integrated_density_accumulation(Δr :: T, mb :: T, ha :: T, hb :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
     Ktyp = typeof(smoothed_kernel)
-    W = LOSint_Smoothed_kernel_function(Ktyp, ra, rb, h)
+    W = T(0.5) * (line_integrated_kernel_function(Ktyp, Δr, ha) + line_integrated_kernel_function(Ktyp, Δr, hb))
     return mb * W
 end
 
-@inline function _LOS_density_accumulation(Δr :: T, mb :: T, ha :: T, hb :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel, }
+## Line-integrated quantities interpolation
+@inline function _line_integrated_quantity_interpolate_accumulation(Δr :: T, mb :: T, ρb :: T, Ab :: T, h :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
     Ktyp = typeof(smoothed_kernel)
-    W = T(0.5) * (LOSint_Smoothed_kernel_function(Ktyp, Δr, ha) + LOSint_Smoothed_kernel_function(Ktyp, Δr, hb))
-    return mb * W
+    W = line_integrated_kernel_function(Ktyp, Δr, h)
+    mbWlρ = mb * W / ρb
+    return Ab * mbWlρ
 end
 
-@inline function _LOS_density_accumulation(ra::NTuple{2, T}, rb::NTuple{2, T}, mb :: T, ha :: T, hb :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
+@inline function _line_integrated_quantity_interpolate_accumulation(Δr :: T, mb :: T, ρb :: T, Ab :: T, ha :: T, hb :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
     Ktyp = typeof(smoothed_kernel)
-    W = T(0.5) * (LOSint_Smoothed_kernel_function(Ktyp, ra, rb, ha) + LOSint_Smoothed_kernel_function(Ktyp, ra, rb, hb))
-    return mb * W
+    W = T(0.5) * (line_integrated_kernel_function(Ktyp, Δr, ha) + line_integrated_kernel_function(Ktyp, Δr, hb))
+    mbWlρ = mb * W / ρb
+    return Ab * mbWlρ
 end
 
-## LOS quantities interpolation
-@inline function _LOS_quantity_interpolate_accumulation(Δr :: T, mb :: T, ρb :: T, Ab :: T, h :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
+## Line-integrated Shepard normalization
+@inline function _line_integrated_ShepardNormalization_accumulation(Δr :: T, mb :: T, ρb :: T, h :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
     Ktyp = typeof(smoothed_kernel)
-    W = LOSint_Smoothed_kernel_function(Ktyp, Δr, h)
-    mbWlρb = mb * W/ρb
-    return Ab * mbWlρb
+    W = line_integrated_kernel_function(Ktyp, Δr, h)
+    mbWlρ = mb * W / ρb
+    return mbWlρ
 end
 
-@inline function _LOS_quantity_interpolate_accumulation(ra::NTuple{2, T}, rb::NTuple{2, T}, mb :: T, ρb :: T, Ab :: T, h :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
+@inline function _line_integrated_ShepardNormalization_accumulation(Δr :: T, mb :: T, ρb :: T, ha :: T, hb :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
     Ktyp = typeof(smoothed_kernel)
-    W = LOSint_Smoothed_kernel_function(Ktyp, ra, rb, h)
-    mbWlρb = mb * W/ρb
-    return Ab * mbWlρb
-end
-
-@inline function _LOS_quantity_interpolate_accumulation(Δr :: T, mb :: T, ρb :: T, Ab :: T, ha :: T, hb :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
-    Ktyp = typeof(smoothed_kernel)
-    W = T(0.5) * (LOSint_Smoothed_kernel_function(Ktyp, Δr, ha) + LOSint_Smoothed_kernel_function(Ktyp, Δr, hb))
-    mbWlρb = mb * W/ρb
-    return Ab * mbWlρb
-end
-
-@inline function _LOS_quantity_interpolate_accumulation(ra::NTuple{2, T}, rb::NTuple{2, T}, mb :: T, ρb :: T, Ab :: T, ha :: T, hb :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
-    Ktyp = typeof(smoothed_kernel)
-    W = T(0.5) * (LOSint_Smoothed_kernel_function(Ktyp, ra, rb, ha) + LOSint_Smoothed_kernel_function(Ktyp, ra, rb, hb))
-    mbWlρb = mb * W/ρb
-    return Ab * mbWlρb
-end
-
-@inline function _LOS_quantity_interpolate_accumulation(ra::NTuple{3, T}, rb::NTuple{3, T}, mb :: T, ρb :: T, Ab :: T, h :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
-    ra2d :: NTuple{2, T} = (ra[1], ra[2])
-    rb2d :: NTuple{2, T} = (rb[1], rb[2])
-    Ktyp = typeof(smoothed_kernel)
-    W = LOSint_Smoothed_kernel_function(Ktyp, ra2d, rb2d, h)
-    mbWlρb = mb * W/ρb
-    return Ab * mbWlρb
-end
-
-@inline function _LOS_quantity_interpolate_accumulation(ra::NTuple{3, T}, rb::NTuple{3, T}, mb :: T, ρb :: T, Ab :: T, ha :: T, hb :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
-    ra2d :: NTuple{2, T} = (ra[1], ra[2])
-    rb2d :: NTuple{2, T} = (rb[1], rb[2])
-    Ktyp = typeof(smoothed_kernel)
-    W = T(0.5) * (LOSint_Smoothed_kernel_function(Ktyp, ra2d, rb2d, ha) + LOSint_Smoothed_kernel_function(Ktyp, ra2d, rb2d, hb))
-    mbWlρb = mb * W/ρb
-    return Ab * mbWlρb
-end
-
-@inline function _LOS_ShepardNormalization_accumulation(Δr :: T, mb :: T, ρb :: T, h :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
-    Ktyp = typeof(smoothed_kernel)
-    W = LOSint_Smoothed_kernel_function(Ktyp, Δr, h)
-    mbWlρb = mb * W/ρb
-    return mbWlρb
-end
-
-@inline function _LOS_ShepardNormalization_accumulation(ra::NTuple{2, T}, rb::NTuple{2, T}, mb :: T, ρb :: T, h :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
-    Ktyp = typeof(smoothed_kernel)
-    W = LOSint_Smoothed_kernel_function(Ktyp, ra, rb, h)
-    mbWlρb = mb * W/ρb
-    return mbWlρb
-end
-
-@inline function _LOS_ShepardNormalization_accumulation(Δr :: T, mb :: T, ρb :: T, ha :: T, hb :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
-    Ktyp = typeof(smoothed_kernel)
-    W = T(0.5) * (LOSint_Smoothed_kernel_function(Ktyp, Δr, ha) + LOSint_Smoothed_kernel_function(Ktyp, Δr, hb))
-    mbWlρb = mb * W/ρb
-    return mbWlρb
-end
-
-@inline function _LOS_ShepardNormalization_accumulation(ra::NTuple{2, T}, rb::NTuple{2, T}, mb :: T, ρb :: T, ha :: T, hb :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
-    Ktyp = typeof(smoothed_kernel)
-    W = T(0.5) * (LOSint_Smoothed_kernel_function(Ktyp, ra, rb, ha) + LOSint_Smoothed_kernel_function(Ktyp, ra, rb, hb))
-    mbWlρb = mb * W/ρb
-    return mbWlρb
-end
-
-@inline function _LOS_ShepardNormalization_accumulation(ra::NTuple{3, T}, rb::NTuple{3, T}, mb :: T, ρb :: T, h :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
-    ra2d :: NTuple{2, T} = (ra[1], ra[2])
-    rb2d :: NTuple{2, T} = (rb[1], rb[2])
-    Ktyp = typeof(smoothed_kernel)
-    W = LOSint_Smoothed_kernel_function(Ktyp, ra2d, rb2d, h)
-    mbWlρb = mb * W/ρb
-    return mbWlρb
-end
-
-@inline function _LOS_ShepardNormalization_accumulation(ra::NTuple{3, T}, rb::NTuple{3, T}, mb :: T, ρb :: T, ha :: T, hb :: T, smoothed_kernel :: K) where {T <: AbstractFloat, K <: AbstractSPHKernel}
-    ra2d :: NTuple{2, T} = (ra[1], ra[2])
-    rb2d :: NTuple{2, T} = (rb[1], rb[2])
-    Ktyp = typeof(smoothed_kernel)
-    W = T(0.5) * (LOSint_Smoothed_kernel_function(Ktyp, ra2d, rb2d, ha) + LOSint_Smoothed_kernel_function(Ktyp, ra2d, rb2d, hb))
-    mbWlρb = mb * W/ρb
-    return mbWlρb
+    W = T(0.5) * (line_integrated_kernel_function(Ktyp, Δr, ha) + line_integrated_kernel_function(Ktyp, Δr, hb))
+    mbWlρ = mb * W / ρb
+    return mbWlρ
 end
