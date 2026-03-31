@@ -30,7 +30,7 @@ A 3-tuple `(count, closest_idx, closest_dist2)`:
     leaf_idx    :: Int = zero(Int)
     p2leaf_d2   :: T   = zero(T)
 
-    @LBVH_gather_traversal LBVH point r2 leaf_idx p2leaf_d2 begin
+    @LBVH_gather_point_traversal LBVH point r2 leaf_idx p2leaf_d2 begin
         count += 1
         if p2leaf_d2 < closest_dist2
             closest_dist2 = p2leaf_d2
@@ -85,7 +85,7 @@ A 2-tuple `(best_idx, best_dist2)`:
     leaf_idx    :: Int = zero(Int)
     p2leaf_d2   :: T   = zero(T)
 
-    @LBVH_gather_traversal LBVH point r2 leaf_idx p2leaf_d2 begin
+    @LBVH_gather_point_traversal LBVH point r2 leaf_idx p2leaf_d2 begin
         if p2leaf_d2 < best_dist2
             best_dist2 = p2leaf_d2
             best_idx = leaf_idx
@@ -133,7 +133,7 @@ returned value is `LBVH.leaf_h[best_idx]`, where `best_idx` is the closest leaf.
     leaf_idx    :: Int = zero(Int)
     p2leaf_d2   :: T   = zero(T)
 
-    @LBVH_gather_traversal LBVH point best_dist2 leaf_idx p2leaf_d2 begin
+    @LBVH_gather_point_traversal LBVH point best_dist2 leaf_idx p2leaf_d2 begin
         if p2leaf_d2 < best_dist2
             best_dist2 = p2leaf_d2
             best_idx = leaf_idx
@@ -199,7 +199,7 @@ AABB squared distance is evaluated and compared against `radius^2`.
     leaf_idx    :: Int = zero(Int)
     p2leaf_d2   :: T   = zero(T)
 
-    @LBVH_gather_traversal LBVH point r2 leaf_idx p2leaf_d2 begin
+    @LBVH_gather_point_traversal LBVH point r2 leaf_idx p2leaf_d2 begin
         count += 1
         @inbounds pool[count] = leaf_idx
         if p2leaf_d2 < closest_dist2

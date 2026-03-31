@@ -143,7 +143,7 @@ function scatter_neighbors_reference(lbvh, point::NTuple{D,T}, Kvalid::T, hvec) 
     if node == 0
         @inbounds for leaf in 1:nleaf
             r2 = (Kvalid * hvec[leaf])^2
-            d2 = NS._squared_distance_point_aabb(leaf_min, leaf_max, point, leaf)
+            d2 = NS._squared_distance_point_aabb(point, leaf_min, leaf_max, leaf)
             d2 <= r2 && push!(hits, leaf)
         end
         sort!(hits)
@@ -153,14 +153,14 @@ function scatter_neighbors_reference(lbvh, point::NTuple{D,T}, Kvalid::T, hvec) 
         if NS.is_leaf_id(node, nleaf)
             leaf = NS.leaf_index(node, nleaf)
             r2 = (Kvalid * hvec[leaf])^2
-            d2 = NS._squared_distance_point_aabb(leaf_min, leaf_max, point, leaf)
+            d2 = NS._squared_distance_point_aabb(point, leaf_min, leaf_max, leaf)
             d2 <= r2 && push!(hits, leaf)
             node = escape[Int(node)]
             continue
         end
         idx = NS.internal_index(node)
         r2node = (Kvalid * lbvh.node_hmax[idx])^2
-        d2node = NS._squared_distance_point_aabb(node_min, node_max, point, idx)
+        d2node = NS._squared_distance_point_aabb(point, node_min, node_max, idx)
         node = (d2node <= r2node) ? left[idx] : escape[idx]
     end
     sort!(hits)
@@ -389,7 +389,7 @@ end
         visits_global += 1
         idx = NS.internal_index(node)
         r2 = (Kvalid * global_hmax)^2
-        d2 = NS._squared_distance_point_aabb(node_min, node_max, point, idx)
+        d2 = NS._squared_distance_point_aabb(point, node_min, node_max, idx)
         node = (d2 <= r2) ? left[idx] : escape[idx]
     end
 
@@ -403,7 +403,7 @@ end
         visits_hmax += 1
         idx = NS.internal_index(node)
         r2 = (Kvalid * lbvh.node_hmax[idx])^2
-        d2 = NS._squared_distance_point_aabb(node_min, node_max, point, idx)
+        d2 = NS._squared_distance_point_aabb(point, node_min, node_max, idx)
         node = (d2 <= r2) ? left[idx] : escape[idx]
     end
 
