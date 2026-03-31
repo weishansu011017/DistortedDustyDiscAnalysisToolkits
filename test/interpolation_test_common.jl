@@ -107,27 +107,27 @@ function brute_quantity(input::InterpolationInput{T}, ref::NTuple{3,T}, ha::T, c
     return iszero(denom) ? T(NaN) : numer / denom
 end
 
-function brute_LOS_density(input::InterpolationInput{T}, ref::NTuple{2,T}, ha::T, strategy) where {T}
-    Kvalid = KernelFunctionValid(typeof(KERN), T)
-    Σ = zero(T)
-    @inbounds for i in 1:input.Npart
-        hb = input.h[i]
-        rb = (input.x[i], input.y[i])
-        radius = support_radius(strategy, ha, hb, Kvalid)
-        d2 = (ref[1]-rb[1])^2 + (ref[2]-rb[2])^2
-        if within_radius(d2, radius)
-            if strategy === itpSymmetric
-                W = T(0.5) * (LOSint_Smoothed_kernel_function(typeof(KERN), ref, rb, ha) +
-                              LOSint_Smoothed_kernel_function(typeof(KERN), ref, rb, hb))
-            else
-                hsel = strategy === itpGather ? ha : hb
-                W = LOSint_Smoothed_kernel_function(typeof(KERN), ref, rb, hsel)
-            end
-            Σ += input.m[i] * W
-        end
-    end
-    return Σ
-end
+# function brute_LOS_density(input::InterpolationInput{T}, ref::NTuple{2,T}, ha::T, strategy) where {T}
+#     Kvalid = KernelFunctionValid(typeof(KERN), T)
+#     Σ = zero(T)
+#     @inbounds for i in 1:input.Npart
+#         hb = input.h[i]
+#         rb = (input.x[i], input.y[i])
+#         radius = support_radius(strategy, ha, hb, Kvalid)
+#         d2 = (ref[1]-rb[1])^2 + (ref[2]-rb[2])^2
+#         if within_radius(d2, radius)
+#             if strategy === itpSymmetric
+#                 W = T(0.5) * (LOSint_Smoothed_kernel_function(typeof(KERN), ref, rb, ha) +
+#                               LOSint_Smoothed_kernel_function(typeof(KERN), ref, rb, hb))
+#             else
+#                 hsel = strategy === itpGather ? ha : hb
+#                 W = LOSint_Smoothed_kernel_function(typeof(KERN), ref, rb, hsel)
+#             end
+#             Σ += input.m[i] * W
+#         end
+#     end
+#     return Σ
+# end
 
 # ========================== Random input generators ========================= #
 
@@ -143,17 +143,17 @@ function random_input_3d(rng::AbstractRNG, n::Int)
     return input, LBVH
 end
 
-function random_input_LOS(rng::AbstractRNG, n::Int)
-    x = rand(rng, n); y = rand(rng, n); z = zeros(Float64, n)
-    m = rand(rng, n) .+ 0.05
-    h = rand(rng, n) .* 0.08 .+ 0.02
-    ρ = rand(rng, n) .+ 0.2
-    q1 = rand(rng, n)
-    input = InterpolationInput{Float64, Vector{Float64}, typeof(KERN), 1}(
-        n, KERN, x, y, z, m, h, ρ, (q1,))
-    LBVH = LinearBVH!(input, Val(2))
-    return input, LBVH
-end
+# function random_input_LOS(rng::AbstractRNG, n::Int)
+#     x = rand(rng, n); y = rand(rng, n); z = zeros(Float64, n)
+#     m = rand(rng, n) .+ 0.05
+#     h = rand(rng, n) .* 0.08 .+ 0.02
+#     ρ = rand(rng, n) .+ 0.2
+#     q1 = rand(rng, n)
+#     input = InterpolationInput{Float64, Vector{Float64}, typeof(KERN), 1}(
+#         n, KERN, x, y, z, m, h, ρ, (q1,))
+#     LBVH = LinearBVH!(input, Val(2))
+#     return input, LBVH
+# end
 
 function make_empty_input()
     x = [10.0]; y = [10.0]; z = [10.0]

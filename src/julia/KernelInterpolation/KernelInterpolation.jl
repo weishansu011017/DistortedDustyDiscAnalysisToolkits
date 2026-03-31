@@ -93,8 +93,8 @@ include(joinpath(@__DIR__, "single_point_interpolation", "kernels", "curl_interp
 include(joinpath(@__DIR__, "single_point_interpolation", "kernels", "general_interpolation.jl"))
 
 #### Line integrated interpolations
-include(joinpath(@__DIR__, "line_integrated_interpolation", "accumulations", "LOSscalar_accumulation.jl"))
-include(joinpath(@__DIR__, "line_integrated_interpolation", "kernels", "LOSscalar_interpolation.jl"))
+# include(joinpath(@__DIR__, "line_integrated_interpolation", "accumulations", "line_integrated_scalar_accumulation.jl"))
+# include(joinpath(@__DIR__, "line_integrated_interpolation", "kernels", "line_integrated_scalar_interpolation.jl"))
 
 ## Grid interpolation
 include(joinpath(@__DIR__, "grid_interpolation", "grid_interpolation.jl"))

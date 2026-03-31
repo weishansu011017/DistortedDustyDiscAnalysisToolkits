@@ -191,19 +191,19 @@ end
 
 # ── 2b. Traversal — LOS column density ──────────────────────────────── #
 
-@testset "Traversal interpolation — LOS column density" begin
-    rng = MersenneTwister(0xF00D)
-    input, LBVH = random_input_LOS(rng, 150)
-    reference_point = (0.2, 0.8)
-    ha = 0.08
+# @testset "Traversal interpolation — LOS column density" begin
+#     rng = MersenneTwister(0xF00D)
+#     input, LBVH = random_input_LOS(rng, 150)
+#     reference_point = (0.2, 0.8)
+#     ha = 0.08
 
-    for strategy in (itpGather, itpScatter, itpSymmetric)
-        ρ_LOS = strategy === itpScatter ?
-            _LOS_density_kernel(input, reference_point, LBVH, strategy) :
-            _LOS_density_kernel(input, reference_point, ha, LBVH, strategy)
-        @test ρ_LOS ≈ brute_LOS_density(input, reference_point, ha, strategy) atol=1e-10 rtol=1e-8
-    end
-end
+#     for strategy in (itpGather, itpScatter, itpSymmetric)
+#         ρ_LOS = strategy === itpScatter ?
+#             _LOS_density_kernel(input, reference_point, LBVH, strategy) :
+#             _LOS_density_kernel(input, reference_point, ha, LBVH, strategy)
+#         @test ρ_LOS ≈ brute_LOS_density(input, reference_point, ha, strategy) atol=1e-10 rtol=1e-8
+#     end
+# end
 
 # ── 3. Divergence & curl vanish for uniform field ────────────────────── #
 

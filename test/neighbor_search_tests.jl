@@ -131,8 +131,7 @@ end
 function scatter_neighbors_reference(lbvh, point::NTuple{D,T}, Kvalid::T, hvec) where {D,T}
     node_min = lbvh.node_aabb.min
     node_max = lbvh.node_aabb.max
-    leaf_min = lbvh.leaf_aabb.min
-    leaf_max = lbvh.leaf_aabb.max
+    leaf_coor = lbvh.leaf_coor
     brt = lbvh.brt
     left = brt.left
     escape = brt.escape
@@ -143,7 +142,7 @@ function scatter_neighbors_reference(lbvh, point::NTuple{D,T}, Kvalid::T, hvec) 
     if node == 0
         @inbounds for leaf in 1:nleaf
             r2 = (Kvalid * hvec[leaf])^2
-            d2 = NS._squared_distance_point_aabb(point, leaf_min, leaf_max, leaf)
+            d2 = NS._squared_distance_point_coords(point, leaf_coor, leaf)
             d2 <= r2 && push!(hits, leaf)
         end
         sort!(hits)
@@ -153,7 +152,7 @@ function scatter_neighbors_reference(lbvh, point::NTuple{D,T}, Kvalid::T, hvec) 
         if NS.is_leaf_id(node, nleaf)
             leaf = NS.leaf_index(node, nleaf)
             r2 = (Kvalid * hvec[leaf])^2
-            d2 = NS._squared_distance_point_aabb(point, leaf_min, leaf_max, leaf)
+            d2 = NS._squared_distance_point_coords(point, leaf_coor, leaf)
             d2 <= r2 && push!(hits, leaf)
             node = escape[Int(node)]
             continue
@@ -162,6 +161,19 @@ function scatter_neighbors_reference(lbvh, point::NTuple{D,T}, Kvalid::T, hvec) 
         r2node = (Kvalid * lbvh.node_hmax[idx])^2
         d2node = NS._squared_distance_point_aabb(point, node_min, node_max, idx)
         node = (d2node <= r2node) ? left[idx] : escape[idx]
+    end
+    sort!(hits)
+    return hits
+end
+
+"""O(N) brute-force line query against leaf particle coordinates."""
+function line_neighbors_reference(lbvh, origin::NTuple{D,T}, direction::NTuple{D,T}, radius2_of) where {D,T}
+    nleaf = lbvh.brt.nleaf
+    hits = Int[]
+    @inbounds for leaf in 1:nleaf
+        point = ntuple(d -> lbvh.leaf_coor[d][leaf], D)
+        d2 = NS._squared_distance_point_line(point, origin, direction)
+        d2 <= radius2_of(leaf) && push!(hits, leaf)
     end
     sort!(hits)
     return hits
@@ -257,26 +269,25 @@ end
         lbvh = LinearBVH(enc, brt)
 
         @test lbvh.brt.root == (n >= 2 ? Int32(1) : Int32(0))
-        @test length(lbvh.leaf_aabb.min[1]) == n
+        @test length(lbvh.leaf_coor[1]) == n
         @test length(lbvh.node_aabb.min[1]) == n - 1
 
-        # Leaf AABBs match sorted coordinates
+        # Leaf coordinates match sorted coordinates
         for d in 1:dim
-            @test lbvh.leaf_aabb.min[d] == enc.coord[d]
-            @test lbvh.leaf_aabb.max[d] == enc.coord[d]
+            @test lbvh.leaf_coor[d] == enc.coord[d]
         end
 
         # Internal node AABBs enclose both children
         L = brt.left;  R = brt.right
         nmin = lbvh.node_aabb.min;  nmax = lbvh.node_aabb.max
-        lmin = lbvh.leaf_aabb.min;  lmax = lbvh.leaf_aabb.max
+        lcoor = lbvh.leaf_coor
 
         for i in 1:(n - 1)
             for d in 1:dim
-                cmin_l = NS.is_leaf_id(L[i], n) ? lmin[d][NS.leaf_index(L[i], n)] : nmin[d][NS.internal_index(L[i])]
-                cmin_r = NS.is_leaf_id(R[i], n) ? lmin[d][NS.leaf_index(R[i], n)] : nmin[d][NS.internal_index(R[i])]
-                cmax_l = NS.is_leaf_id(L[i], n) ? lmax[d][NS.leaf_index(L[i], n)] : nmax[d][NS.internal_index(L[i])]
-                cmax_r = NS.is_leaf_id(R[i], n) ? lmax[d][NS.leaf_index(R[i], n)] : nmax[d][NS.internal_index(R[i])]
+                cmin_l = NS.is_leaf_id(L[i], n) ? lcoor[d][NS.leaf_index(L[i], n)] : nmin[d][NS.internal_index(L[i])]
+                cmin_r = NS.is_leaf_id(R[i], n) ? lcoor[d][NS.leaf_index(R[i], n)] : nmin[d][NS.internal_index(R[i])]
+                cmax_l = NS.is_leaf_id(L[i], n) ? lcoor[d][NS.leaf_index(L[i], n)] : nmax[d][NS.internal_index(L[i])]
+                cmax_r = NS.is_leaf_id(R[i], n) ? lcoor[d][NS.leaf_index(R[i], n)] : nmax[d][NS.internal_index(R[i])]
                 @test nmin[d][i] == min(cmin_l, cmin_r)
                 @test nmax[d][i] == max(cmax_l, cmax_r)
             end
@@ -408,4 +419,48 @@ end
     end
 
     @test visits_hmax <= visits_global
+end
+
+@testset "LinearBVH ??line traversal matches brute force" begin
+    x = [0.0, 0.1, 0.2, 0.3, 0.4]
+    y = [0.0, 0.15, 0.3, 0.6, 1.0]
+    h = [0.05, 0.2, 0.35, 0.55, 0.2]
+
+    enc = MortonEncoding(x, y, h)
+    brt = BinaryRadixTree(enc)
+    lbvh = LinearBVH(enc, brt)
+
+    origin = (0.0, 0.0)
+    direction = (1.0, 0.0)
+    Kvalid = 1.0
+    radius2 = 0.04
+
+    gather_expected = line_neighbors_reference(lbvh, origin, direction, _ -> radius2)
+    scatter_expected = line_neighbors_reference(lbvh, origin, direction, leaf -> (Kvalid * lbvh.leaf_h[leaf])^2)
+    symmetric_expected = line_neighbors_reference(lbvh, origin, direction, leaf -> max(radius2, (Kvalid * lbvh.leaf_h[leaf])^2))
+
+    gather_hits = Int[]
+    leaf_idx = 0
+    d2 = 0.0
+    NS.@LBVH_gather_line_traversal lbvh origin direction radius2 leaf_idx d2 begin
+        push!(gather_hits, leaf_idx)
+    end
+    sort!(gather_hits)
+
+    scatter_hits = Int[]
+    hb = 0.0
+    NS.@LBVH_scatter_line_traversal lbvh origin direction Kvalid leaf_idx d2 hb begin
+        push!(scatter_hits, leaf_idx)
+    end
+    sort!(scatter_hits)
+
+    symmetric_hits = Int[]
+    NS.@LBVH_symmetric_line_traversal lbvh origin direction Kvalid radius2 leaf_idx d2 hb begin
+        push!(symmetric_hits, leaf_idx)
+    end
+    sort!(symmetric_hits)
+
+    @test gather_hits == gather_expected
+    @test scatter_hits == scatter_expected
+    @test symmetric_hits == symmetric_expected
 end

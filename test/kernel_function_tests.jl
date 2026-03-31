@@ -196,16 +196,16 @@ end
 
 # ── 7. LOS-integrated kernel consistency ─────────────────────────────── #
 
-@testset "LOS kernel — two-point interface" begin
-    kern = M4_spline()
-    h = 0.1
-    ra = (0.5, 0.5)
-    rb = (0.52, 0.48)
+# @testset "LOS kernel — two-point interface" begin
+#     kern = M4_spline()
+#     h = 0.1
+#     ra = (0.5, 0.5)
+#     rb = (0.52, 0.48)
 
-    r = sqrt((ra[1] - rb[1])^2 + (ra[2] - rb[2])^2)
+#     r = sqrt((ra[1] - rb[1])^2 + (ra[2] - rb[2])^2)
 
-    Wlos_rh = LOSint_Smoothed_kernel_function(typeof(kern), r, h)
-    Wlos_pts = LOSint_Smoothed_kernel_function(typeof(kern), ra, rb, h)
+#     Wlos_rh = LOSint_Smoothed_kernel_function(typeof(kern), r, h)
+#     Wlos_pts = LOSint_Smoothed_kernel_function(typeof(kern), ra, rb, h)
 
-    @test Wlos_rh ≈ Wlos_pts  atol = 1e-14
-end
+#     @test Wlos_rh ≈ Wlos_pts  atol = 1e-14
+# end

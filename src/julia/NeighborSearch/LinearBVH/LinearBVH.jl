@@ -19,7 +19,7 @@ end
 
 struct LinearBVH{D, TF <: AbstractFloat, VF <: AbstractVector{TF}, VB <: AbstractVector{Int32}}
     brt :: BinaryRadixTree{VB}
-    leaf_aabb :: AABB{D, TF, VF}
+    leaf_coor :: NTuple{D, VF}
     leaf_h    :: VF
     node_aabb :: AABB{D, TF, VF}
     node_hmax :: VF
@@ -28,7 +28,7 @@ end
 function Adapt.adapt_structure(to, x :: LBVH) where {D, LBVH <: LinearBVH{D}}
     LinearBVH(
         Adapt.adapt(to, x.brt),
-        Adapt.adapt(to, x.leaf_aabb),
+        ntuple(i -> Adapt.adapt(to, x.leaf_coor[i]), D),
         Adapt.adapt(to, x.leaf_h),
         Adapt.adapt(to, x.node_aabb),
         Adapt.adapt(to, x.node_hmax),
@@ -40,17 +40,17 @@ end
         LinearBVH(enc::MortonEncoding, brt::BinaryRadixTree)
 
 Assemble a linear bounding volume hierarchy from a Morton-encoded particle set
-and its matching binary radix tree. This allocates per-leaf and per-node
-axis-aligned bounding boxes, discovers the tree root, and precomputes the
-hierarchical extent data required for subsequent neighbor queries.
+and its matching binary radix tree. This stores per-leaf particle coordinates,
+allocates per-node axis-aligned bounding boxes, discovers the tree root, and
+precomputes the hierarchical extent data required for subsequent neighbor queries.
 
 # Parameters
 - `enc::MortonEncoding`: Morton-sorted particle coordinates and permutation.
 - `brt::BinaryRadixTree`: Connectivity generated from the same `enc` instance.
 
 # Returns
-- `LinearBVH`: Immutable hierarchy storing the encoding, tree topology, and
-    bounding volumes.
+- `LinearBVH`: Immutable hierarchy storing the tree topology, leaf particle
+    coordinates, and internal-node bounding volumes.
 """
 function LinearBVH(enc::MortonEncoding{D, TF, TI, VF, VI}, brt::BinaryRadixTree{VB}) where {D, TF <: AbstractFloat, TI <: Unsigned, VF <: AbstractVector{TF}, VI <: AbstractVector{TI}, VB <: AbstractVector{Int32}}
     nleaf = brt.nleaf
@@ -61,20 +61,19 @@ function LinearBVH(enc::MortonEncoding{D, TF, TI, VF, VI}, brt::BinaryRadixTree{
 
     vproto = enc.coord[1]
 
-    leaf_aabb = AABB(ntuple(_ -> similar(vproto, nleaf), D),
-                     ntuple(_ -> similar(vproto, nleaf), D))
+    leaf_coor = ntuple(_ -> similar(vproto, nleaf), D)
     node_aabb = AABB(ntuple(_ -> similar(vproto, ninternal), D),
                      ntuple(_ -> similar(vproto, ninternal), D))
     node_hmax = similar(enc.h, ninternal)
     
-    LBVH = LinearBVH{D, TF, VF, VB}(brt, leaf_aabb, enc.h, node_aabb, node_hmax)
+    LBVH = LinearBVH{D, TF, VF, VB}(brt, leaf_coor, enc.h, node_aabb, node_hmax)
 
     visited = AtomicMemory{UInt32}(undef, ninternal)                        # atomic visit counters for internal nodes (2nd arrival processes the node)
     @threads for i in eachindex(visited)
         @inbounds @atomic :sequentially_consistent visited[i] = zero(UInt32)
     end
 
-    _build_leaf_aabb!(LBVH, enc)
+    _build_leaf_coords!(LBVH, enc)
 
     @threads for startid in Int32(nleaf):Int32(ntotal)                      # Karras: Each thread starts from one leaf node and walks up the tree using parent pointers that we record during radix tree construction.
         _build_internal_aabb!(LBVH, visited, startid)                       # Well I prefer to use id in 2n-1 space rather than the index of leaf
@@ -87,12 +86,11 @@ function LinearBVH(enc::MortonEncoding{D, TF, TI, VF, VI}, brt::BinaryRadixTree{
     return LBVH
 end
 
-function _build_leaf_aabb!(LBVH::LinearBVH{D}, enc :: MortonEncoding{D}) where {D}
+function _build_leaf_coords!(LBVH::LinearBVH{D}, enc :: MortonEncoding{D}) where {D}
     coords = enc.coord
-    leaf = LBVH.leaf_aabb
+    leaf = LBVH.leaf_coor
     @inbounds for d in 1:D
-        copyto!(leaf.min[d], coords[d])
-        copyto!(leaf.max[d], coords[d])
+        copyto!(leaf[d], coords[d])
     end
     return nothing
 end
@@ -108,8 +106,7 @@ function _build_internal_aabb!(LBVH::LinearBVH{D}, visited :: AtomicMemory{UInt3
     node_min  = LBVH.node_aabb.min
     node_max  = LBVH.node_aabb.max
     node_hmax = LBVH.node_hmax
-    leaf_min  = LBVH.leaf_aabb.min
-    leaf_max  = LBVH.leaf_aabb.max
+    leaf      = LBVH.leaf_coor
     leaf_h    = LBVH.leaf_h
 
     # BRT children (only meaningful for internal ids 1..ninternal)
@@ -138,10 +135,10 @@ function _build_internal_aabb!(LBVH::LinearBVH{D}, visited :: AtomicMemory{UInt3
 
                 # bounds
                 for d in 1:D
-                    lmin = is_leaf_id(l, nleaf) ? leaf_min[d][leaf_index(l, nleaf)] : node_min[d][internal_index(l)]
-                    rmin = is_leaf_id(r, nleaf) ? leaf_min[d][leaf_index(r, nleaf)] : node_min[d][internal_index(r)]
-                    lmax = is_leaf_id(l, nleaf) ? leaf_max[d][leaf_index(l, nleaf)] : node_max[d][internal_index(l)]
-                    rmax = is_leaf_id(r, nleaf) ? leaf_max[d][leaf_index(r, nleaf)] : node_max[d][internal_index(r)]
+                    lmin = is_leaf_id(l, nleaf) ? leaf[d][leaf_index(l, nleaf)] : node_min[d][internal_index(l)]
+                    rmin = is_leaf_id(r, nleaf) ? leaf[d][leaf_index(r, nleaf)] : node_min[d][internal_index(r)]
+                    lmax = is_leaf_id(l, nleaf) ? leaf[d][leaf_index(l, nleaf)] : node_max[d][internal_index(l)]
+                    rmax = is_leaf_id(r, nleaf) ? leaf[d][leaf_index(r, nleaf)] : node_max[d][internal_index(r)]
                     node_min[d][pidx] = ifelse(lmin < rmin, lmin, rmin)
                     node_max[d][pidx] = ifelse(lmax > rmax, lmax, rmax)
                 end
@@ -159,6 +156,22 @@ function _build_internal_aabb!(LBVH::LinearBVH{D}, visited :: AtomicMemory{UInt3
 end
 
 # Toolbox
+@inline function _squared_distance_point_coords(point :: NTuple{D, TF}, coords :: NTuple{D, VF}, idx :: Int) where {D, TF <: AbstractFloat, VF <: AbstractVector{TF}}
+    # Contract:
+    # - `idx` must index the provided arrays directly.
+    #   i.e. `idx ∈ 1:length(coords[d])` for all d.
+    # - This function DOES NOT accept "unified node IDs" in the 1:(2nleaf-1) space.
+    #   Callers must convert unified IDs to the appropriate array index
+    #   (e.g. leaf_index(...) or internal_index(...)) before calling.
+    zero_T = zero(TF)
+    s = zero_T
+    @inbounds for d in 1:D
+        δ = point[d] - coords[d][idx]
+        s += δ * δ
+    end
+    return s
+end
+
 @inline function _squared_distance_point_aabb(point :: NTuple{D, TF}, aabb_min :: NTuple{D, VF} , aabb_max :: NTuple{D, VF}, idx :: Int) where {D, TF <: AbstractFloat, VF <: AbstractVector{TF}}
     # Contract:
     # - `idx` must index the provided AABB arrays directly.
@@ -198,6 +211,25 @@ end
         Δ2 += Δ * Δ
         Δm += Δ * m
     end
+    s = Δ2 - Δm * Δm
+    return s
+end
+
+@inline function _squared_distance_line_coords(origin :: NTuple{D,TF}, direction :: NTuple{D,TF}, coords :: NTuple{D, VF}, idx :: Int) where {D, TF <: AbstractFloat, VF <: AbstractVector{TF}}
+    # Contract:
+    # - The line geometry is treated as an infinite line, not a ray.
+    # - The returned value is the exact minimum squared Euclidean distance.
+    # - `direction` must be a unit vector.
+    zero_T = zero(TF)
+    Δ2 = zero_T
+    Δm = zero_T
+
+    @inbounds for d in 1:D
+        Δ = coords[d][idx] - origin[d]
+        Δ2 += Δ * Δ
+        Δm += Δ * direction[d]
+    end
+
     s = Δ2 - Δm * Δm
     return s
 end

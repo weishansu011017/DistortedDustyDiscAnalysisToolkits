@@ -44,7 +44,7 @@ end
 function PhantomRevealer.to_HostVector(LBVH :: LinearBVH{D, TF, VF, VB}) where {D, TF <: AbstractFloat, VF <: CuVector{TF}, VB <: CuVector{Int32}}
     return LinearBVH{D, TF, Vector{TF}, Vector{Int32}}(
         to_HostVector(LBVH.brt),
-        to_HostVector(LBVH.leaf_aabb),
+        ntuple(i -> Vector{TF}(LBVH.leaf_coor[i]), D),
         Vector{TF}(LBVH.leaf_h),
         to_HostVector(LBVH.node_aabb),
         Vector{TF}(LBVH.node_hmax)

@@ -1,4 +1,4 @@
-@inline function _LOS_density_kernel(input::ITPINPUT, reference_point::NTuple{2, T}, ha :: T, LBVH :: LinearBVH, :: Type{itpGather} = itpGather) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
+@inline function _LOS_density_kernel(input::ITPINPUT, origin::NTuple{3, T}, direction::NTuple{3, T}, ha :: T, LBVH :: LinearBVH, :: Type{itpGather} = itpGather) where {ITPINPUT <: AbstractInterpolationInput, T <: AbstractFloat}
     # Prepare for interpolation
     K = input.smoothed_kernel
     Ktyp = typeof(K)
@@ -14,12 +14,12 @@
     leaf_idx    :: Int = zero(Int)
     p2leaf_d2   :: T   = zero(T)
 
-    NeighborSearch.@LBVH_gather_point_traversal LBVH reference_point radius2 leaf_idx p2leaf_d2 begin
+    NeighborSearch.@LBVH_gather_line_traversal LBVH origin direction radius2 leaf_idx p2leaf_d2 begin
         ########### Found a neighbor, do accumulation ###########
         @inbounds begin
             rb = (input.x[leaf_idx], input.y[leaf_idx])
             mb = input.m[leaf_idx]
-            Sigma += _LOS_density_accumulation(reference_point, rb, mb, ha, K)
+            Sigma += _LOS_density_accumulation(origin, direction, rb, mb, ha, K)
         end
         #########################################################
     end

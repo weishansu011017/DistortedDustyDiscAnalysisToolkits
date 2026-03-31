@@ -50,8 +50,8 @@
             Δx = xa - xb
             Δy = ya - yb 
             Δz = za - zb
-            Δr2 = Δx * Δx + Δy * Δy + Δz * Δz
-            Δr = sqrt(Δr2)
+
+            Δr = sqrt(p2leaf_d2)
 
             mb = input.m[leaf_idx]
             ρb = input.ρ[leaf_idx]
@@ -267,8 +267,8 @@ end
             Δx = xa - xb
             Δy = ya - yb 
             Δz = za - zb
-            Δr2 = Δx * Δx + Δy * Δy + Δz * Δz
-            Δr = sqrt(Δr2)
+            
+            Δr = sqrt(p2leaf_d2)
 
             mb = input.m[leaf_idx]
             ρb = input.ρ[leaf_idx]
@@ -490,8 +490,8 @@ end
             Δx = xa - xb
             Δy = ya - yb 
             Δz = za - zb
-            Δr2 = Δx * Δx + Δy * Δy + Δz * Δz
-            Δr = sqrt(Δr2)
+
+            Δr = sqrt(p2leaf_d2)
 
             mb = input.m[leaf_idx]
             ρb = input.ρ[leaf_idx]
