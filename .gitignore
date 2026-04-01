@@ -54,3 +54,4 @@ snap*.hdf5
 build/*
 lapack
 temp/*
+sysimage/*

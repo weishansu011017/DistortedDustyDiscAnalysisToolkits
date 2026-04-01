@@ -16,7 +16,13 @@
 #     • Flattening a `StructuredGrid` and restoring it back to the same axes
 #       reproduces the original grid values and axes exactly.
 #
-#  3. `StructuredGrid_interpolation`
+#  3. `LineSamples_interpolation`
+#     • Scalar line-integrated outputs match the corresponding direct
+#       line-integrated kernel evaluations for `itpScatter`.
+#     • Returned samples preserve line origin/direction geometry.
+#     • Unsupported strategies / non-scalar catalogs are rejected explicitly.
+#
+#  4. `StructuredGrid_interpolation`
 #     • Matches `PointSamples_interpolation` applied to the flattened grid.
 #     • Restores the structured axes and value layout correctly.
 #
@@ -26,7 +32,8 @@ using Test
 using DataFrames
 using PhantomRevealer
 using PhantomRevealer.KernelInterpolation: _quantity_interpolate_kernel,
-    _divergence_quantity_interpolate_kernel
+    _divergence_quantity_interpolate_kernel,
+    _line_integrated_quantities_interpolate_kernel
 
 ki_mod = PhantomRevealer.KernelInterpolation
 
@@ -74,6 +81,45 @@ function make_structured_grid_template()
         (0.25, 0.55, 2),
         (0.30, 0.60, 2),
     )
+end
+
+function make_line_interpolation_fixture()
+    df = DataFrame(
+        x = Float64[0.15, 0.35, 0.55, 0.75],
+        y = Float64[0.20, 0.60, 0.25, 0.70],
+        z = Float64[0.25, 0.45, 0.80, 0.30],
+        h = Float64[0.28, 0.24, 0.26, 0.22],
+        rho = Float64[1.0, 0.95, 1.05, 1.1],
+        mass = Float64[0.4, 0.45, 0.42, 0.38],
+        temp = Float64[10.0, 11.0, 13.0, 12.0],
+        vx = Float64[0.1, -0.2, 0.3, -0.1],
+    )
+
+    data = PhantomRevealer.IO.ParticleDataFrame(df, Dict{Symbol, Any}())
+    input, catalog = build_input(
+        data,
+        MassFromColumn(:mass);
+        scalars = [:temp, :vx],
+        smoothed_kernel = M4_spline,
+    )
+
+    LBVH = LinearBVH!(input, Val(3))
+    return input, catalog, LBVH
+end
+
+function make_line_samples_template()
+    invsqrt2 = inv(sqrt(2.0))
+    origin = (
+        Float64[0.20, 0.40, 0.55],
+        Float64[0.25, 0.35, 0.45],
+        Float64[0.00, 0.10, 0.20],
+    )
+    direction = (
+        Float64[0.0, invsqrt2, 1.0],
+        Float64[0.0, 0.0, 0.0],
+        Float64[1.0, invsqrt2, 0.0],
+    )
+    return LineSamples(zeros(Float64, length(origin[1])), origin, direction)
 end
 
 
@@ -124,7 +170,62 @@ end
     @test restored.size == size(grid)
 end
 
-# ── 3. StructuredGrid interpolation ─────────────────────────────────── #
+# ── 3. LineSamples interpolation ────────────────────────────────────── #
+
+@testset "LineSamples interpolation — CPU scatter consistency" begin
+    input, catalog, LBVH = make_line_interpolation_fixture()
+    grid_template = make_line_samples_template()
+    result = LineSamples_interpolation(CPUComputeBackend(), grid_template, input, catalog, itpScatter)
+
+    scalar_slots = catalog.scalar_slots
+    scalar_snormalization = catalog.scalar_snormalization
+
+    @test result.names == catalog.ordered_names
+    @test length(result.grids) == length(catalog.ordered_names)
+    @test result.grids[1].origin === result.grids[2].origin
+    @test result.grids[1].direction === result.grids[2].direction
+    @test result.grids[1].origin == grid_template.origin
+    @test result.grids[1].direction == grid_template.direction
+
+    for i in eachindex(grid_template.grid)
+        origin = (
+            grid_template.origin[1][i],
+            grid_template.origin[2][i],
+            grid_template.origin[3][i],
+        )
+        direction = (
+            grid_template.direction[1][i],
+            grid_template.direction[2][i],
+            grid_template.direction[3][i],
+        )
+
+        expected = _line_integrated_quantities_interpolate_kernel(
+            input,
+            origin,
+            direction,
+            LBVH,
+            scalar_slots,
+            scalar_snormalization,
+            itpScatter,
+        )
+
+        @test result.grids[1].grid[i] ≈ expected[1] atol = 1.0e-12 rtol = 1.0e-10
+        @test result.grids[2].grid[i] ≈ expected[2] atol = 1.0e-12 rtol = 1.0e-10
+    end
+end
+
+@testset "LineSamples interpolation — unsupported modes" begin
+    line_input, line_catalog, _ = make_line_interpolation_fixture()
+    line_template = make_line_samples_template()
+
+    @test_throws ArgumentError LineSamples_interpolation(CPUComputeBackend(), line_template, line_input, line_catalog, itpGather)
+    @test_throws ArgumentError LineSamples_interpolation(CPUComputeBackend(), line_template, line_input, line_catalog, itpSymmetric)
+
+    point_input, point_catalog, _ = make_grid_interpolation_fixture()
+    @test_throws MethodError LineSamples_interpolation(CPUComputeBackend(), line_template, point_input, point_catalog, itpScatter)
+end
+
+# ── 4. StructuredGrid interpolation ─────────────────────────────────── #
 
 @testset "StructuredGrid interpolation — flattened consistency" begin
     input, catalog, _ = make_grid_interpolation_fixture()

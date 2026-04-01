@@ -143,23 +143,6 @@ function InterpolationCatalog(;
         ordered
     )
 end
-# function InterpolationCatalog(
-#     scalar_names::NTuple{N,Symbol}, scalar_slots::NTuple{N,Int},
-#     grad_names::NTuple{G,Symbol}, grad_slots::NTuple{G,Int},
-#     div_names::NTuple{D,Symbol}, div_slots::NTuple{D,NTuple{3,Int}},
-#     curl_names::NTuple{C,Symbol}, curl_slots::NTuple{C,NTuple{3,Int}},
-# ) where {N,G,D,C}
-#     L = N + 3G + D + 3C
-#     ordered = _ordered_quantity_names(Val(L), scalar_names, grad_names, div_names, curl_names)
-#     scalar_norm = _shepard_normalization_flag(scalar_names)
-#     return InterpolationCatalog{N,G,D,C,L}(
-#         scalar_names, scalar_slots, scalar_norm, 
-#         grad_names, grad_slots,
-#         div_names, div_slots,
-#         curl_names, curl_slots,
-#         ordered
-#     )
-# end
 
 scalar_index(cat::InterpolationCatalog, name::Symbol) =
     cat.scalar_slots[findfirst(==(name), cat.scalar_names)]

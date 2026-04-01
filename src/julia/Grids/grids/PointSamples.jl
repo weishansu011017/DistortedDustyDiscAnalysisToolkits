@@ -59,6 +59,8 @@ the same coordinate container as the input grid.
   and shared coordinates (`grid.coor`).
 """
 function Base.similar(grid::PointSamples)
+    # Geometry is taken from grids[1] under the contract that `similar(::LineSamples)`
+    # shares `coor` across all output grids.
     return PointSamples(similar(grid.grid), grid.coor)
 end
 
@@ -280,7 +282,7 @@ function PointSamples(x :: V, y :: V, z :: V) where {T <: AbstractFloat, V <: Ab
 
     coords = (x, y, z)
     vals = zeros(T, N)
-    return PointSamples{3, T, Vector{T}, NTuple{3, Vector{T}}}(vals, coords)
+    return PointSamples(vals, coords)
 end
 
 """
@@ -303,5 +305,5 @@ function PointSamples(x :: V, y :: V) where {T <: AbstractFloat, V <: AbstractVe
 
     coords = (x, y)
     vals = zeros(T, N)
-    return PointSamples{2, T, Vector{T}, NTuple{2, Vector{T}}}(vals, coords)
+    return PointSamples(vals, coords)
 end

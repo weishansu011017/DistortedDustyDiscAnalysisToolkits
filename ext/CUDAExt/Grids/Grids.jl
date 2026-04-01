@@ -4,6 +4,7 @@ using CUDA
 
 # Grid construction
 include(joinpath(@__DIR__, "grids", "PointSamples.jl"))
+include(joinpath(@__DIR__, "grids", "LineSamples.jl"))
 
 
 # Export function, marco, const...

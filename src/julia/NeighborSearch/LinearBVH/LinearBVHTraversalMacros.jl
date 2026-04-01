@@ -951,4 +951,3 @@ end
         return δ * δ
     end
 end
-

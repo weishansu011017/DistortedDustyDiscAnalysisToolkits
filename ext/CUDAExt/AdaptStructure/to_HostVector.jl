@@ -52,14 +52,14 @@ function PhantomRevealer.to_HostVector(LBVH :: LinearBVH{D, TF, VF, VB}) where {
 end
 
 function PhantomRevealer.to_HostVector(grid :: PointSamples{D, TF, VG, VC}) where {D, TF <: AbstractFloat, VG <: CuVector{TF}, VC <: NTuple{D, CuVector{TF}}}
-    return PointSamples{D, TF, Vector{TF}, NTuple{D, Vector{TF}}}(
+    return PointSamples(
         Vector{TF}(grid.grid),
         ntuple(i -> Vector{TF}(grid.coor[i]), D)
     )
 end
 
 function PhantomRevealer.to_HostVector(grid :: LineSamples{D, TF, VG, VC}) where {D, TF <: AbstractFloat, VG <: CuVector{TF}, VC <: NTuple{D, CuVector{TF}}}
-    return LineSamples{D, TF, Vector{TF}, NTuple{D, Vector{TF}}}(
+    return LineSamples(
         Vector{TF}(grid.grid),
         ntuple(i -> Vector{TF}(grid.origin[i]), D),
         ntuple(i -> Vector{TF}(grid.direction[i]), D)

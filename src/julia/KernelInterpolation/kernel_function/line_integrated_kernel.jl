@@ -10,24 +10,44 @@ density and related line-integrated quantities by replacing the 3D kernel
 """
 
 # Line-integrated kernel lookup
-@inline function _lin_lut(q, Q::SVector{N,T}, I::SVector{N,T}) where {N,T}
-    dq   = Q[2] - Q[1]            
-    idxf = q / dq + 1             
-    i    = clamp(Int(floor(idxf)), 1, N-1)
-    t    = idxf - i             
-    return I[i]*(1-t) + I[i+1]*t
+@inline function _lin_lut(q::T, Q::SVector{N,T}, I::SVector{N,T}) where {N,T <: AbstractFloat}
+    dq = Q[2] - Q[1]
+    idxf = q / dq + one(T)
+    i = Int(clamp(Base.unsafe_trunc(Int32, idxf), Int32(1), Int32(N - 1)))
+    t = idxf - T(i)
+    return I[i] * (one(T) - t) + I[i + 1] * t
 end
 
-for (K, Qsym, Inormsym) in (
-    (M4_spline,   :_M4_spline_Q,   _M4_spline_Inorm),
-    (M5_spline,   :_M5_spline_Q,   _M5_spline_Inorm),
-    (M6_spline,   :_M6_spline_Q,   _M6_spline_Inorm),
-    (C2_Wendland, :_C2_Wendland_Q, _C2_Wendland_Inorm),
-    (C4_Wendland, :_C4_Wendland_Q, _C4_Wendland_Inorm),
-    (C6_Wendland, :_C6_Wendland_Q, _C6_Wendland_Inorm),
+const _M4_spline_Q32 = Float32.(_M4_spline_Q)
+const _M4_spline_Inorm32 = Float32.(_M4_spline_Inorm)
+const _M5_spline_Q32 = Float32.(_M5_spline_Q)
+const _M5_spline_Inorm32 = Float32.(_M5_spline_Inorm)
+const _M6_spline_Q32 = Float32.(_M6_spline_Q)
+const _M6_spline_Inorm32 = Float32.(_M6_spline_Inorm)
+const _C2_Wendland_Q32 = Float32.(_C2_Wendland_Q)
+const _C2_Wendland_Inorm32 = Float32.(_C2_Wendland_Inorm)
+const _C4_Wendland_Q32 = Float32.(_C4_Wendland_Q)
+const _C4_Wendland_Inorm32 = Float32.(_C4_Wendland_Inorm)
+const _C6_Wendland_Q32 = Float32.(_C6_Wendland_Q)
+const _C6_Wendland_Inorm32 = Float32.(_C6_Wendland_Inorm)
+
+for (K, Q64sym, I64sym, Q32sym, I32sym) in (
+    (M4_spline,   :_M4_spline_Q,   :_M4_spline_Inorm,   :_M4_spline_Q32,   :_M4_spline_Inorm32),
+    (M5_spline,   :_M5_spline_Q,   :_M5_spline_Inorm,   :_M5_spline_Q32,   :_M5_spline_Inorm32),
+    (M6_spline,   :_M6_spline_Q,   :_M6_spline_Inorm,   :_M6_spline_Q32,   :_M6_spline_Inorm32),
+    (C2_Wendland, :_C2_Wendland_Q, :_C2_Wendland_Inorm, :_C2_Wendland_Q32, :_C2_Wendland_Inorm32),
+    (C4_Wendland, :_C4_Wendland_Q, :_C4_Wendland_Inorm, :_C4_Wendland_Q32, :_C4_Wendland_Inorm32),
+    (C6_Wendland, :_C6_Wendland_Q, :_C6_Wendland_Inorm, :_C6_Wendland_Q32, :_C6_Wendland_Inorm32),
 )
-    @eval @inline lookup_line_integrated_kernel(::Type{$K}, q_perp::T) where {T <: AbstractFloat} =
-    _lin_lut(T(q_perp), $Qsym, $Inormsym,)
+    @eval @inline lookup_line_integrated_kernel(::Type{$K}, q_perp::Float32) =
+    _lin_lut(q_perp, $Q32sym, $I32sym)
+
+    @eval @inline lookup_line_integrated_kernel(::Type{$K}, q_perp::Float64) =
+    _lin_lut(q_perp, $Q64sym, $I64sym)
+end
+
+@inline function lookup_line_integrated_kernel(::Type{K}, q_perp::T) where {K <: AbstractSPHKernel, T <: AbstractFloat}
+    return T(lookup_line_integrated_kernel(K, Float64(q_perp)))
 end
 
 """

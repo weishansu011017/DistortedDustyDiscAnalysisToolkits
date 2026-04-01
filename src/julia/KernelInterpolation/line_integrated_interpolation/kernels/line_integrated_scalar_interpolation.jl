@@ -107,7 +107,7 @@ end
     end
 
     if iszero(S1)
-        return ntuple(_ -> T(NaN), Val(M))
+        return ntuple(_ -> T(NaN32), Val(M))
     end
 
     invS1 = inv(S1)
@@ -152,7 +152,7 @@ end
     end
 
     if iszero(S1)
-        return ntuple(_ -> T(NaN), Val(M))
+        return ntuple(_ -> T(NaN32), Val(M))
     end
 
     invS1 = inv(S1)
@@ -200,7 +200,7 @@ end
     end
 
     if iszero(S1)
-        return ntuple(_ -> T(NaN), Val(M))
+        return ntuple(_ -> T(NaN32), Val(M))
     end
 
     invS1 = inv(S1)

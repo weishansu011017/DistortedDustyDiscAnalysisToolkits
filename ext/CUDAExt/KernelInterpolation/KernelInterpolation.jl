@@ -3,7 +3,8 @@ using PhantomRevealer
 using CUDA
 
 # Grid interpolation
-include(joinpath(@__DIR__, "grid_interpolation", "grid_interpolation.jl"))
+include(joinpath(@__DIR__, "grid_interpolation", "PointSamples_interpolation.jl"))
+include(joinpath(@__DIR__, "grid_interpolation", "LineSamples_interpolation.jl"))
 
 # Export function, marco, const...
 for name in filter(s -> !startswith(string(s), "#"), names(@__MODULE__, all = true))

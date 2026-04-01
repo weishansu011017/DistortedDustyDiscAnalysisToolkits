@@ -52,14 +52,14 @@ function PhantomRevealer.to_CuVector(LBVH :: LinearBVH{D, TF, VF, VB}) where {D,
 end
 
 function PhantomRevealer.to_CuVector(grid :: PointSamples{D, TF, VG, VC}) where {D, TF <: AbstractFloat, VG <: AbstractVector{TF}, VC <: NTuple{D, Vector{TF}}}
-    return PointSamples{D, TF, CuVector{TF}, NTuple{D, CuVector{TF}}}(
+    return PointSamples(
         CuVector{TF}(grid.grid),
         ntuple(i -> CuVector{TF}(grid.coor[i]), D)
     )
 end
 
 function PhantomRevealer.to_CuVector(grid :: LineSamples{D, TF, VG, VC}) where {D, TF <: AbstractFloat, VG <: AbstractVector{TF}, VC <: NTuple{D, Vector{TF}}}
-    return LineSamples{D, TF, CuVector{TF}, NTuple{D, CuVector{TF}}}(
+    return LineSamples(
         CuVector{TF}(grid.grid),
         ntuple(i -> CuVector{TF}(grid.origin[i]), D),
         ntuple(i -> CuVector{TF}(grid.direction[i]), D)

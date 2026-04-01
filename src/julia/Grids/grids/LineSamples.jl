@@ -42,7 +42,7 @@ struct LineSamples{D, TF <: AbstractFloat, VG <: AbstractVector{TF}, VC <: NTupl
             length(direction[d]) == N || throw(ArgumentError("direction[$d] length mismatch"))
         end
 
-        return LineSamples{D,TF,VG,VC}(grid, origin, direction)
+        return new{D,TF,VG,VC}(grid, origin, direction)
     end
 end
 
@@ -73,6 +73,8 @@ The returned object allocates a new `grid` vector, but reuses
   origin/direction containers.
 """
 function Base.similar(grid::LineSamples)
+    # Geometry is taken from grids[1] under the contract that `similar(::LineSamples)`
+    # shares `origin` and `direction` across all output grids.
     return LineSamples(similar(grid.grid), grid.origin, grid.direction)
 end
 
@@ -397,7 +399,7 @@ function LineSamples(xo :: V, yo :: V, zo :: V, xd :: V, yd :: V, zd :: V) where
     origin = (xo, yo, zo)
     direction = (xd, yd, zd)
     vals = zeros(T, N)
-    return LineSamples{3, T, Vector{T}, NTuple{3, Vector{T}}}(vals, origin, direction)
+    return LineSamples(vals, origin, direction)
 end
 
 """
@@ -432,6 +434,5 @@ function LineSamples(xo :: V, yo :: V, xd :: V, yd :: V) where {T <: AbstractFlo
     origin = (xo, yo)
     direction = (xd, yd)
     vals = zeros(T, N)
-    return LineSamples{2, T, Vector{T}, NTuple{2, Vector{T}}}(vals, origin, direction)
+    return LineSamples(vals, origin, direction)
 end
-

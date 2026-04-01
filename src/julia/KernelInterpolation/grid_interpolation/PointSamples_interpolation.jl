@@ -31,7 +31,7 @@ and evaluates each grid point in parallel using threaded execution.
 - `grids` — NTuple of output grids storing interpolated results.  
 - `names` — Ordered list of all output quantity names, matching the grid tuple order.
 """
-function PointSamples_interpolation(backend :: CPUComputeBackend, grid_template::PointSamples{D}, input::ITPINPUT, catalog::InterpolationCatalog{N, G, Div, C, L}, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {D, N, G, Div, C, L, T <: AbstractFloat, ITPINPUT <: InterpolationInput{T}, ITPSTRATEGY <: AbstractInterpolationStrategy}
+function PointSamples_interpolation(backend :: CPUComputeBackend, grid_template::PointSamples{D, TF}, input::ITPINPUT, catalog::InterpolationCatalog{N, G, Div, C, L}, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {D, N, G, Div, C, L, TF <: AbstractFloat, ITPINPUT <: InterpolationInput{TF}, ITPSTRATEGY <: AbstractInterpolationStrategy}
     grids_result, LBVH, names, catalog_consice = initialize_interpolation(backend, grid_template, input, catalog)
     npoints = length(grid_template)
     @info "     SPH Interpolation: Start interpolation..."
@@ -50,12 +50,14 @@ end
 
 # Interpolation kernels
 ## Need providing smoothed radius
-@inline function _point_samples_interpolation_kernel!(:: CPUComputeBackend, grids :: NTuple{L, PointSamples{3}}, i :: Int, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {N, G, Div, C, L, TF <: AbstractFloat, ITPINPUT <: InterpolationInput{TF}, ITPSTRATEGY <: AbstractInterpolationStrategy}
+@inline function _point_samples_interpolation_kernel!(:: CPUComputeBackend, grids :: NTuple{L, PointSamples{3, TF}}, i :: Int, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {N, G, Div, C, L, TF <: AbstractFloat, ITPINPUT <: InterpolationInput{TF}, ITPSTRATEGY <: AbstractInterpolationStrategy}
     # Get point
     @inbounds begin
-        xa = grids[1].coor[1][i]
-        ya = grids[1].coor[2][i]
-        za = grids[1].coor[3][i]
+        geometry = grids[1]
+        
+        xa = geometry.coor[1][i]
+        ya = geometry.coor[2][i]
+        za = geometry.coor[3][i]
         point :: NTuple{3, TF} = (xa, ya, za)
     end
     
@@ -117,12 +119,14 @@ end
 end
 
 ## Not providing smoothed radius
-@inline function _point_samples_interpolation_kernel!(:: CPUComputeBackend, grids :: NTuple{L, PointSamples{3}}, i :: Int, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, ::Type{itpScatter}) where {N, G, Div, C, L, TF <: AbstractFloat, ITPINPUT <: InterpolationInput{TF}}
+@inline function _point_samples_interpolation_kernel!(:: CPUComputeBackend, grids :: NTuple{L, PointSamples{3, TF}}, i :: Int, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, ::Type{itpScatter}) where {N, G, Div, C, L, TF <: AbstractFloat, ITPINPUT <: InterpolationInput{TF}}
     # Get point
     @inbounds begin
-        xa = grids[1].coor[1][i]
-        ya = grids[1].coor[2][i]
-        za = grids[1].coor[3][i]
+        geometry = grids[1]
+
+        xa = geometry.coor[1][i]
+        ya = geometry.coor[2][i]
+        za = geometry.coor[3][i]
         point :: NTuple{3, TF} = (xa, ya, za)
     end
 

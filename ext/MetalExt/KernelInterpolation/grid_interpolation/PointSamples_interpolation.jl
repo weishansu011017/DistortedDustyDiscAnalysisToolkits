@@ -5,18 +5,15 @@
     npoints = length(grids[1])
     i = tid
     while i <= npoints
-        # Get point
         @inbounds begin
             xa = grids[1].coor[1][i]
             ya = grids[1].coor[2][i]
             za = grids[1].coor[3][i]
             point :: NTuple{3, TF} = (xa, ya, za)
         end
-        
-        # Particles searching
+
         ha = LBVH_find_nearest_h(LBVH, point)
 
-        # Interpolation
         itpresult :: Tuple{NTuple{N,TF}, NTuple{G,NTuple{3,TF}}, NTuple{Div,TF}, NTuple{C,NTuple{3,TF}}} = PhantomRevealer.KernelInterpolation._general_quantity_interpolate_kernel(input, point, ha, LBVH, catalog_consice, itp_strategy)
 
         scalars :: NTuple{N,TF} = itpresult[1]
@@ -24,10 +21,8 @@
         divergences :: NTuple{Div,TF} = itpresult[3]
         curls :: NTuple{C,NTuple{3,TF}} = itpresult[4]
 
-        # Store results
         out_idx = 1
 
-        ## Scalars
         if N > 0
             @inbounds for j in 1:N
                 grids[out_idx].grid[i] = scalars[j]
@@ -35,7 +30,6 @@
             end
         end
 
-        ## Gradients
         if G > 0
             @inbounds for j in 1:G
                 grad_quant = gradients[j]
@@ -46,7 +40,6 @@
             end
         end
 
-        ## Divergences
         if Div > 0
             @inbounds for j in 1:Div
                 div_quant = divergences[j]
@@ -55,7 +48,6 @@
             end
         end
 
-        ## Curls
         if C > 0
             @inbounds for j in 1:C
                 curl_quant = curls[j]
@@ -77,7 +69,6 @@ end
     npoints = length(grids[1])
     i = tid
     while i <= npoints
-        # Get point
         @inbounds begin
             xa = grids[1].coor[1][i]
             ya = grids[1].coor[2][i]
@@ -85,7 +76,6 @@ end
             point :: NTuple{3, TF} = (xa, ya, za)
         end
 
-        # Interpolation
         itpresult :: Tuple{NTuple{N,TF}, NTuple{G,NTuple{3,TF}}, NTuple{Div,TF}, NTuple{C,NTuple{3,TF}}} = PhantomRevealer.KernelInterpolation._general_quantity_interpolate_kernel(input, point, LBVH, catalog_consice, itpScatter)
 
         scalars :: NTuple{N,TF} = itpresult[1]
@@ -93,10 +83,8 @@ end
         divergences :: NTuple{Div,TF} = itpresult[3]
         curls :: NTuple{C,NTuple{3,TF}} = itpresult[4]
 
-        # Store results
         out_idx = 1
 
-        ## Scalars
         if N > 0
             @inbounds for j in 1:N
                 grids[out_idx].grid[i] = scalars[j]
@@ -104,7 +92,6 @@ end
             end
         end
 
-        ## Gradients
         if G > 0
             @inbounds for j in 1:G
                 grad_quant = gradients[j]
@@ -115,7 +102,6 @@ end
             end
         end
 
-        ## Divergences
         if Div > 0
             @inbounds for j in 1:Div
                 div_quant = divergences[j]
@@ -124,7 +110,6 @@ end
             end
         end
 
-        ## Curls
         if C > 0
             @inbounds for j in 1:C
                 curl_quant = curls[j]
@@ -147,34 +132,9 @@ end
 Performs SPH grid interpolation on the GPU using Apple's Metal backend.
 The routine copies particle data, grids, and BVH structures to Metal buffers,
 launches the interpolation kernel, and copies results back to host memory.
-
-# Parameters
-- `backend::MetalComputeBackend`  
-  GPU execution backend using Metal.
-
-- `grid_template::PointSamples{D}`  
-  Template grid defining dimensionality and coordinate storage for the output grids.
-
-- `input::ITPINPUT`  
-  `InterpolationInput` holding positions, smoothing lengths, quantities,
-  and the SPH kernel to be used for GPU-side interpolation.
-
-- `catalog::InterpolationCatalog{N, G, Div, C, L}`  
-  Full interpolation catalog describing which scalar, gradient, divergence,
-  and curl quantities should be computed.
-
-- `itp_strategy::Type{ITPSTRATEGY}`  
-  Interpolation strategy type (e.g., symmetric, gather, scatter).
-
-# Returns
-`GridBundle{L, typeof(grids[1])}` containing:
-- `grids` — NTuple of host-side grids with all interpolated fields.  
-- `names` — Ordered list of output quantity names.
-
 """
 function PhantomRevealer.PointSamples_interpolation(::MetalComputeBackend, grid_template::PointSamples{D}, input::ITPINPUT, catalog::InterpolationCatalog{N, G, Div, C, L}, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {D, N, G, Div, C, L, T <: AbstractFloat, ITPINPUT <: InterpolationInput{T}, ITPSTRATEGY <: AbstractInterpolationStrategy}
     grids, LBVH, names, catalog_consice = PhantomRevealer.initialize_interpolation(PhantomRevealer.CPUComputeBackend(), grid_template, input, catalog)
-    # To MtlVector
     @info "     SPH Interpolation: Copying interpolated grids to device memory..."
     input_Mtl = to_MtlVector(input)
     grids_Mtl = ntuple(i -> to_MtlVector(grids[i]), Val(L))
@@ -182,7 +142,7 @@ function PhantomRevealer.PointSamples_interpolation(::MetalComputeBackend, grid_
     @info "     SPH Interpolation: End copying interpolated grids to device memory."
 
     npoints = length(grid_template)
-    @info"      SPH Interpolation: Start interpolation..."
+    @info "     SPH Interpolation: Start interpolation..."
     @metal threads=(256,) groups=(cld(npoints, 256)) _point_samples_interpolation_kernel!(grids_Mtl, input_Mtl, catalog_consice, LBVH_Mtl, itp_strategy)
     Metal.synchronize()
     @info "     SPH Interpolation: End interpolation."
