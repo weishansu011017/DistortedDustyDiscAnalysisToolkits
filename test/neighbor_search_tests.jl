@@ -40,21 +40,21 @@ using PhantomRevealer.NeighborSearch
 
 # ========================== Module aliases ================================== #
 
-const NS = PhantomRevealer.NeighborSearch
+ns_mod = PhantomRevealer.NeighborSearch
 
 # ========================== Helper functions ================================ #
 
 # ── Coordinate generators ────────────────────────────────────────────── #
 
-const PRIMES = (37, 61, 97, 131, 197, 263)
+primes = (37, 61, 97, 131, 197, 263)
 
 """Build `dim` coordinate vectors of length `n` using prime-hashing."""
 function build_coords(dim::Int, n::Int, offset::Int)
     coords = Vector{Vector{Float64}}(undef, dim)
     modulus = 1021
     for d in 1:dim
-        prime = PRIMES[d]
-        shift = PRIMES[d + dim]
+        prime = primes[d]
+        shift = primes[d + dim]
         coords[d] = [Float64(mod(prime * i + shift * offset, modulus)) / modulus for i in 1:n]
     end
     return coords
@@ -112,10 +112,10 @@ function subtree_hmax_reference(enc, brt)
     root == 0 && return out
 
     function visit(node::Int32)
-        if NS.is_leaf_id(node, nleaf)
-            return enc.h[NS.leaf_index(node, nleaf)]
+        if ns_mod.is_leaf_id(node, nleaf)
+            return enc.h[ns_mod.leaf_index(node, nleaf)]
         end
-        idx = NS.internal_index(node)
+        idx = ns_mod.internal_index(node)
         hl = visit(brt.left[idx])
         hr = visit(brt.right[idx])
         out[idx] = max(hl, hr)
@@ -142,24 +142,24 @@ function scatter_neighbors_reference(lbvh, point::NTuple{D,T}, Kvalid::T, hvec) 
     if node == 0
         @inbounds for leaf in 1:nleaf
             r2 = (Kvalid * hvec[leaf])^2
-            d2 = NS._squared_distance_point_coords(point, leaf_coor, leaf)
+            d2 = ns_mod._squared_distance_point_coords(point, leaf_coor, leaf)
             d2 <= r2 && push!(hits, leaf)
         end
         sort!(hits)
         return hits
     end
     while node != 0
-        if NS.is_leaf_id(node, nleaf)
-            leaf = NS.leaf_index(node, nleaf)
+        if ns_mod.is_leaf_id(node, nleaf)
+            leaf = ns_mod.leaf_index(node, nleaf)
             r2 = (Kvalid * hvec[leaf])^2
-            d2 = NS._squared_distance_point_coords(point, leaf_coor, leaf)
+            d2 = ns_mod._squared_distance_point_coords(point, leaf_coor, leaf)
             d2 <= r2 && push!(hits, leaf)
             node = escape[Int(node)]
             continue
         end
-        idx = NS.internal_index(node)
+        idx = ns_mod.internal_index(node)
         r2node = (Kvalid * lbvh.node_hmax[idx])^2
-        d2node = NS._squared_distance_point_aabb(point, node_min, node_max, idx)
+        d2node = ns_mod._squared_distance_point_aabb(point, node_min, node_max, idx)
         node = (d2node <= r2node) ? left[idx] : escape[idx]
     end
     sort!(hits)
@@ -172,7 +172,7 @@ function line_neighbors_reference(lbvh, origin::NTuple{D,T}, direction::NTuple{D
     hits = Int[]
     @inbounds for leaf in 1:nleaf
         point = ntuple(d -> lbvh.leaf_coor[d][leaf], D)
-        d2 = NS._squared_distance_point_line(point, origin, direction)
+        d2 = ns_mod._squared_distance_point_line(point, origin, direction)
         d2 <= radius2_of(leaf) && push!(hits, leaf)
     end
     sort!(hits)
@@ -211,24 +211,24 @@ end
         codes = enc.codes
         leaf_offset = n - 1
         for i in 1:(n - 1)
-            lo, hi = NS._find_range(codes, i)
-            split = NS._split_position(codes, lo, hi)
+            lo, hi = ns_mod._find_range(codes, i)
+            split = ns_mod._split_position(codes, lo, hi)
 
             l = brt.left[i]
             r = brt.right[i]
 
-            @test NS.is_internal_id(l, n) || NS.is_leaf_id(l, n)
-            @test NS.is_internal_id(r, n) || NS.is_leaf_id(r, n)
+            @test ns_mod.is_internal_id(l, n) || ns_mod.is_leaf_id(l, n)
+            @test ns_mod.is_internal_id(r, n) || ns_mod.is_leaf_id(r, n)
 
-            if NS.is_leaf_id(l, n)
-                @test NS.leaf_index(l, n) == lo
+            if ns_mod.is_leaf_id(l, n)
+                @test ns_mod.leaf_index(l, n) == lo
                 @test l == Int32(leaf_offset + lo)
             else
                 @test l == Int32(split)
             end
 
-            if NS.is_leaf_id(r, n)
-                @test NS.leaf_index(r, n) == hi
+            if ns_mod.is_leaf_id(r, n)
+                @test ns_mod.leaf_index(r, n) == hi
                 @test r == Int32(leaf_offset + hi)
             else
                 @test r == Int32(split + 1)
@@ -284,10 +284,10 @@ end
 
         for i in 1:(n - 1)
             for d in 1:dim
-                cmin_l = NS.is_leaf_id(L[i], n) ? lcoor[d][NS.leaf_index(L[i], n)] : nmin[d][NS.internal_index(L[i])]
-                cmin_r = NS.is_leaf_id(R[i], n) ? lcoor[d][NS.leaf_index(R[i], n)] : nmin[d][NS.internal_index(R[i])]
-                cmax_l = NS.is_leaf_id(L[i], n) ? lcoor[d][NS.leaf_index(L[i], n)] : nmax[d][NS.internal_index(L[i])]
-                cmax_r = NS.is_leaf_id(R[i], n) ? lcoor[d][NS.leaf_index(R[i], n)] : nmax[d][NS.internal_index(R[i])]
+                cmin_l = ns_mod.is_leaf_id(L[i], n) ? lcoor[d][ns_mod.leaf_index(L[i], n)] : nmin[d][ns_mod.internal_index(L[i])]
+                cmin_r = ns_mod.is_leaf_id(R[i], n) ? lcoor[d][ns_mod.leaf_index(R[i], n)] : nmin[d][ns_mod.internal_index(R[i])]
+                cmax_l = ns_mod.is_leaf_id(L[i], n) ? lcoor[d][ns_mod.leaf_index(L[i], n)] : nmax[d][ns_mod.internal_index(L[i])]
+                cmax_r = ns_mod.is_leaf_id(R[i], n) ? lcoor[d][ns_mod.leaf_index(R[i], n)] : nmax[d][ns_mod.internal_index(R[i])]
                 @test nmin[d][i] == min(cmin_l, cmin_r)
                 @test nmax[d][i] == max(cmax_l, cmax_r)
             end
@@ -394,13 +394,13 @@ end
     visits_global = 0
     node = brt.root
     while node != 0
-        if NS.is_leaf_id(node, nleaf)
+        if ns_mod.is_leaf_id(node, nleaf)
             node = escape[Int(node)]; continue
         end
         visits_global += 1
-        idx = NS.internal_index(node)
+        idx = ns_mod.internal_index(node)
         r2 = (Kvalid * global_hmax)^2
-        d2 = NS._squared_distance_point_aabb(point, node_min, node_max, idx)
+        d2 = ns_mod._squared_distance_point_aabb(point, node_min, node_max, idx)
         node = (d2 <= r2) ? left[idx] : escape[idx]
     end
 
@@ -408,20 +408,20 @@ end
     visits_hmax = 0
     node = brt.root
     while node != 0
-        if NS.is_leaf_id(node, nleaf)
+        if ns_mod.is_leaf_id(node, nleaf)
             node = escape[Int(node)]; continue
         end
         visits_hmax += 1
-        idx = NS.internal_index(node)
+        idx = ns_mod.internal_index(node)
         r2 = (Kvalid * lbvh.node_hmax[idx])^2
-        d2 = NS._squared_distance_point_aabb(point, node_min, node_max, idx)
+        d2 = ns_mod._squared_distance_point_aabb(point, node_min, node_max, idx)
         node = (d2 <= r2) ? left[idx] : escape[idx]
     end
 
     @test visits_hmax <= visits_global
 end
 
-@testset "LinearBVH ??line traversal matches brute force" begin
+@testset "LinearBVH - line traversal matches brute force" begin
     x = [0.0, 0.1, 0.2, 0.3, 0.4]
     y = [0.0, 0.15, 0.3, 0.6, 1.0]
     h = [0.05, 0.2, 0.35, 0.55, 0.2]
@@ -442,20 +442,20 @@ end
     gather_hits = Int[]
     leaf_idx = 0
     d2 = 0.0
-    NS.@LBVH_gather_line_traversal lbvh origin direction radius2 leaf_idx d2 begin
+    ns_mod.@LBVH_gather_line_traversal lbvh origin direction radius2 leaf_idx d2 begin
         push!(gather_hits, leaf_idx)
     end
     sort!(gather_hits)
 
     scatter_hits = Int[]
     hb = 0.0
-    NS.@LBVH_scatter_line_traversal lbvh origin direction Kvalid leaf_idx d2 hb begin
+    ns_mod.@LBVH_scatter_line_traversal lbvh origin direction Kvalid leaf_idx d2 hb begin
         push!(scatter_hits, leaf_idx)
     end
     sort!(scatter_hits)
 
     symmetric_hits = Int[]
-    NS.@LBVH_symmetric_line_traversal lbvh origin direction Kvalid radius2 leaf_idx d2 hb begin
+    ns_mod.@LBVH_symmetric_line_traversal lbvh origin direction Kvalid radius2 leaf_idx d2 hb begin
         push!(symmetric_hits, leaf_idx)
     end
     sort!(symmetric_hits)

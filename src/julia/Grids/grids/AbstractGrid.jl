@@ -1,5 +1,5 @@
 # General Grid definition
-abstract type AbstractGrid{TF} end
+abstract type AbstractGrid{TF <: AbstractFloat} end
 
 """
     Base.length(grid::GRID) where {GRID <: AbstractGrid}

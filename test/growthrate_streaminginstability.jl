@@ -30,10 +30,10 @@ using PhantomRevealer
 
 # ========================== Physical parameters ============================= #
 
-const Hlr          = 0.05              # H/r — disc aspect ratio
-const η_param      = 0.0025            # η   — radial pressure gradient parameter
-const ηvₖlcₛ       = η_param / Hlr     # ηvₖ / cₛ  =  η / (H/r)
-const invηvₖlcₛ    = inv(ηvₖlcₛ)       # cₛ / (ηvₖ)
+hlr = 0.05              # H/r — disc aspect ratio
+η_param = 0.0025        # η   — radial pressure gradient parameter
+ηvₖlcₛ = η_param / hlr  # ηvₖ / cₛ  =  η / (H/r)
+invηvₖlcₛ = inv(ηvₖlcₛ) # cₛ / (ηvₖ)
 
 # ========================== Helper functions ================================ #
 

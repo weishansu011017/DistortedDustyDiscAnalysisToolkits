@@ -1,4 +1,4 @@
-@inline function _general_grid_interpolation_kernel!(grids :: NTuple{L, GeneralGrid{3}}, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {N, G, Div, C, L, TF <: AbstractFloat, ITPINPUT <: InterpolationInput{TF}, ITPSTRATEGY <: AbstractInterpolationStrategy}
+@inline function _point_samples_interpolation_kernel!(grids :: NTuple{L, PointSamples{3}}, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {N, G, Div, C, L, TF <: AbstractFloat, ITPINPUT <: InterpolationInput{TF}, ITPSTRATEGY <: AbstractInterpolationStrategy}
     tid    = Int(CUDA.threadIdx().x)
     bid    = Int(CUDA.blockIdx().x)
     bdim   = Int(CUDA.blockDim().x)
@@ -75,7 +75,7 @@
     return nothing
 end
 
-@inline function _general_grid_interpolation_kernel!(grids :: NTuple{L, GeneralGrid{3}}, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, ::Type{itpScatter}) where {N, G, Div, C, L, TF <: AbstractFloat, ITPINPUT <: InterpolationInput{TF}}
+@inline function _point_samples_interpolation_kernel!(grids :: NTuple{L, PointSamples{3}}, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, ::Type{itpScatter}) where {N, G, Div, C, L, TF <: AbstractFloat, ITPINPUT <: InterpolationInput{TF}}
     tid    = Int(CUDA.threadIdx().x)
     bid    = Int(CUDA.blockIdx().x)
     bdim   = Int(CUDA.blockDim().x)
@@ -150,7 +150,7 @@ end
 end
 
 """
-    GeneralGrid_interpolation(backend::MetalComputeBackend, grid_template::GeneralGrid{D},
+    PointSamples_interpolation(backend::CUDAComputeBackend, grid_template::PointSamples{D},
                           input::ITPINPUT, catalog::InterpolationCatalog{N, G, Div, C, L},
                           itp_strategy::Type{ITPSTRATEGY} = itpSymmetric)
 
@@ -159,10 +159,10 @@ The routine copies particle data, grids, and BVH structures to Metal buffers,
 launches the interpolation kernel, and copies results back to host memory.
 
 # Parameters
-- `backend::MetalComputeBackend`  
-  GPU execution backend using Metal.
+- `backend::CUDAComputeBackend`  
+  GPU execution backend using CUDA.
 
-- `grid_template::GeneralGrid{D}`  
+- `grid_template::PointSamples{D}`  
   Template grid defining dimensionality and coordinate storage for the output grids.
 
 - `input::ITPINPUT`  
@@ -182,8 +182,8 @@ launches the interpolation kernel, and copies results back to host memory.
 - `names` — Ordered list of output quantity names.
 
 """
-function PhantomRevealer.GeneralGrid_interpolation(:: CUDAComputeBackend, grid_template::GeneralGrid{D}, input::ITPINPUT, catalog::InterpolationCatalog{N, G, Div, C, L}, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {D, N, G, Div, C, L, T <: AbstractFloat, ITPINPUT <: InterpolationInput{T}, ITPSTRATEGY <: AbstractInterpolationStrategy}
-    grids, LBVH, names, catalog_consice, p = PhantomRevealer.initialize_interpolation(PhantomRevealer.CPUComputeBackend(), grid_template, input, catalog)
+function PhantomRevealer.PointSamples_interpolation(:: CUDAComputeBackend, grid_template::PointSamples{D}, input::ITPINPUT, catalog::InterpolationCatalog{N, G, Div, C, L}, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {D, N, G, Div, C, L, T <: AbstractFloat, ITPINPUT <: InterpolationInput{T}, ITPSTRATEGY <: AbstractInterpolationStrategy}
+    grids, LBVH, names, catalog_consice = PhantomRevealer.initialize_interpolation(PhantomRevealer.CPUComputeBackend(), grid_template, input, catalog)
     # To CuVector
     @info "     SPH Interpolation: Copying interpolated grids to device memory..."
     input_Cu = to_CuVector(input)
@@ -193,30 +193,11 @@ function PhantomRevealer.GeneralGrid_interpolation(:: CUDAComputeBackend, grid_t
 
     npoints = length(grid_template)
     @info "     SPH Interpolation: Start interpolation..."
-    @cuda threads=(256,) blocks=(cld(npoints, 256)) _general_grid_interpolation_kernel!(grids_Cu, input_Cu, catalog_consice, LBVH_Cu, itp_strategy)
+    @cuda threads=(256,) blocks=(cld(npoints, 256)) _point_samples_interpolation_kernel!(grids_Cu, input_Cu, catalog_consice, LBVH_Cu, itp_strategy)
     CUDA.synchronize()
     @info "     SPH Interpolation: End interpolation."
     @info "     SPH Interpolation: Copying interpolated grids back to host memory..."
     grids_result = ntuple(i -> PhantomRevealer.to_HostVector(grids_Cu[i]), Val(L))
     @info "     SPH Interpolation: End copying interpolated grids back to host memory."
-
-    # Reorder grids back to original order
-    @info "     SPH Interpolation: Reordering output grids back to original order..."
-    # Reorder coor
-    refV = grids_result[1].grid               
-    shared_coor = ntuple(d -> begin
-        v = similar(refV)
-        copyto!(v, grid_template.coor[d])       
-        Base.invpermute!(v, p)           
-        v
-    end, Val(D))
-
-    # Reorder each grid
-    for grid in grids_result
-        Base.invpermute!(grid.grid, p)
-    end
-    grids = ntuple(i -> GeneralGrid(grids_result[i].grid, shared_coor), Val(L))
-    @info "     SPH Interpolation: End reordering output grids..."
-
-    return GridBundle(grids, names)
+    return GridBundle(grids_result, names)
 end

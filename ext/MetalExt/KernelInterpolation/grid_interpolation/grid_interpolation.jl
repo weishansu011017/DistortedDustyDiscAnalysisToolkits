@@ -1,4 +1,4 @@
-@inline function _general_grid_interpolation_kernel!(grids :: NTuple{L, GeneralGrid{3}}, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {N, G, Div, C, L, TF <: Float32, VF <: MtlDeviceVector{TF}, ITPINPUT <: InterpolationInput{TF, VF}, ITPSTRATEGY <: AbstractInterpolationStrategy}
+@inline function _point_samples_interpolation_kernel!(grids :: NTuple{L, PointSamples{3}}, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {N, G, Div, C, L, TF <: Float32, VF <: MtlDeviceVector{TF}, ITPINPUT <: InterpolationInput{TF, VF}, ITPSTRATEGY <: AbstractInterpolationStrategy}
     tid = Int(Metal.thread_position_in_grid().x)
     stride = Int(Metal.threads_per_grid().x)
 
@@ -70,7 +70,7 @@
     return nothing
 end
 
-@inline function _general_grid_interpolation_kernel!(grids :: NTuple{L, GeneralGrid{3}}, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, ::Type{itpScatter}) where {N, G, Div, C, L, TF <: Float32, VF <: MtlDeviceVector{TF}, ITPINPUT <: InterpolationInput{TF, VF}}
+@inline function _point_samples_interpolation_kernel!(grids :: NTuple{L, PointSamples{3}}, input :: ITPINPUT, catalog_consice :: InterpolationCatalogConcise{N, G, Div, C}, LBVH :: LinearBVH, ::Type{itpScatter}) where {N, G, Div, C, L, TF <: Float32, VF <: MtlDeviceVector{TF}, ITPINPUT <: InterpolationInput{TF, VF}}
     tid = Int(Metal.thread_position_in_grid().x)
     stride = Int(Metal.threads_per_grid().x)
 
@@ -140,7 +140,7 @@ end
 end
 
 """
-    GeneralGrid_interpolation(backend::MetalComputeBackend, grid_template::GeneralGrid{D},
+    PointSamples_interpolation(backend::MetalComputeBackend, grid_template::PointSamples{D},
                           input::ITPINPUT, catalog::InterpolationCatalog{N, G, Div, C, L},
                           itp_strategy::Type{ITPSTRATEGY} = itpSymmetric)
 
@@ -152,7 +152,7 @@ launches the interpolation kernel, and copies results back to host memory.
 - `backend::MetalComputeBackend`  
   GPU execution backend using Metal.
 
-- `grid_template::GeneralGrid{D}`  
+- `grid_template::PointSamples{D}`  
   Template grid defining dimensionality and coordinate storage for the output grids.
 
 - `input::ITPINPUT`  
@@ -172,8 +172,8 @@ launches the interpolation kernel, and copies results back to host memory.
 - `names` — Ordered list of output quantity names.
 
 """
-function PhantomRevealer.GeneralGrid_interpolation(::MetalComputeBackend, grid_template::GeneralGrid{D}, input::ITPINPUT, catalog::InterpolationCatalog{N, G, Div, C, L}, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {D, N, G, Div, C, L, T <: AbstractFloat, ITPINPUT <: InterpolationInput{T}, ITPSTRATEGY <: AbstractInterpolationStrategy}
-    grids, LBVH, names, catalog_consice, p = PhantomRevealer.initialize_interpolation(PhantomRevealer.CPUComputeBackend(), grid_template, input, catalog)
+function PhantomRevealer.PointSamples_interpolation(::MetalComputeBackend, grid_template::PointSamples{D}, input::ITPINPUT, catalog::InterpolationCatalog{N, G, Div, C, L}, itp_strategy::Type{ITPSTRATEGY} = itpSymmetric) where {D, N, G, Div, C, L, T <: AbstractFloat, ITPINPUT <: InterpolationInput{T}, ITPSTRATEGY <: AbstractInterpolationStrategy}
+    grids, LBVH, names, catalog_consice = PhantomRevealer.initialize_interpolation(PhantomRevealer.CPUComputeBackend(), grid_template, input, catalog)
     # To MtlVector
     @info "     SPH Interpolation: Copying interpolated grids to device memory..."
     input_Mtl = to_MtlVector(input)
@@ -183,30 +183,11 @@ function PhantomRevealer.GeneralGrid_interpolation(::MetalComputeBackend, grid_t
 
     npoints = length(grid_template)
     @info"      SPH Interpolation: Start interpolation..."
-    @metal threads=(256,) groups=(cld(npoints, 256)) _general_grid_interpolation_kernel!(grids_Mtl, input_Mtl, catalog_consice, LBVH_Mtl, itp_strategy)
+    @metal threads=(256,) groups=(cld(npoints, 256)) _point_samples_interpolation_kernel!(grids_Mtl, input_Mtl, catalog_consice, LBVH_Mtl, itp_strategy)
     Metal.synchronize()
     @info "     SPH Interpolation: End interpolation."
     @info "     SPH Interpolation: Copying interpolated grids back to host memory..."
     grids_result = ntuple(i -> PhantomRevealer.to_HostVector(grids_Mtl[i]), Val(L))
     @info "     SPH Interpolation: End copying interpolated grids back to host memory."
-
-    # Reorder grids back to original order
-    @info "     SPH Interpolation: Reordering output grids back to original order..."
-    # Reorder coor
-    refV = grids_result[1].grid               
-    shared_coor = ntuple(d -> begin
-        v = similar(refV)
-        copyto!(v, grid_template.coor[d])       
-        Base.invpermute!(v, p)           
-        v
-    end, Val(D))
-
-    # Reorder each grid
-    for grid in grids_result
-        Base.invpermute!(grid.grid, p)
-    end
-    grids = ntuple(i -> GeneralGrid(grids_result[i].grid, shared_coor), Val(L))
-    @info "     SPH Interpolation: End reordering output grids..."
-
-    return GridBundle(grids, names)
+    return GridBundle(grids_result, names)
 end

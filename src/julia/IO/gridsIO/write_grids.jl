@@ -1,7 +1,7 @@
 const _COORDINATE = ("x", "y", "z")
 
 """
-    write_GridDataset(gd::GridDataset{L,TF,G}, filename::String="PRGridDataset.h5") where {L,D,TF<:AbstractFloat, VG<:AbstractVector{TF}, VC<:NTuple{D,VG}, G<:GeneralGrid{D,TF,VG,VC}}
+    write_GridDataset(gd::GridDataset{L,TF,G}, filename::String="PRGridDataset.h5") where {L,D,TF<:AbstractFloat, VG<:AbstractVector{TF}, VC<:NTuple{D,VG}, G<:PointSamples{D,TF,VG,VC}}
 
 Serialize a `GridDataset` and write it to an HDF5 file.  
 All grids in the dataset **must share the same coordinate vectors**, verified by
@@ -21,18 +21,18 @@ The resulting HDF5 file has the following structure:
 
 # Parameters
 - `gd::GridDataset{L,TF,G}`  
-  A dataset containing multiple `GeneralGrid` objects that must share identical coordinates
+  A dataset containing multiple `PointSamples` objects that must share identical coordinates
 - `filename::String="PRGridDataset.h5"`  
   Output HDF5 filename
 
 """
-function write_GridDataset(gd::GridDataset{L,TF,G}, filename::String="PRGridDataset.h5") where {L,D,TF<:AbstractFloat, VG<:AbstractVector{TF}, VC<:NTuple{D,VG}, G<:GeneralGrid{D,TF,VG,VC}}
+function write_GridDataset(gd::GridDataset{L,TF,G}, filename::String="PRGridDataset.h5") where {L,D,TF<:AbstractFloat, VG<:AbstractVector{TF}, VC<:NTuple{D,VG}, G <: PointSamples{D,TF,VG,VC}}
     # Check whether all the grid share the same coor
     g1 = gd.data.grids[1]
     @inbounds for i in 2:L
         gi = gd.data.grids[i]
         for d in 1:D
-            (gi.coor[d] === g1.coor[d]) || throw(ArgumentError("GeneralGrid coor not shared: grid=$i dim=$d"))
+            (gi.coor[d] === g1.coor[d]) || throw(ArgumentError("PointSamples coor not shared: grid=$i dim=$d"))
         end
     end
     # Write HDF5
@@ -95,7 +95,7 @@ The resulting HDF5 file has the following structure:
 - `filename::String="PRGridDataset.h5"`  
   Output HDF5 filename
 """
-function write_GridDataset(gd::GridDataset{L,TF,G}, filename::String="PRGridDataset.h5") where {L,D,TF <: AbstractFloat, V <: AbstractVector{TF}, A <: AbstractArray{TF, D}, G<:StructuredGrid{D,TF,V, A}}
+function write_GridDataset(gd::GridDataset{L,TF,G}, filename::String="PRGridDataset.h5") where {L,D,TF <: AbstractFloat, V <: AbstractVector{TF}, A <: AbstractArray{TF, D}, G <: StructuredGrid{D,TF,V, A}}
     # Check whether all the grid share the same coor
     g1 = gd.data.grids[1]
     @inbounds for i in 2:L

@@ -107,7 +107,7 @@ end
 
 Generate coordinates for all grid points defined by a `StructuredGrid`.
 
-Coordinates are returned in a structure-of-arrays (SoA) layout compatible with `GeneralGrid`.
+Coordinates are returned in a structure-of-arrays (SoA) layout compatible with `PointSamples`.
 For each dimension `d = 1:D`, the returned vector `coor[d]` has length `N = prod(grid.size)`,
 and `coor[d][i]` is the `d`-th coordinate of the `i`-th grid point, where `i` follows Julia's
 column-major linear indexing of `grid.size`.

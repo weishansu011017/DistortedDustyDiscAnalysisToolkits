@@ -14,7 +14,7 @@
 #  4. Compact support — kernel ≡ 0 beyond q_max, NaN for q < 0.
 #  5. Gradient kernel — `Smoothed_gradient_kernel_function` matches finite-
 #     difference approximation.
-#  6. LOS-integrated kernel — numerical column-integral of M4 matches the
+#  6. Line-integrated kernel — numerical column-integral of M4 matches the
 #     tabulated `line_integrated_kernel_function`.
 #
 #  Reference formulas
@@ -33,8 +33,8 @@ using PhantomRevealer
 
 # ========================== Constants ======================================= #
 
-const ALL_KERNELS = (M4_spline, M5_spline, M6_spline,
-                     C2_Wendland, C4_Wendland, C6_Wendland)
+all_kernels = (M4_spline, M5_spline, M6_spline,
+               C2_Wendland, C4_Wendland, C6_Wendland)
 
 # ========================== Helper functions ================================ #
 
@@ -127,7 +127,7 @@ end
 @testset "Kernel values — analytic comparison" begin
     test_q_values = [0.0, 0.3, 0.7, 1.0, 1.3, 1.8]
 
-    for K in ALL_KERNELS
+    for K in all_kernels
         @testset "$(nameof(K))" begin
             for q in test_q_values
                 expected = analytic_kernel(K, q)
@@ -143,7 +143,7 @@ end
 # ── 4. Compact support and NaN for q < 0 ─────────────────────────────── #
 
 @testset "Kernel compact support" begin
-    for K in ALL_KERNELS
+    for K in all_kernels
         qmax = KernelFunctionValid(K, Float64)
         # Beyond support → zero
         @test Smoothed_kernel_function_dimensionless(K, qmax + 0.1, Val(3)) == 0.0
@@ -194,18 +194,18 @@ end
     @test W_got ≈ W_expected  atol = 1e-14
 end
 
-# ── 7. LOS-integrated kernel consistency ─────────────────────────────── #
+# ── 7. Line-integrated kernel consistency ───────────────────────────── #
 
-# @testset "LOS kernel — two-point interface" begin
-#     kern = M4_spline()
-#     h = 0.1
-#     ra = (0.5, 0.5)
-#     rb = (0.52, 0.48)
+@testset "Line-integrated kernel — two-point interface" begin
+    kern = M4_spline()
+    h = 0.1
+    ra = (0.5, 0.5)
+    rb = (0.52, 0.48)
 
-#     r = sqrt((ra[1] - rb[1])^2 + (ra[2] - rb[2])^2)
+    r = sqrt((ra[1] - rb[1])^2 + (ra[2] - rb[2])^2)
 
-#     Wlos_rh = line_integrated_kernel_function(typeof(kern), r, h)
-#     Wlos_pts = line_integrated_kernel_function(typeof(kern), ra, rb, h)
+    W_line_rh = line_integrated_kernel_function(typeof(kern), r, h)
+    W_line_pts = line_integrated_kernel_function(typeof(kern), ra, rb, h)
 
-#     @test Wlos_rh ≈ Wlos_pts  atol = 1e-14
-# end
+    @test W_line_rh ≈ W_line_pts  atol = 1e-14
+end

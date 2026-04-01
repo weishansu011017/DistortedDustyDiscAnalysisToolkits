@@ -794,3 +794,161 @@ macro LBVH_symmetric_line_traversal(LBVH, line_origin, line_direction, Kvalid, r
         nothing
     end
 end
+
+
+# Toolbox
+@inline function _squared_distance_point_coords(point :: NTuple{D, TF}, coords :: NTuple{D, VF}, idx :: Int) where {D, TF <: AbstractFloat, VF <: AbstractVector{TF}}
+    # Contract:
+    # - `idx` must index the provided arrays directly.
+    #   i.e. `idx ∈ 1:length(coords[d])` for all d.
+    # - This function DOES NOT accept "unified node IDs" in the 1:(2nleaf-1) space.
+    #   Callers must convert unified IDs to the appropriate array index
+    #   (e.g. leaf_index(...) or internal_index(...)) before calling.
+    zero_T = zero(TF)
+    s = zero_T
+    @inbounds for d in 1:D
+        δ = point[d] - coords[d][idx]
+        s += δ * δ
+    end
+    return s
+end
+
+@inline function _squared_distance_point_aabb(point :: NTuple{D, TF}, aabb_min :: NTuple{D, VF} , aabb_max :: NTuple{D, VF}, idx :: Int) where {D, TF <: AbstractFloat, VF <: AbstractVector{TF}}
+    # Contract:
+    # - `idx` must index the provided AABB arrays directly.
+    #   i.e. `idx ∈ 1:length(aabb_min[d])` for all d.
+    # - This function DOES NOT accept "unified node IDs" in the 1:(2nleaf-1) space.
+    #   Callers must convert unified IDs to the appropriate array index
+    #   (e.g. leaf_index(...) or internal_index(...)) before calling.
+    zero_T = zero(TF)
+    s = zero_T
+    @inbounds for d in 1:D
+        @inbounds begin
+            a = aabb_min[d][idx]
+            b = aabb_max[d][idx]
+            p = point[d]
+        end
+        t = p < a ? (a - p) : (p > b ? (p - b) : zero_T)
+        s += t * t
+    end
+    return s
+end
+
+@inline function _squared_distance_point_line(point :: NTuple{D,TF}, origin :: NTuple{D,TF}, direction :: NTuple{D,TF}) where {D, TF <: AbstractFloat}
+    # Contract:
+    # - The line geometry is treated as an infinite line, not a ray.
+    # - The returned value is the exact minimum squared Euclidean distance.
+    # - `direction` must be a unit vector.
+    zero_T = zero(TF)
+    Δ2 = zero_T
+    Δm = zero_T
+    @inbounds for d in 1:D
+        @inbounds begin
+            p = point[d]
+            o = origin[d]
+            m = direction[d]
+        end
+        Δ = p - o
+        Δ2 += Δ * Δ
+        Δm += Δ * m
+    end
+    s = Δ2 - Δm * Δm
+    return s
+end
+
+@inline function _squared_distance_line_coords(origin :: NTuple{D,TF}, direction :: NTuple{D,TF}, coords :: NTuple{D, VF}, idx :: Int) where {D, TF <: AbstractFloat, VF <: AbstractVector{TF}}
+    # Contract:
+    # - The line geometry is treated as an infinite line, not a ray.
+    # - The returned value is the exact minimum squared Euclidean distance.
+    # - `direction` must be a unit vector.
+    zero_T = zero(TF)
+    Δ2 = zero_T
+    Δm = zero_T
+
+    @inbounds for d in 1:D
+        Δ = coords[d][idx] - origin[d]
+        Δ2 += Δ * Δ
+        Δm += Δ * direction[d]
+    end
+
+    s = Δ2 - Δm * Δm
+    return s
+end
+
+@inline function _line_intersects_aabb(origin :: NTuple{D,TF}, direction :: NTuple{D,TF}, aabb_min :: NTuple{D, VF} , aabb_max :: NTuple{D, VF}, idx :: Int) where {D, TF <: AbstractFloat, VF <: AbstractVector{TF}}
+    # Contract:
+    # - The line geometry is treated as an infinite line, not a ray.
+    # - `direction` must be a unit vector.
+    # - `idx` must index the provided AABB arrays directly.
+    #   i.e. `idx ∈ 1:length(aabb_min[d])` for all d.
+    # - This function DOES NOT accept unified node IDs in the 1:(2nleaf-1) space.
+    #   Callers must convert unified IDs to the appropriate array index
+    #   before calling.
+    tmin = typemin(TF)
+    tmax = typemax(TF)
+
+    @inbounds for d in 1:D
+        @inbounds begin
+            a = aabb_min[d][idx]
+            b = aabb_max[d][idx]
+            o = origin[d]
+            m = direction[d]
+        end
+
+        if iszero(m)
+            (o < a || o > b) && return false
+        else
+            t0 = (a - o) / m
+            t1 = (b - o) / m
+
+            if t0 > t1
+                t0, t1 = t1, t0
+            end
+
+            tmin = max(tmin, t0)
+            tmax = min(tmax, t1)
+
+            (tmin > tmax) && return false
+        end
+    end
+
+    return true
+end
+
+@inline function _squared_distance_line_aabb_lower_bound(origin :: NTuple{D,TF}, direction :: NTuple{D,TF}, aabb_min :: NTuple{D, VF} , aabb_max :: NTuple{D, VF}, idx :: Int) where {D, TF <: AbstractFloat, VF <: AbstractVector{TF}}
+    # Contract:
+    # - The line geometry is treated as an infinite line, not a ray.
+    # - `direction` must be a unit vector.
+    # - The returned value is a conservative lower bound of the exact
+    #   minimum squared Euclidean distance between the line and the AABB.
+    # - `idx` must index the provided AABB arrays directly.
+    #   i.e. `idx ∈ 1:length(aabb_min[d])` for all d.
+    # - This function DOES NOT accept unified node IDs in the 1:(2nleaf-1) space.
+    #   Callers must convert unified IDs to the appropriate array index
+    #   before calling.
+
+    zero_T = zero(TF)
+    half_T = inv(TF(2))
+
+    _line_intersects_aabb(origin, direction, aabb_min, aabb_max, idx) && return zero_T
+
+    center = ntuple(d -> (aabb_min[d][idx] + aabb_max[d][idx]) * half_T, D)
+
+    r2 = zero_T
+    @inbounds for d in 1:D
+        h = (aabb_max[d][idx] - aabb_min[d][idx]) * half_T 
+        r2 += h * h
+    end
+
+    dc2 = _squared_distance_point_line(center, origin, direction)
+
+    if dc2 <= r2
+        return zero_T
+    else
+        dc = sqrt(dc2)
+        r  = sqrt(r2)
+        δ  = dc - r
+        return δ * δ
+    end
+end
+

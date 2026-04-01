@@ -1,0 +1,63 @@
+Legacy query-sample Morton reorder snippets, temporarily parked here.
+Not active code.
+
+PointSamples CPU path:
+
+    # Reorder grid template according to Morton code order
+    @info "     SPH Interpolation: Reordering grid template according to Morton code order..."
+    enc = MortonEncoding(grid_template.coor, CodeType = UInt64)
+    p = sortperm(enc.codes; alg=QuickSort)
+    @inbounds for i in 1:D
+        Base.permute!(grid_template.coor[i], p)
+    end
+    @info "     SPH Interpolation: End reordering grid template..."
+
+    ...
+
+    # Reorder grids back to original order
+    @info "     SPH Interpolation: Reordering output grids back to original order..."
+    refV = grids_result[1].grid
+    shared_coor = ntuple(d -> begin
+        v = similar(refV)
+        copyto!(v, grid_template.coor[d])
+        Base.invpermute!(v, p)
+        v
+    end, Val(D))
+
+    for grid in grids_result
+        Base.invpermute!(grid.grid, p)
+    end
+    grids = ntuple(i -> PointSamples(grids_result[i].grid, shared_coor), Val(L))
+    @info "     SPH Interpolation: End reordering output grids..."
+
+
+LineSamples CPU path:
+
+    # Reorder grid template according to Morton code order
+    @info "     SPH Interpolation: Reordering grid template according to Morton code order..."
+    enc = MortonEncoding(grid_template.origin, CodeType = UInt64)
+    p = sortperm(enc.codes; alg=QuickSort)
+    @inbounds for i in 1:D
+        Base.permute!(grid_template.origin[i], p)
+        Base.permute!(grid_template.direction[i], p)
+    end
+    @info "     SPH Interpolation: End reordering grid template..."
+
+
+CUDA / Metal PointSamples host-side postprocess:
+
+    # Reorder grids back to original order
+    @info "     SPH Interpolation: Reordering output grids back to original order..."
+    refV = grids_result[1].grid
+    shared_coor = ntuple(d -> begin
+        v = similar(refV)
+        copyto!(v, grid_template.coor[d])
+        Base.invpermute!(v, p)
+        v
+    end, Val(D))
+
+    for grid in grids_result
+        Base.invpermute!(grid.grid, p)
+    end
+    grids = ntuple(i -> PointSamples(grids_result[i].grid, shared_coor), Val(L))
+    @info "     SPH Interpolation: End reordering output grids..."

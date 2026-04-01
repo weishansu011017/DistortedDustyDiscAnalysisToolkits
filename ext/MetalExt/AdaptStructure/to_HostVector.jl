@@ -51,15 +51,15 @@ function PhantomRevealer.to_HostVector(LBVH :: LinearBVH{D, TF, VF, VB}) where {
     )
 end
 
-function PhantomRevealer.to_HostVector(grid :: GeneralGrid{D, TF, VG, VC}) where {D, TF <: Float32, VG <: MtlVector{TF}, VC <: NTuple{D, MtlVector{TF}}}
-    return GeneralGrid{D, Float32, Vector{Float32}, NTuple{D, Vector{Float32}}}(
+function PhantomRevealer.to_HostVector(grid :: PointSamples{D, TF, VG, VC}) where {D, TF <: Float32, VG <: MtlVector{TF}, VC <: NTuple{D, MtlVector{TF}}}
+    return PointSamples{D, Float32, Vector{Float32}, NTuple{D, Vector{Float32}}}(
         Vector{Float32}(grid.grid),
         ntuple(i -> Vector{Float32}(grid.coor[i]), D)
     )
 end
 
-function PhantomRevealer.to_HostVector(grid :: GeneralLineGrid{D, TF, VG, VC}) where {D, TF <: Float32, VG <: MtlVector{TF}, VC <: NTuple{D, MtlVector{TF}}}
-    return GeneralLineGrid{D, Float32, Vector{Float32}, NTuple{D, Vector{Float32}}}(
+function PhantomRevealer.to_HostVector(grid :: LineSamples{D, TF, VG, VC}) where {D, TF <: Float32, VG <: MtlVector{TF}, VC <: NTuple{D, MtlVector{TF}}}
+    return LineSamples{D, Float32, Vector{Float32}, NTuple{D, Vector{Float32}}}(
         Vector{Float32}(grid.grid),
         ntuple(i -> Vector{Float32}(grid.origin[i]), D),
         ntuple(i -> Vector{Float32}(grid.direction[i]), D)

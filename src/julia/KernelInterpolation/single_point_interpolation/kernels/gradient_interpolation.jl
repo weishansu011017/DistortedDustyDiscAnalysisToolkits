@@ -205,9 +205,7 @@ end
         end
         #########################################################
     end
-    if iszero(S1)
-        return (T(NaN), T(NaN), T(NaN)), NaN32
-    end
+    iszero(S1) && return (T(NaN), T(NaN), T(NaN))
 
     A /= S1
     ∇Axb *= A
@@ -266,9 +264,7 @@ end
         end
         #########################################################
     end
-    if iszero(S1)
-        return (T(NaN), T(NaN), T(NaN)), NaN32
-    end
+    iszero(S1) && return (T(NaN), T(NaN), T(NaN))
 
     A /= S1
     ∇Axb *= A
@@ -330,9 +326,7 @@ end
         end
         #########################################################
     end
-    if iszero(S1)
-        return (T(NaN), T(NaN), T(NaN)), NaN32
-    end
+    iszero(S1) && return (T(NaN), T(NaN), T(NaN))
 
     A /= S1
     ∇Axb *= A

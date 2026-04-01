@@ -1,5 +1,5 @@
 """
-    GeneralGrid{D, TF<:AbstractFloat, VG<:AbstractVector{TF}, VC<:NTuple{D, VG}} <: AbstractGrid{TF}
+    PointSamples{D, TF<:AbstractFloat, VG<:AbstractVector{TF}, VC<:NTuple{D, VG}} <: AbstractSamples{TF}
 
 A generic *unstructured* grid container for interpolation, storing grid values together with
 their coordinates.
@@ -22,52 +22,63 @@ across multiple grids without changing its structure.
     and `coor[d][i]` is the coordinate of the `i`-th grid point along dimension `d`.
 
 """
-struct GeneralGrid{D, TF <: AbstractFloat, VG <: AbstractVector{TF}, VC <: NTuple{D, VG}} <: AbstractGrid{TF}
+struct PointSamples{D, TF <: AbstractFloat, VG <: AbstractVector{TF}, VC <: NTuple{D, VG}} <: AbstractSamples{D, TF}
     grid :: VG
     coor :: VC
+
+    # Inner constructor
+    function PointSamples(grid::VG, coor::VC) where {D,TF <: AbstractFloat,VG <: AbstractVector{TF},VC <: NTuple{D,VG}}
+        N = length(grid)
+
+        @inbounds for d in 1:D
+            length(coor[d]) == N || throw(ArgumentError("coor[$d] length mismatch"))
+        end
+
+        return new{D,TF,VG,VC}(grid, coor)
+    end
 end
 
-function Adapt.adapt_structure(to, x :: GeneralGrid{D}) where {D}
-    GeneralGrid(
+function Adapt.adapt_structure(to, x :: PointSamples{D}) where {D}
+    PointSamples(
         Adapt.adapt(to, x.grid),
         ntuple(i -> Adapt.adapt(to, x.coor[i]), D)
     )
 end
 
 """
-    similar(grid::GeneralGrid)
+    similar(grid::PointSamples)
 
-Construct a new `GeneralGrid` with fresh storage for values but sharing
+Construct a new `PointSamples` with fresh storage for values but sharing
 the same coordinate container as the input grid.
 
 # Parameters
-- `grid::GeneralGrid` : Template grid to copy structure from.
+- `grid::PointSamples` : Template grid to copy structure from.
 
 # Returns
-- `GeneralGrid` : A grid with independent value storage (`grid.grid`)
+- `PointSamples` : A grid with independent value storage (`grid.grid`)
   and shared coordinates (`grid.coor`).
 """
-function Base.similar(grid::GeneralGrid)
-    return GeneralGrid(similar(grid.grid), grid.coor)
+function Base.similar(grid::PointSamples)
+    return PointSamples(similar(grid.grid), grid.coor)
 end
 
 """
-    similar(grid::GeneralGrid, itype :: Type{T}) where {T}
+    similar(grid::PointSamples, itype :: Type{T}) where {T}
 
-Construct a new `GeneralGrid` with fresh storage for values but sharing
+Construct a new `PointSamples` with fresh storage for values but sharing
 the same coordinate container as the input grid and with values of type `T`.
 
 Note that the coordinate type also changes accordingly.
 
 # Parameters
-- `grid::GeneralGrid` : Template grid to copy structure from.
+- `grid::PointSamples` : Template grid to copy structure from.
 - `itype::Type{T}` : Desired element type for the new grid's values.
 
 # Returns
-- `GeneralGrid` : A grid with independent value storage (`grid.grid`) of type `T`
+- `PointSamples` : A grid with independent value storage (`grid.grid`) of type `T`
   and shared coordinates (`grid.coor`) of type `NTuple{D, T}`.
 """
-function Base.similar(grid::GeneralGrid{3,TF}, ::Type{T}) where {TF<:AbstractFloat,T<:AbstractFloat}
+function Base.similar(grid::PointSamples{3,TF}, ::Type{T}) where {TF<:AbstractFloat,T<:AbstractFloat}
     new_grid = similar(grid.grid, T)
     new_coor = ntuple(i -> similar(grid.coor[i], T), 3)
 
@@ -82,26 +93,26 @@ function Base.similar(grid::GeneralGrid{3,TF}, ::Type{T}) where {TF<:AbstractFlo
             new_coor[3][i] = zi
         end 
     end
-    return GeneralGrid(new_grid, new_coor)
+    return PointSamples(new_grid, new_coor)
 end
 
 """
-    similar(grid::GeneralGrid, itype :: Type{T}) where {T}
+    similar(grid::PointSamples, itype :: Type{T}) where {T}
 
-Construct a new `GeneralGrid` with fresh storage for values but sharing
+Construct a new `PointSamples` with fresh storage for values but sharing
 the same coordinate container as the input grid and with values of type `T`.
 
 Note that the coordinate type also changes accordingly.
 
 # Parameters
-- `grid::GeneralGrid` : Template grid to copy structure from.
+- `grid::PointSamples` : Template grid to copy structure from.
 - `itype::Type{T}` : Desired element type for the new grid's values.
 
 # Returns
-- `GeneralGrid` : A grid with independent value storage (`grid.grid`) of type `T`
+- `PointSamples` : A grid with independent value storage (`grid.grid`) of type `T`
   and shared coordinates (`grid.coor`) of type `NTuple{D, T}`.
 """
-function Base.similar(grid::GeneralGrid{2,TF}, ::Type{T}) where {TF<:AbstractFloat,T<:AbstractFloat}
+function Base.similar(grid::PointSamples{2,TF}, ::Type{T}) where {TF<:AbstractFloat,T<:AbstractFloat}
     new_grid = similar(grid.grid, T)
     new_coor = ntuple(i -> similar(grid.coor[i], T), 2)
 
@@ -114,17 +125,17 @@ function Base.similar(grid::GeneralGrid{2,TF}, ::Type{T}) where {TF<:AbstractFlo
             new_coor[2][i] = yi
         end 
     end
-    return GeneralGrid(new_grid, new_coor)
+    return PointSamples(new_grid, new_coor)
 end
 
 """
-    Base.isapprox(grid::GeneralGrid{D,TF}, axes::NTuple{D,<:AbstractVector}; atol::Real=1.0e-8, rtol::Real=1.0e-8) :: Bool where {D,TF<:AbstractFloat}
+    Base.isapprox(grid::PointSamples{D,TF}, axes::NTuple{D,<:AbstractVector}; atol::Real=1.0e-8, rtol::Real=1.0e-8) :: Bool where {D,TF<:AbstractFloat}
 
-Check whether the coordinates stored in a `GeneralGrid` match the given `axes`
+Check whether the coordinates stored in a `PointSamples` match the given `axes`
 (up to numerical tolerance).
 
 # Parameters
-- `grid::GeneralGrid{D,TF}` : Grid whose coordinates will be checked.
+- `grid::PointSamples{D,TF}` : Grid whose coordinates will be checked.
 - `axes::NTuple{D,<:AbstractVector}` : Target coordinate axes.
 
 # Keyword Arguments
@@ -136,7 +147,7 @@ Check whether the coordinates stored in a `GeneralGrid` match the given `axes`
 # Returns
 - `Bool` : `true` if all coordinates match within tolerance, otherwise `false`.
 """
-function Base.isapprox(grid::GeneralGrid{D,TF}, axes::NTuple{D,<:AbstractVector}; atol :: Real = 1.0e-8, rtol :: Real = 1.0e-8) :: Bool where {D,TF <: AbstractFloat}
+function Base.isapprox(grid::PointSamples{D,TF}, axes::NTuple{D,<:AbstractVector}; atol :: Real = 1.0e-8, rtol :: Real = 1.0e-8) :: Bool where {D,TF <: AbstractFloat}
     size_expected = ntuple(d -> length(axes[d]), D)
     N = prod(size_expected)
 
@@ -163,7 +174,7 @@ function Base.isapprox(grid::GeneralGrid{D,TF}, axes::NTuple{D,<:AbstractVector}
     return true
 end
 
-function Base.permute!(grid::GeneralGrid{D,TF}, p :: AbstractVector{TI}) where {D,TF<:AbstractFloat, TI<:Integer}
+function Base.permute!(grid::PointSamples{D,TF}, p :: AbstractVector{TI}) where {D,TF<:AbstractFloat, TI<:Integer}
     Base.permute!(grid.grid, p)
     @inbounds for i in 1:D
         Base.permute!(grid.coor[i], p)
@@ -171,7 +182,7 @@ function Base.permute!(grid::GeneralGrid{D,TF}, p :: AbstractVector{TI}) where {
     return nothing
 end
 
-function Base.invpermute!(grid::GeneralGrid{D,TF}, p :: AbstractVector{TI}) where {D,TF<:AbstractFloat, TI<:Integer}
+function Base.invpermute!(grid::PointSamples{D,TF}, p :: AbstractVector{TI}) where {D,TF<:AbstractFloat, TI<:Integer}
     Base.invpermute!(grid.grid, p)
     @inbounds for i in 1:D
         Base.invpermute!(grid.coor[i], p)
@@ -180,33 +191,33 @@ function Base.invpermute!(grid::GeneralGrid{D,TF}, p :: AbstractVector{TI}) wher
 end
 
 """
-    batch_GeneralGrid(grid::GeneralGrid{D, TF, VG, VC}, batch_size::Int)
+    batch_PointSamples(grid::PointSamples{D, TF, VG, VC}, batch_size::Int)
 
-Split a `GeneralGrid` into contiguous batches, each containing at most `batch_size` points.
+Split a `PointSamples` into contiguous batches, each containing at most `batch_size` points.
 The function preserves the ordering of both `grid.grid` and coordinates `grid.coor`, returning
-a statically-sized `NTuple` of `GeneralGrid`s.
+a statically-sized `NTuple` of `PointSamples`s.
 
 Batch `b` contains points from index
 `start = (b - 1) * batch_size + 1` to `stop = min(b * batch_size, N)`,
 where `N = length(grid)`.
 
 # Parameters
-- `grid::GeneralGrid{D, TF, VG, VC}` :
+- `grid::PointSamples{D, TF, VG, VC}` :
   Input grid containing values `grid.grid` and coordinates `grid.coor` in SoA layout
   (`grid.coor[d][i]` is the `d`-th coordinate of the `i`-th point).
 - `batch_size::Int` :
   Maximum number of points in each batch.
 
 # Returns
-`NTuple{B, GeneralGrid{D, TF, VG, VC}}` where `B = cld(N, batch_size)` and `N = length(grid)`.
+`NTuple{B, PointSamples{D, TF, VG, VC}}` where `B = cld(N, batch_size)` and `N = length(grid)`.
 
-Each returned `GeneralGrid` contains:
+Each returned `PointSamples` contains:
 - `grid.grid[start:stop]`
 - `ntuple(d -> grid.coor[d][start:stop], D)`
 
 with `start:stop` defined by the batch index `b`.
 """
-function batch_GeneralGrid(grid::GeneralGrid{D,TF,VG,VC}, batch_size::Int) where {D, TF<:AbstractFloat, VG<:AbstractVector{TF}, VC<:NTuple{D,VG}}
+function batch_PointSamples(grid::PointSamples{D,TF,VG,VC}, batch_size::Int) where {D, TF<:AbstractFloat, VG<:AbstractVector{TF}, VC<:NTuple{D,VG}}
     npoints = length(grid)
     num_batches = cld(npoints, batch_size)
 
@@ -217,50 +228,40 @@ function batch_GeneralGrid(grid::GeneralGrid{D,TF,VG,VC}, batch_size::Int) where
         grid_b = grid.grid[start:stop]
         coor_b = ntuple(d -> grid.coor[d][start:stop], D)
 
-        GeneralGrid(grid_b, coor_b)
+        PointSamples(grid_b, coor_b)
     end, num_batches)
 end
 
 """
-    merge_GeneralGrid(grids::AbstractVector{<:GeneralGrid{D,TF,VG,VC}})
+    merge_PointSamples(grids::AbstractVector{<:PointSamples{D,TF,VG,VC}})
 
-Merge a collection of `GeneralGrid` batches into a single `GeneralGrid`.
+Merge a collection of `PointSamples` batches into a single `PointSamples`.
 
 The function concatenates all scalar values `g.grid` in order, and concatenates
 coordinates in SoA form per dimension: for each `d = 1:D`, the merged coordinate
 vector is `vcat(g.coor[d] for g in grids...)`. This restores the original point
-ordering when `grids` is produced by `batch_GeneralGrid` without reordering.
+ordering when `grids` is produced by `batch_PointSamples` without reordering.
 
 # Parameters
-- `grids::AbstractVector{<:GeneralGrid{D,TF,VG,VC}}` :
-  A vector of batched `GeneralGrid` objects.
+- `grids::AbstractVector{<:PointSamples{D,TF,VG,VC}}` :
+  A vector of batched `PointSamples` objects.
 
 # Returns
-`GeneralGrid{D,TF,VG,VC}` containing the concatenated values and coordinates.
+`PointSamples{D,TF,VG,VC}` containing the concatenated values and coordinates.
 """
-function merge_GeneralGrid(grids::V) where {D, TF<:AbstractFloat, VG<:AbstractVector{TF}, VC<:NTuple{D,VG}, GG<:GeneralGrid{D,TF,VG,VC}, V<:AbstractVector{GG}}
+function merge_PointSamples(grids::V) where {D, TF<:AbstractFloat, VG<:AbstractVector{TF}, VC<:NTuple{D,VG}, GG<:PointSamples{D,TF,VG,VC}, V<:AbstractVector{GG}}
     merged_grid = vcat((g.grid for g in grids)...)
     merged_coor = ntuple(d -> vcat((g.coor[d] for g in grids)...), D)
 
-    return GeneralGrid(merged_grid, merged_coor)
+    return PointSamples(merged_grid, merged_coor)
 end
 
 
 # Constructors
-function GeneralGrid(grid::VG, coor::VC) where {D,TF<:AbstractFloat,VG<:AbstractVector{TF},VC<:NTuple{D,VG}}
-    N = length(grid)
-
-    @inbounds for d in 1:D
-        length(coor[d]) == N || throw(ArgumentError("coor[$d] length mismatch"))
-    end
-
-    return GeneralGrid{D,TF,VG,VC}(grid, coor)
-end
-
 """
-    GeneralGrid(x::V, y::V, z::V) where {T<:AbstractFloat, V<:AbstractVector{T}}
+    PointSamples(x::V, y::V, z::V) where {T<:AbstractFloat, V<:AbstractVector{T}}
 
-Construct a 3D `GeneralGrid` from particle coordinates. The input vectors are
+Construct a 3D `PointSamples` from particle coordinates. The input vectors are
 copied into an array of position tuples and paired with a zero-initialised value
 buffer, yielding a dense, order-preserving grid container that can be filled by
 subsequent interpolation routines.
@@ -269,23 +270,23 @@ subsequent interpolation routines.
 - `x, y, z::AbstractVector{T}`: Particle positions along each Cartesian axis.
 
 # Returns
-- `GeneralGrid{3, T, Vector{T}, NTuple{3, Vector{T}}}`: Grid with zeroed values
+- `PointSamples{3, T, Vector{T}, NTuple{3, Vector{T}}}`: Grid with zeroed values
     and `(x, y, z)` coordinate tuples.
 """
-function GeneralGrid(x :: V, y :: V, z :: V) where {T <: AbstractFloat, V <: AbstractVector{T}}
+function PointSamples(x :: V, y :: V, z :: V) where {T <: AbstractFloat, V <: AbstractVector{T}}
     N = length(x)
     (length(y) == N) || throw(ArgumentError("y length mismatch"))
     (length(z) == N) || throw(ArgumentError("z length mismatch"))
 
     coords = (x, y, z)
     vals = zeros(T, N)
-    return GeneralGrid{3, T, Vector{T}, NTuple{3, Vector{T}}}(vals, coords)
+    return PointSamples{3, T, Vector{T}, NTuple{3, Vector{T}}}(vals, coords)
 end
 
 """
-    GeneralGrid(x::V, y::V) where {T<:AbstractFloat, V<:AbstractVector{T}}
+    PointSamples(x::V, y::V) where {T<:AbstractFloat, V<:AbstractVector{T}}
 
-Construct a 2D `GeneralGrid` from planar coordinates. The returned grid stores
+Construct a 2D `PointSamples` from planar coordinates. The returned grid stores
 zeroed values and the `(x, y)` coordinate tuples, ready for interpolation or
 resampling passes.
 
@@ -293,14 +294,14 @@ resampling passes.
 - `x, y::AbstractVector{T}`: Particle positions along each axis.
 
 # Returns
-- `GeneralGrid{2, T, Vector{T}, NTuple{2, Vector{T}}}`: Grid with zeroed values
+- `PointSamples{2, T, Vector{T}, NTuple{2, Vector{T}}}`: Grid with zeroed values
   and `(x, y)` coordinate tuples.
 """
-function GeneralGrid(x :: V, y :: V) where {T <: AbstractFloat, V <: AbstractVector{T}}
+function PointSamples(x :: V, y :: V) where {T <: AbstractFloat, V <: AbstractVector{T}}
     N = length(x)
     (length(y) == N) || throw(ArgumentError("y length mismatch"))
 
     coords = (x, y)
     vals = zeros(T, N)
-    return GeneralGrid{2, T, Vector{T}, NTuple{2, Vector{T}}}(vals, coords)
+    return PointSamples{2, T, Vector{T}, NTuple{2, Vector{T}}}(vals, coords)
 end

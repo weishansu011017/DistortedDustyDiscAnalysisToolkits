@@ -47,9 +47,7 @@
         #########################################################
     end
 
-    if iszero(S1)
-        return T(NaN), NaN32
-    end
+    iszero(S1) && return T(NaN)
 
     Ax /= S1
     Ay /= S1
@@ -109,9 +107,7 @@ end
         #########################################################
     end
 
-    if iszero(S1)
-        return T(NaN), NaN32
-    end
+    iszero(S1) && return T(NaN)
 
     Ax /= S1
     Ay /= S1
@@ -174,9 +170,7 @@ end
         #########################################################
     end
 
-    if iszero(S1)
-        return T(NaN), NaN32
-    end
+    iszero(S1) && return T(NaN)
 
     Ax /= S1
     Ay /= S1

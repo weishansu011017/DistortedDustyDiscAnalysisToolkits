@@ -34,16 +34,16 @@ using PhantomRevealer
 
 # ========================== Constants ======================================= #
 
-const TESTDUMP = joinpath(@__DIR__, "testinput", "testdumpfile_00000")
+testdump = joinpath(@__DIR__, "testinput", "testdumpfile_00000")
 
 # ============================== Test body =================================== #
 
 # ── 1. Basic read ────────────────────────────────────────────────────── #
 
 @testset "read_phantom — basic read" begin
-    @test isfile(TESTDUMP)
+    @test isfile(testdump)
 
-    data_list = read_phantom(TESTDUMP)
+    data_list = read_phantom(testdump)
 
     @test data_list isa Vector
     @test length(data_list) >= 1
@@ -62,7 +62,7 @@ end
 # ── 2. ParticleDataFrame interface ───────────────────────────────────── #
 
 @testset "ParticleDataFrame — interface" begin
-    data_list = read_phantom(TESTDUMP)
+    data_list = read_phantom(testdump)
     gas = data_list[1]
 
     # Dimension
@@ -95,7 +95,7 @@ end
 # ── 3. Header parameters ────────────────────────────────────────────── #
 
 @testset "read_phantom — header parameters" begin
-    data_list = read_phantom(TESTDUMP)
+    data_list = read_phantom(testdump)
     gas = data_list[1]
 
     params = gas.params
@@ -103,4 +103,25 @@ end
 
     # Phantom headers always contain mass-related keys
     @test haskey(params, :mass) || haskey(params, :massoftype)
+end
+
+# ── 4. Alternative read modes ───────────────────────────────────────── #
+
+@testset "read_phantom — separate_types and inactive-particle handling" begin
+    data_default = read_phantom(testdump)
+    data_all = read_phantom(testdump; separate_types = :all)
+    data_all_keep_inactive = read_phantom(testdump; separate_types = :all, ignore_inactive = false)
+
+    @test length(data_all) >= length(data_default)
+    @test length(data_all) >= 2
+
+    npart_all = sum(get_npart(prdf) for prdf in data_all)
+    npart_all_keep_inactive = sum(get_npart(prdf) for prdf in data_all_keep_inactive)
+
+    @test npart_all > 0
+    @test npart_all_keep_inactive >= npart_all
+    @test haskey(data_all[1].params, :nparttot)
+    @test npart_all <= data_all[1].params[:nparttot]
+    @test npart_all_keep_inactive >= data_all[1].params[:nparttot]
+    @test npart_all_keep_inactive - data_all[1].params[:nparttot] == get_npart(data_all_keep_inactive[end])
 end

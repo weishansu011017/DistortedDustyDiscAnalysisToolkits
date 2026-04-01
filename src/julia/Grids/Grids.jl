@@ -21,16 +21,20 @@ Implemented in:
 
 ## Core Grid Abstractions
 - `AbstractGrid`, the common interface for all grid types
-- `GeneralGrid`, a flexible grid representation with explicit axes
+- `AbstractSamples`, the common interface for sample-based grid types
+- `PointSamples`, a flexible sample representation with explicit coordinates
+- `LineSamples`, a flexible line-sample representation with explicit origins and directions
 - `StructuredGrid`, a regular grid with implicit topology
 
 Implemented in:
 - `grids/AbstractGrid.jl`
-- `grids/GeneralGrid.jl`
+- `grids/AbstractSamples.jl`
+- `grids/PointSamples.jl`
+- `grids/LineSamples.jl`
 - `grids/StructuredGrid.jl`
 
 ## Grid Transformations
-- Conversion utilities between `StructuredGrid` and `GeneralGrid`
+- Conversion utilities between `StructuredGrid` and `PointSamples`
 - Used to bridge regular grids and more general representations
 
 Implemented in:
@@ -55,13 +59,19 @@ include(joinpath(@__DIR__, "grids", "coordinate.jl"))
 # AbstractGrid
 include(joinpath(@__DIR__, "grids", "AbstractGrid.jl"))
 
-# GeneralGrid
-include(joinpath(@__DIR__, "grids", "GeneralGrid.jl"))
+# AbstractSamples
+include(joinpath(@__DIR__, "grids", "AbstractSamples.jl"))
+
+# PointSamples
+include(joinpath(@__DIR__, "grids", "PointSamples.jl"))
+
+# LineSamples
+include(joinpath(@__DIR__, "grids", "LineSamples.jl"))
 
 # StructuredGrid
 include(joinpath(@__DIR__, "grids", "StructuredGrid.jl"))
 
-# Transfromation between StructuredGrid and GeneralGrid
+# Transfromation between StructuredGrid and PointSamples
 include(joinpath(@__DIR__, "grids", "transform.jl"))
 
 # GridBundle

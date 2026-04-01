@@ -35,6 +35,9 @@ include("kernel_function_tests.jl")
 # ── 5. Interpolation ────────────────────────────────────────────────── #
 include("interpolation_test_common.jl")
 include("interpolation_tests.jl")
+include("grid_interpolation_tests.jl")
+include("test_traversal_analytic.jl")
+include("type_stability.jl")
 
 # ── 6. Solvers / numerics ───────────────────────────────────────────── #
 include("tiny_eigvals_tests.jl")

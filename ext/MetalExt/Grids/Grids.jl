@@ -3,7 +3,7 @@ using PhantomRevealer
 using Metal
 
 # Grid construction
-include(joinpath(@__DIR__, "grids", "GeneralGrid.jl"))
+include(joinpath(@__DIR__, "grids", "PointSamples.jl"))
 
 
 # Export function, marco, const...

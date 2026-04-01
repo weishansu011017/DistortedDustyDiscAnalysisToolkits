@@ -9,7 +9,7 @@ base type from `params`, infers `D` and `L` from the stored coordinate/axes vect
 the number of grids, then constructs concrete grid types:
 
 - `StructuredGrid{D,TF,V,A}` when `params[:grid_type] == :StructuredGrid`
-- `GeneralGrid{D,TF,VG,VC}` when `params[:grid_type] == :GeneralGrid`
+- `PointSamples{D,TF,VG,VC}` when `params[:grid_type] == :PointSamples`
 
 Shared vectors (`axes` or `coord`) are read once and reused across all grids, matching the
 writer-side assumption that coordinate/axes vectors are shared among grids.
@@ -58,14 +58,14 @@ function read_GridDataset(filename::String="PRGridDataset.h5")
             gb = GridBundle{L, G}(grids, names)
             return GridDataset{L, TF, G}(gb, params)
 
-        elseif base === :GeneralGrid
+        elseif base === :PointSamples
             shared_vecs, D = _read_shared_vectors(dg, "coord")
             arrays, L = _read_dense_grids(dg, TF)
             length(names_vec) == L || throw(ArgumentError("names length != number of grids"))
 
             VG = typeof(shared_vecs[1])         
             VC = typeof(shared_vecs)           
-            G  = PhantomRevealer.GeneralGrid{D, TF, VG, VC} 
+            G  = PhantomRevealer.PointSamples{D, TF, VG, VC} 
 
             grids = ntuple(i -> G(arrays[i], shared_vecs), Val(L))
             names = ntuple(i -> names_vec[i], Val(L))
