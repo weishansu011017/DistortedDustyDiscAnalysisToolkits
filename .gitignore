@@ -55,3 +55,4 @@ build/*
 lapack
 temp/*
 sysimage/*
+LocalPreferences.toml
