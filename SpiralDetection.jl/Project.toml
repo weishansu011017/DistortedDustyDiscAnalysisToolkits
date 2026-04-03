@@ -1,0 +1,13 @@
+name = "SpiralDetection"
+uuid = "70e2ca46-dfdc-434c-b4d2-056738c601c0"
+version = "0.1.0"
+authors = ["Wei-Shan Su <weishansu011017@gmail.com>"]
+
+[deps]
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

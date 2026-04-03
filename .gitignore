@@ -1,0 +1,38 @@
+# ============================================================================ #
+#  Monorepo-local ignores
+# ============================================================================ #
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+__pycache__/
+
+# Julia local environment files
+**/Manifest.toml
+**/LocalPreferences.toml
+**/.manifest
+**/.project
+**/.dev
+
+# Local work directories
+**/.local/
+**/build/
+**/temp/
+**/backup/
+**/sysimage/
+
+# Generated benchmark / scratch outputs
+TinyEigvals.jl/test/tiny_eigvals_gpu/benchmark_tiny_eigvals_gpu_report.md
+*.mem
+disc_*
+snap*.hdf5
+
+# User-local scripts / scratch files
+Fully_analysis_disk.jl
+subjobJ.sh
+subjobJ64.sh
