@@ -103,9 +103,9 @@ Return the physical coordinate corresponding to a grid index.
 end
 
 """
-    coordinate_grid(grid::StructuredGrid{D, TF}) where {D, TF<:AbstractFloat}
+    coordinate_grid(::Type{Cartesian}, grid::StructuredGrid{D, TF}) where {D, TF<:AbstractFloat}
 
-Generate coordinates for all grid points defined by a `StructuredGrid`.
+Generate Cartesian coordinates for all grid points defined by a Cartesian `StructuredGrid`.
 
 Coordinates are returned in a structure-of-arrays (SoA) layout compatible with `PointSamples`.
 For each dimension `d = 1:D`, the returned vector `coor[d]` has length `N = prod(grid.size)`,
@@ -113,6 +113,8 @@ and `coor[d][i]` is the `d`-th coordinate of the `i`-th grid point, where `i` fo
 column-major linear indexing of `grid.size`.
 
 # Parameters
+- `::Type{Cartesian}` :
+  Explicit coordinate-system dispatch for Cartesian grids.
 - `grid::StructuredGrid{D,TF}` :
   The structured grid container.
 
@@ -121,7 +123,7 @@ column-major linear indexing of `grid.size`.
 - For each `d = 1:D`, `coor[d]` is a vector of length `N = prod(grid.size)`.
 - The linear index `i` is consistent with `vec(grid.grid)`.
 """
-function coordinate_grid(grid::StructuredGrid{D,TF}) where {D,TF<:AbstractFloat}
+function coordinate_grid(::Type{Cartesian}, grid::StructuredGrid{D,TF}) where {D,TF<:AbstractFloat}
     sz = grid.size
     gv = vec(grid.grid)
     coor = ntuple(_ -> similar(gv), D)
@@ -136,6 +138,69 @@ function coordinate_grid(grid::StructuredGrid{D,TF}) where {D,TF<:AbstractFloat}
     end
 
     return coor
+end
+
+function coordinate_grid(::Type{Polar}, grid::StructuredGrid{2,TF}) where {TF<:AbstractFloat}
+    sz = grid.size
+    gv = vec(grid.grid)
+    x = similar(gv)
+    y = similar(gv)
+
+    L = LinearIndices(sz)
+    @inbounds for I in CartesianIndices(sz)
+        i = L[I]
+        s = grid.axes[1][I[1]]
+        ϕ = grid.axes[2][I[2]]
+        xi, yi = _cylin2cart(s, ϕ)
+        x[i] = xi
+        y[i] = yi
+    end
+
+    return (x, y)
+end
+
+function coordinate_grid(::Type{Cylindrical}, grid::StructuredGrid{3,TF}) where {TF<:AbstractFloat}
+    sz = grid.size
+    gv = vec(grid.grid)
+    x = similar(gv)
+    y = similar(gv)
+    z = similar(gv)
+
+    L = LinearIndices(sz)
+    @inbounds for I in CartesianIndices(sz)
+        i = L[I]
+        s = grid.axes[1][I[1]]
+        ϕ = grid.axes[2][I[2]]
+        zi = grid.axes[3][I[3]]
+        xi, yi, zc = _cylin2cart(s, ϕ, zi)
+        x[i] = xi
+        y[i] = yi
+        z[i] = zc
+    end
+
+    return (x, y, z)
+end
+
+function coordinate_grid(::Type{Spherical}, grid::StructuredGrid{3,TF}) where {TF<:AbstractFloat}
+    sz = grid.size
+    gv = vec(grid.grid)
+    x = similar(gv)
+    y = similar(gv)
+    z = similar(gv)
+
+    L = LinearIndices(sz)
+    @inbounds for I in CartesianIndices(sz)
+        i = L[I]
+        r = grid.axes[1][I[1]]
+        ϕ = grid.axes[2][I[2]]
+        θ = grid.axes[3][I[3]]
+        xi, yi, zi = _sph2cart(r, ϕ, θ)
+        x[i] = xi
+        y[i] = yi
+        z[i] = zi
+    end
+
+    return (x, y, z)
 end
 
 """

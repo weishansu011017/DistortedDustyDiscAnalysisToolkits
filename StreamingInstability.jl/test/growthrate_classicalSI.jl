@@ -13,8 +13,8 @@
 #
 #  Reference data
 #  ──────────────
-#  • linA, linB  — Youdin & Johansen (2007), Table 1
-#  • linC, linD  — Bai & Stone      (2010), Table 2
+#  • linA, linB  — Youdin & Johansen (2007), Table 1 (doi: 10.1086/516729)
+#  • linC, linD  — Bai & Stone       (2010), Table 2 (doi: 10.1088/0067-0049/190/2/297)
 #
 #  Unit convention
 #  ───────────────
@@ -32,8 +32,8 @@ using StreamingInstability
 
 hlr = 0.05              # H/r — disc aspect ratio
 η_param = 0.0025        # η   — radial pressure gradient parameter
-ηvₖlcₛ = η_param / hlr  # ηvₖ / cₛ  =  η / (H/r)
-invηvₖlcₛ = inv(ηvₖlcₛ) # cₛ / (ηvₖ)
+ηvₖlcₛ = η_param / hlr   # ηvₖ / cₛ  =  η / (H/r)
+invηvₖlcₛ = inv(ηvₖlcₛ)   # cₛ / (ηvₖ)
 
 # ========================== Helper functions ================================ #
 
@@ -47,9 +47,9 @@ invηvₖlcₛ = inv(ηvₖlcₛ) # cₛ / (ηvₖ)
 @inline vlcₛ(ṽ::T) where {T<:Complex} = ηvₖlcₛ * ṽ
 
 # ── Equilibrium velocities (Nakagawa–Sekiya–Hayashi drift) ──────────── #
-
+## doi: 10.1016/0019-1035(86)90121-1
 Δ(ε, τ)      = (1 + ε)^2 + τ^2
-uxlcₛ(ε, τ)  =  (ηvₖlcₛ) * (2ε * τ)          / Δ(ε, τ)
+uxlcₛ(ε, τ)  =  (ηvₖlcₛ) * (2ε * τ)           / Δ(ε, τ)
 uylcₛ(ε, τ)  = -(ηvₖlcₛ) * (1 + ε*τ^2/Δ(ε,τ)) / (1 + ε)
 wxlcₛ(ε, τ)  = -(ηvₖlcₛ) * 2τ                 / Δ(ε, τ)
 wylcₛ(ε, τ)  = -(ηvₖlcₛ) * (1 - τ^2/Δ(ε,τ))   / (1 + ε)
@@ -166,8 +166,8 @@ end
     #    convention difference noted in the original references.
     ref_sA = 0.4190204     # Youdin & Johansen (2007) linA
     ref_sB = 0.0154764     # Youdin & Johansen (2007) linB
-    ref_sC = 0.5980690     # Bai & Stone      (2010) linC
-    ref_sD = 0.3154373     # Bai & Stone      (2010) linD
+    ref_sC = 0.5980690     # Bai & Stone       (2010) linC
+    ref_sD = 0.3154373     # Bai & Stone       (2010) linD
 
     # ── Assertions ────────────────────────────────────────── #
     #    Tolerance: 1e-3 relative (0.1 %).

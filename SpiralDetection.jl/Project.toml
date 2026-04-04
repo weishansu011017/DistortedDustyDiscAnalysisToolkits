@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Wei-Shan Su <weishansu011017@gmail.com>"]
 
 [deps]
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [extras]

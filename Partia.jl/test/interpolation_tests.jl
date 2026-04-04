@@ -135,7 +135,7 @@ end
 
     input, catalog = build_input(
         CPUComputeBackend(),
-        x, y, z, h, rho, m, (P, vx, vy, vz, Bx, By, Bz);
+        x, y, z, m, h, rho, (P, vx, vy, vz, Bx, By, Bz);
         column_names = (:P, :vx, :vy, :vz, :Bx, :By, :Bz),
         scalars = (:P,),
         gradients = (:P,),
@@ -161,7 +161,7 @@ end
 
     @test_throws KeyError build_input(
         CPUComputeBackend(),
-        x, y, z, h, rho, m, (P, vx, vy, vz, Bx, By);
+        x, y, z, m, h, rho, (P, vx, vy, vz, Bx, By);
         column_names = (:P, :vx, :vy, :vz, :Bx, :By),
         scalars = (),
         gradients = (),
@@ -190,7 +190,7 @@ end
 
     input, catalog = build_input(
         CPUComputeBackend(),
-        x, y, z, h, rho, m, (P, vx, vy, vz, Bx, By, Bz);
+        x, y, z, m, h, rho, (P, vx, vy, vz, Bx, By, Bz);
         column_names = (:P, :vx, :vy, :vz, :Bx, :By, :Bz),
         scalars = (:P,),
         gradients = (:P,),
@@ -210,7 +210,7 @@ end
 
     @test_throws KeyError build_input(
         CPUComputeBackend(),
-        x, y, z, h, rho, m, (vx, vy, vz, Bx, By, Bz);
+        x, y, z, m, h, rho, (vx, vy, vz, Bx, By, Bz);
         column_names = (:vx, :vy, :vz, :Bx, :By, :Bz),
         scalars = (:P,),
         gradients = (),

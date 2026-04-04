@@ -1,5 +1,6 @@
 module Partia
 # Include the Julia Module
+using Logging
 using Pkg
 using Reexport
 
@@ -51,5 +52,13 @@ Get the folder of currently loaded Partia
 """
 function get_Partia_path()
     return dirname(dirname(pathof(Partia)))
+end
+
+# Package metadata helpers.
+version() = pkgversion(@__MODULE__)
+
+function about()
+    @info "Partia analysis Module\n  Version: $(version())\n  Made by Wei-Shan Su, Apr 2026"
+    return nothing
 end
 end

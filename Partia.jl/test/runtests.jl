@@ -21,6 +21,7 @@ using Partia
 
 # 1. Utility functions ------------------------------------------------------ #
 include("tools_tests.jl")
+include("coordinate_tests.jl")
 
 # 2. Spatial data structures ------------------------------------------------ #
 include("neighbor_search_tests.jl")
@@ -30,7 +31,10 @@ include("kernel_function_tests.jl")
 
 # 4. Interpolation ---------------------------------------------------------- #
 include("interpolation_test_common.jl")
+include("interpolation_analytic_test_common.jl")
 include("interpolation_tests.jl")
-include("grid_interpolation_tests.jl")
+include("grid_interpolation_test_common.jl")
+include("point_samples_interpolation_tests.jl")
+include("structured_grid_interpolation_tests.jl")
 include("traversal_analytic.jl")
 include("type_stability.jl")

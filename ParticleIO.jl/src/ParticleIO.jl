@@ -19,6 +19,7 @@ that eventually feed into `Partia`'s interpolation and analysis machinery.
 module ParticleIO
 
 # Include the Julia Module
+using Logging
 using Reexport
 
 ## Particle data structures and convenience operations
@@ -32,6 +33,14 @@ include(joinpath(@__DIR__, "julia", "IO", "IO.jl"))
 ## Adapters from particle containers to Partia interpolation inputs
 include(joinpath(@__DIR__, "julia", "PartiaAdapter", "PartiaAdapter.jl"))
 @reexport using .PartiaAdapter
+
+# Package metadata helpers.
+version() = pkgversion(@__MODULE__)
+
+function about()
+    @info "ParticleIO Module\n  Version: $(version())\n  Made by Wei-Shan Su, Apr 2026"
+    return nothing
+end
 
 # Export function, macro, const...
 for name in filter(s -> !startswith(string(s), "#"), names(@__MODULE__, all = true))

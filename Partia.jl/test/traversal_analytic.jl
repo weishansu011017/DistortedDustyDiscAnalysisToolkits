@@ -29,71 +29,22 @@ using Partia.KernelInterpolation: _density_kernel,
     _divergence_quantity_interpolate_kernel,
     _curl_quantity_interpolate_kernel
 
+@static if !isdefined(@__MODULE__, :analytic_scalar)
+    include("interpolation_analytic_test_common.jl")
+end
+
 kern = M4_spline()
 strategies = (itpGather, itpScatter, itpSymmetric)
 kvalid = KernelFunctionValid(typeof(kern), Float64)
-
-# Analytic manufactured solutions (linear fields)
-@inline analytic_scalar(x, y, z) = x + y + z
-@inline analytic_grad_scalar(::Float64, ::Float64, ::Float64) = (1.0, 1.0, 1.0)
-@inline analytic_vecA(x, y, z) = (x, y, z)
-@inline analytic_divA(::Float64, ::Float64, ::Float64) = 3.0
-@inline analytic_curlA(::Float64, ::Float64, ::Float64) = (0.0, 0.0, 0.0)
-
-# Structured particle generation
-function make_uniform_cloud_3d(nx::Int; eta::Float64)
-    dx = 1.0 / nx
-    coords = collect(range(dx / 2, stop = 1.0 - dx / 2, step = dx))
-    x = Float64[]
-    y = Float64[]
-    z = Float64[]
-    @inbounds for xi in coords, yi in coords, zi in coords
-        push!(x, xi)
-        push!(y, yi)
-        push!(z, zi)
-    end
-
-    n = length(x)
-    m = fill(dx^3, n)
-    h = fill(eta * dx, n)
-    q1 = similar(x)
-    q2 = similar(x)
-    q3 = similar(x)
-    q4 = similar(x)
-    @inbounds for i in 1:n
-        q1[i] = analytic_scalar(x[i], y[i], z[i])
-        q2[i], q3[i], q4[i] = analytic_vecA(x[i], y[i], z[i])
-    end
-
-    rho = ones(Float64, n)
-    input = InterpolationInput((x, y, z), m, h, rho, (q1, q2, q3, q4); smoothed_kernel = typeof(kern))
-    return input, dx, h[1]
-end
-
-sample_reference_points(rng::AbstractRNG, n::Int, h::Float64) = begin
-    margin = 1.5 * kvalid * h
-    lo = margin
-    hi = 1.0 - margin
-    refs = NTuple{3, Float64}[]
-    @inbounds for _ in 1:n
-        x = rand(rng) * (hi - lo) + lo
-        y = rand(rng) * (hi - lo) + lo
-        z = rand(rng) * (hi - lo) + lo
-        push!(refs, (x, y, z))
-    end
-    refs
-end
-
-mean_abs(v) = isempty(v) ? 0.0 : sum(abs, v) / length(v)
 
 @testset "Analytic traversal kernels (linear field)" begin
     rng = Xoshiro(0xA11CE)
     configs = ((nx = 8, eta = 1.2), (nx = 12, eta = 1.2))
 
     for cfg in configs
-        input, _, h = make_uniform_cloud_3d(cfg.nx; eta = cfg.eta)
+        input, _, h = make_uniform_cloud_3d(cfg.nx; eta = cfg.eta, kernel = typeof(kern), variable_h = false)
         LBVH = LinearBVH!(input, Val(3))
-        refs = sample_reference_points(rng, 12, h)
+        refs = sample_reference_points(rng, 12, h; kernel = typeof(kern))
 
         scalar_err = Float64[]
         grad_err = Float64[]

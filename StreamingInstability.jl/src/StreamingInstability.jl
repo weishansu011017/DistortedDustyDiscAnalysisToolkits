@@ -11,6 +11,7 @@ Currently implemented:
 """
 module StreamingInstability
 
+using Logging
 using Statistics
 using LinearAlgebra
 using StaticArrays
@@ -18,6 +19,15 @@ using TinyEigvals
 
 # Growth rate estimation through Chen & Lin (2021)
 include(joinpath(@__DIR__, "julia", "classical_SI_growth_rate.jl"))
+
+# Package metadata helpers.
+version() = pkgversion(@__MODULE__)
+
+function about()
+    @info "StreamingInstability Module\n  Version: $(version())\n  Made by Wei-Shan Su, Apr 2026"
+    return nothing
+end
+
 # Export function, macro, const...
 for name in filter(s -> !startswith(string(s), "#"), names(@__MODULE__, all = true))
     if !startswith(String(name), "_") && (name != :eval) && (name != :include)

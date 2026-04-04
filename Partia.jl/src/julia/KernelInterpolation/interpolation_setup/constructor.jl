@@ -15,9 +15,9 @@ from their own container types and then call the internal helpers defined here.
                 x_col::AbstractVector,
                 y_col::AbstractVector,
                 z_col::AbstractVector,
+                m_col::AbstractVector,
                 h_col::AbstractVector,
                 ρ_col::AbstractVector,
-                m_col::AbstractVector,
                 quantity_columns::NTuple{NCOLUMN,<:AbstractVector};
                 column_names::NTuple{NCOLUMN,Symbol},
                 scalars::Tuple{Vararg{Symbol}}=(),
@@ -35,7 +35,7 @@ builds a 3D `InterpolationCatalog` from the provided extra quantity names.
 The catalog request names are resolved only against `column_names`, which must
 correspond one-to-one with `quantity_columns`.
 
-Base interpolation fields `x`, `y`, `z`, `h`, `ρ`, and `m` are supplied
+Base interpolation fields `x`, `y`, `z`, `m`, `h`, and `ρ` are supplied
 explicitly through positional arguments and are not part of the catalog lookup
 namespace.
 
@@ -45,16 +45,16 @@ namespace.
 - `x_col::AbstractVector`: Particle `x` coordinates.
 - `y_col::AbstractVector`: Particle `y` coordinates.
 - `z_col::AbstractVector`: Particle `z` coordinates.
+- `m_col::AbstractVector`: Particle masses.
 - `h_col::AbstractVector`: Particle smoothing lengths.
 - `ρ_col::AbstractVector`: Particle densities.
-- `m_col::AbstractVector`: Particle masses.
 - `quantity_columns::NTuple{NCOLUMN,<:AbstractVector}`: Extra particle
   quantity columns to be attached to the interpolation input.
 
 # Keyword Arguments
 | Keyword | Type | Default | Description |
 |---|---|---|---|
-| `column_names` | `NTuple{NCOLUMN,Symbol}` | — | Names associated one-to-one with `quantity_columns`. These names define the catalog lookup namespace. |
+| `column_names` | `NTuple{NCOLUMN,Symbol}` | required | Names associated one-to-one with `quantity_columns`. These names define the catalog lookup namespace. |
 | `scalars` | `Tuple{Vararg{Symbol}}` | `()` | Names of extra scalar quantities to interpolate directly. |
 | `gradients` | `Tuple{Vararg{Symbol}}` | `()` | Names of extra scalar quantities whose spatial gradients should be computed. |
 | `divergences` | `Tuple{Vararg{Symbol}}` | `()` | Base names of extra vector quantities whose divergences should be computed. |
@@ -66,30 +66,41 @@ namespace.
   consisting of the materialized CPU interpolation input and the corresponding
   3D interpolation catalog for the requested extra quantities.
 """
-function build_input(:: CPUComputeBackend,
-    x_col :: AbstractVector, y_col :: AbstractVector, z_col :: AbstractVector, h_col :: AbstractVector, ρ_col :: AbstractVector, m_col :: AbstractVector, quantity_columns :: NTuple{NCOLUMN, <: AbstractVector};
-    column_names :: NTuple{NCOLUMN, Symbol}, 
-    scalars :: Tuple{Vararg{Symbol}} = (), gradients :: Tuple{Vararg{Symbol}} = (), divergences :: Tuple{Vararg{Symbol}} = (), curls :: Tuple{Vararg{Symbol}} = (), 
-    smoothed_kernel::Type{K} = M5_spline) where {K <: AbstractSPHKernel, NCOLUMN}
+function build_input(
+    ::CPUComputeBackend,
+    x_col::AbstractVector,
+    y_col::AbstractVector,
+    z_col::AbstractVector,
+    m_col::AbstractVector,
+    h_col::AbstractVector,
+    ρ_col::AbstractVector,
+    quantity_columns::NTuple{NCOLUMN,<:AbstractVector};
+    column_names::NTuple{NCOLUMN,Symbol},
+    scalars::Tuple{Vararg{Symbol}} = (),
+    gradients::Tuple{Vararg{Symbol}} = (),
+    divergences::Tuple{Vararg{Symbol}} = (),
+    curls::Tuple{Vararg{Symbol}} = (),
+    smoothed_kernel::Type{K} = M5_spline,
+) where {K<:AbstractSPHKernel,NCOLUMN}
 
-    # Get promoted type for all columns to ensure consistent numeric types in InterpolationInput
+    # Promote all columns to a common floating-point type before materialization.
     Tprom = if isempty(quantity_columns)
         promote_type(
             eltype(x_col),
             eltype(y_col),
             eltype(z_col),
+            eltype(m_col),
             eltype(h_col),
             eltype(ρ_col),
-            eltype(m_col),
         )
     else
         promote_type(
             eltype(x_col),
             eltype(y_col),
             eltype(z_col),
+            eltype(m_col),
             eltype(h_col),
             eltype(ρ_col),
-            eltype(m_col),
             (eltype(column) for column in quantity_columns)...,
         )
     end
@@ -97,10 +108,9 @@ function build_input(:: CPUComputeBackend,
     x = Vector{Tprom}(x_col)
     y = Vector{Tprom}(y_col)
     z = Vector{Tprom}(z_col)
+    m = Vector{Tprom}(m_col)
     h = Vector{Tprom}(h_col)
     ρ = Vector{Tprom}(ρ_col)
-    m = Vector{Tprom}(m_col)
-
     quant = ntuple(i -> Vector{Tprom}(quantity_columns[i]), NCOLUMN)
 
     input = InterpolationInput(
@@ -115,7 +125,8 @@ function build_input(:: CPUComputeBackend,
     )
 
     catalog = InterpolationCatalog(
-        column_names, Val(3);
+        column_names,
+        Val(3);
         scalars = scalars,
         gradients = gradients,
         divergences = divergences,

@@ -62,11 +62,11 @@ function build_input(
         data[!, :x],
         data[!, :y],
         data[!, :z],
+        data[!, mass_from_column.name],
         data[!, :h],
         data[!, :rho],
-        data[!, mass_from_column.name];
+        _materialized_columns(data, column_names);
         column_names = column_names,
-        quantity_columns = _materialized_columns(data, column_names),
         scalars = scalars,
         gradients = gradients,
         divergences = divergences,
@@ -147,11 +147,11 @@ function build_input(
         data[!, :x],
         data[!, :y],
         data[!, :z],
+        fill(particle_mass, N),
         data[!, :h],
         data[!, :rho],
-        fill(particle_mass, N);
+        _materialized_columns(data, column_names);
         column_names = column_names,
-        quantity_columns = _materialized_columns(data, column_names),
         scalars = scalars,
         gradients = gradients,
         divergences = divergences,

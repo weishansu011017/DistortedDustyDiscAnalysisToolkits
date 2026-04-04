@@ -27,7 +27,6 @@ __pycache__/
 **/sysimage/
 
 # Generated benchmark / scratch outputs
-TinyEigvals.jl/test/tiny_eigvals_gpu/benchmark_tiny_eigvals_gpu_report.md
 *.mem
 disc_*
 snap*.hdf5
