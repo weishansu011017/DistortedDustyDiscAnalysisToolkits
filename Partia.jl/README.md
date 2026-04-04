@@ -28,26 +28,29 @@ Pkg.develop(path="path/to/DistortedDustyDiscAnalysis/Partia.jl")
 
 For a sampling position $\mathbf{r}$, the density estimate is
 
-$$
+```math
 \rho(\mathbf{r})
 =
+\sum_b m_b \, W\!\left(\lvert \mathbf{r} - \mathbf{r}_b \rvert, h\right),\rho(\mathbf{r})
+=
 \sum_b m_b \, W\!\left(\lvert \mathbf{r} - \mathbf{r}_b \rvert, h\right),
-$$
-
+```
 
 and a particle-carried scalar quantity $A_b$ is interpolated as
 
-$$
+```math
 A(\mathbf{r})
 =
 \sum_b \frac{m_b}{\rho_b} A_b \,
+W\!\left(\lvert \mathbf{r} - \mathbf{r}_b \rvert, h\right).A(\mathbf{r})
+=
+\sum_b \frac{m_b}{\rho_b} A_b \,
 W\!\left(\lvert \mathbf{r} - \mathbf{r}_b \rvert, h\right).
-$$
-
+```
 
 When Shepard normalization is enabled, the interpolated value becomes
 
-$$
+```math
 \tilde{A}(\mathbf{r})
 =
 \frac{
@@ -57,25 +60,25 @@ W\!\left(\lvert \mathbf{r} - \mathbf{r}_b \rvert, h\right)
 \sum_b \frac{m_b}{\rho_b}
 W\!\left(\lvert \mathbf{r} - \mathbf{r}_b \rvert, h\right)
 }.
-$$
+```
 
 For a vector field $\mathbf{A}$, the Shepard-normalized value $\tilde{\mathbf{A}}(\mathbf{r})$ is obtained by applying the same normalization component-wise.
 
 The interpolation formula is the same in all cases; the only difference is how the smoothing length used in the kernel evaluation is chosen. `Partia.jl` supports gather, scatter, and symmetric evaluation:
 
-$$
+```math
 W_{\mathrm{gather}}(\mathbf{r}, \mathbf{r}_b)
 =
 W\!\left(\lvert \mathbf{r} - \mathbf{r}_b \rvert, h_{\mathrm{samp}}\right),
-$$
+```
 
-$$
+```math
 W_{\mathrm{scatter}}(\mathbf{r}, \mathbf{r}_b)
 =
 W\!\left(\lvert \mathbf{r} - \mathbf{r}_b \rvert, h_b\right),
-$$
+```
 
-$$
+```math
 W_{\mathrm{symmetric}}(\mathbf{r}, \mathbf{r}_b)
 =
 \frac{1}{2}
@@ -84,24 +87,24 @@ W\!\left(\lvert \mathbf{r} - \mathbf{r}_b \rvert, h_{\mathrm{samp}}\right)
 +
 W\!\left(\lvert \mathbf{r} - \mathbf{r}_b \rvert, h_b\right)
 \right].
-$$
+```
 
 Here $h_{\mathrm{samp}}$ is the smoothing length assigned to the sampling point and $h_b$ is the smoothing length carried by particle $b$.
 
 Spatial derivatives are evaluated using the error-reduced SPH difference form of [Price 2012](https://doi.org/10.1016/j.jcp.2010.12.011). For a scalar field $A$,
 
-$$
+```math
 \nabla A(\mathbf{r})
 =
 \sum_b
 \frac{m_b}{\rho_b}
 \left(A_b - \tilde{A}(\mathbf{r})\right)
 \nabla W\!\left(\mathbf{r} - \mathbf{r}_b, h\right).
-$$
+```
 
 For density,
 
-$$
+```math
 \nabla \rho(\mathbf{r})
 =
 \sum_b m_b \nabla W\!\left(\mathbf{r} - \mathbf{r}_b, h\right)
@@ -109,11 +112,11 @@ $$
 \rho(\mathbf{r})
 \sum_b \frac{m_b}{\rho_b}
 \nabla W\!\left(\mathbf{r} - \mathbf{r}_b, h\right).
-$$
+```
 
 For a vector field $\mathbf{A}$,
 
-$$
+```math
 \nabla \cdot \mathbf{A}(\mathbf{r})
 =
 \sum_b
@@ -121,9 +124,9 @@ $$
 \left(\mathbf{A}_b - \tilde{\mathbf{A}}(\mathbf{r})\right)
 \cdot
 \nabla W\!\left(\mathbf{r} - \mathbf{r}_b, h\right),
-$$
+```
 
-$$
+```math
 \nabla \times \mathbf{A}(\mathbf{r})
 =
 -
@@ -132,7 +135,7 @@ $$
 \left(\mathbf{A}_b - \tilde{\mathbf{A}}(\mathbf{r})\right)
 \times
 \nabla W\!\left(\mathbf{r} - \mathbf{r}_b, h\right).
-$$
+```
 
 This derivative form reduces zeroth-order gradient errors and guarantees that the derivative vanishes for a constant field.
 
