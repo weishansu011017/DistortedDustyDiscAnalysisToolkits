@@ -1,10 +1,9 @@
 module SpiralDetection
 
 using Logging
-using StaticArrays
+using Statistics
 
-# Add implementation includes here, for example:
-# include(joinpath(@__DIR__, "julia", "spiral_detection.jl"))
+# include(joinpath(@__DIR__, "julia", "spiral_detection", "logspiral_detection.jl"))
 
 # Package metadata helpers.
 version() = pkgversion(@__MODULE__)
