@@ -1,6 +1,6 @@
 # Distorted Dusty Disc Analysis Toolkits
 
-Distorted dusty-disc analysis toolkits is a Julia monorepo for SPH-based dusty-disc analysis.
+Distorted dusty-disc analysis toolkits is a Julia monorepo for SPH-based dusty-disc analysis, originated from the lagacy package `PhantomRevealer.jl` ([Su et al. 2026](https://academic.oup.com/mnras/article/547/2/stag173/8442268)).
 
 It is currently organised into the following companion packages:
 
