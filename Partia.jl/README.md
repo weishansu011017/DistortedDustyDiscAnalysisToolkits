@@ -32,8 +32,6 @@ For a sampling position $\mathbf{r}$, the density estimate is
 \rho(\mathbf{r})
 =
 \sum_b m_b \, W\!\left(\lvert \mathbf{r} - \mathbf{r}_b \rvert, h\right),\rho(\mathbf{r})
-=
-\sum_b m_b \, W\!\left(\lvert \mathbf{r} - \mathbf{r}_b \rvert, h\right),
 ```
 
 and a particle-carried scalar quantity $A_b$ is interpolated as
@@ -43,9 +41,6 @@ A(\mathbf{r})
 =
 \sum_b \frac{m_b}{\rho_b} A_b \,
 W\!\left(\lvert \mathbf{r} - \mathbf{r}_b \rvert, h\right).A(\mathbf{r})
-=
-\sum_b \frac{m_b}{\rho_b} A_b \,
-W\!\left(\lvert \mathbf{r} - \mathbf{r}_b \rvert, h\right).
 ```
 
 When Shepard normalization is enabled, the interpolated value becomes
