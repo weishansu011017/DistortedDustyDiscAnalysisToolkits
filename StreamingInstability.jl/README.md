@@ -10,14 +10,14 @@
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/weishansu011017/DistortedDustyDiscAnalysis.git", subdir="StreamingInstability.jl")
+Pkg.add(url="https://github.com/weishansu011017/DistortedDustyDiscAnalysisToolkits.git", subdir="StreamingInstability.jl")
 ```
 
 If you already have this repository locally and want a development checkout, use
 
 ```julia
 using Pkg
-Pkg.develop(path="path/to/DistortedDustyDiscAnalysis/StreamingInstability.jl")
+Pkg.develop(path="path/to/DistortedDustyDiscAnalysisToolkits/StreamingInstability.jl")
 ```
 
 
