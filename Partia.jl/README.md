@@ -306,7 +306,7 @@ cyl_result = StructuredGrid_interpolation(
 
 In this case the cylindrical sample coordinates are converted to Cartesian positions before the SPH interpolation kernel is evaluated, while the output grids are restored on the original cylindrical axes.
 
-### Example 3 - Particle-wise postprocessing
+### Example 3 - Points interpolation
 
 To evaluate interpolated quantities at an arbitrary set of sample points, use `PointSamples`:
 
