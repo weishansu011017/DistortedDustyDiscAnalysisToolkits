@@ -6,21 +6,14 @@
 
 ## Installation
 
+Before installing `ParticleIO.jl`, `Partia.jl` is required. Please install `Partia.jl` first.
+
 `ParticleIO.jl` is not registered in the General registry. If you want to install it directly from this repository, use
 
 ```julia
 using Pkg
 Pkg.add(url="https://github.com/weishansu011017/DistortedDustyDiscAnalysis.git", subdir="ParticleIO.jl")
 ```
-
-If you already have this repository locally and want a development checkout, use
-
-```julia
-using Pkg
-Pkg.develop(path="path/to/DistortedDustyDiscAnalysis/ParticleIO.jl")
-```
-
-
 
 ## Reading Phantom dump files
 
