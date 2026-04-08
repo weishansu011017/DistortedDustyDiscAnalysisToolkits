@@ -12,7 +12,7 @@ Before installing `ParticleIO.jl`, `Partia.jl` is required. Please install `Part
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/weishansu011017/DistortedDustyDiscAnalysis.git", subdir="ParticleIO.jl")
+Pkg.add(url="https://github.com/weishansu011017/DistortedDustyDiscAnalysisToolkits.git", subdir="ParticleIO.jl")
 ```
 
 ## Reading Phantom dump files
