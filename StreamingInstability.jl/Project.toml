@@ -10,9 +10,6 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 TinyEigvals = "7dc15f10-ef5b-4bb7-b45f-6ac6462fc3a6"
 
-[sources]
-TinyEigvals = {url = "https://github.com/weishansu011017/TinyEigvals.jl"}
-
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
