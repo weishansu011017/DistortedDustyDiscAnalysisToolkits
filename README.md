@@ -1,10 +1,21 @@
 # Distorted Dusty Disc Analysis Toolkits
 
-Distorted dusty-disc analysis toolkits is a Julia monorepo for SPH-based dusty-disc analysis, originated from the lagacy package `PhantomRevealer.jl` ([Su et al. 2026](https://academic.oup.com/mnras/article/547/2/stag173/8442268)).
+> Status: This repository is no longer the main development repository.  
+> The original PhantomRevealer.jl / Distorted Dusty Disc Analysis Toolkits codebase has been reorganized and moved to the AstroPostprocess GitHub organization.
 
-It is currently organised into the following companion packages:
+Distorted Dusty Disc Analysis Toolkits was a Julia monorepo for SPH-based dusty-disc analysis, originating from the legacy package PhantomRevealer.jl (Su et al. 2026).
 
-- [`Partia.jl`](./Partia.jl): Core SPH interpolation and grid-analysis tools, including kernels, neighbour search, interpolation, and structured outputs.
-- [`ParticleIO.jl`](./ParticleIO.jl): Particle-oriented data handling for Phantom workflows, including dump reading, particle containers, and adapters into `Partia.jl`.
-- [`StreamingInstability.jl`](./StreamingInstability.jl): Linear growth-rate analysis tools for the classical streaming instability.
-- [`SpiralDetection.jl`](./SpiralDetection.jl): Placeholder package for future spiral-structure detection and post-processing workflows; the implementation is not finished yet, and the previous working API can be found on the `OptionalGLMakie` branch if needed.
+The code has since been split into several separate packages under the AstroPostprocess organization:
+
+- Partia.jl: Core LBVH-based SPH interpolation and grid-analysis tools, including kernels, neighbour search, interpolation, and structured outputs.
+- ParticleIO.jl: Particle-data front-end companion to Partia.jl, including Phantom data handling, particle containers, and adapters into Partia.jl.
+- StreamingInstability.jl: Classical linear streaming-instability growth-rate analysis tools for dust-gas mixtures in protoplanetary discs.
+- TinyEigvals.jl: A small-matrix eigensolver package used by StreamingInstability.jl. This package is already available from the Julia General registry.
+
+SpiralDetection.jl has not been reimplemented yet. The previous working API can still be found on the OptionalGLMakie branch of this repository if needed.
+
+## Recommended citation
+
+If this toolkit or its successor packages are useful for your work, please cite:
+
+Su et al. 2026, MNRAS, 547, 2, stag173.
