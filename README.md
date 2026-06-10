@@ -1,9 +1,9 @@
-# Distorted Dusty Disc Analysis Toolkits
+# Distorted Dusty Disc Analysis Toolkits / PhantomRevealer.jl
 
 > Status: This repository is no longer the main development repository.  
 > The original PhantomRevealer.jl / Distorted Dusty Disc Analysis Toolkits codebase has been reorganized and moved to the [AstroPostprocess](https://github.com/AstroPostprocess) GitHub organization.
 
-Distorted Dusty Disc Analysis Toolkits was a Julia monorepo for SPH-based dusty-disc analysis, originating from the legacy package PhantomRevealer.jl (Su et al. 2026).
+Distorted Dusty Disc Analysis Toolkits, formerly known as `PhantomRevealer.jl`, was a Julia monorepo for SPH-based dusty-disc analysis, originating from the legacy package PhantomRevealer.jl (Su et al. 2026).
 
 The code has since been split into several separate packages under the AstroPostprocess organization:
 
